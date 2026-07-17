@@ -107,7 +107,7 @@ const CustomerInfo = () => {
               </p>
             </div>
 
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-1">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               {cateringFields.map((field) => (
                 <div key={field.id}>
                   <label className="block text-[#ababab] mb-2 text-xs font-medium">
