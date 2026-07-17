@@ -1,8 +1,22 @@
 import { createSlice } from "@reduxjs/toolkit";
 
+const getToday = () => new Date().toISOString().slice(0, 10);
+
 const initialState = {
     customerName: "",
     guests: 1,
+    orderType: "Offline",
+    selectedCategoryName: "",
+    catering: {
+        paymentPlan: "Full",
+        institution: "",
+        whatsapp: "",
+        orderDate: getToday(),
+        eventDate: "",
+        deliveryTime: "",
+        dp: "",
+        note: "",
+    },
 }
 
 
@@ -11,14 +25,30 @@ const customerSlice = createSlice({
     initialState,
     reducers : {
         setCustomer: (state, action) => {
-            const { name, guests } = action.payload;
-            state.customerName = name;
-            state.guests = guests;
+            const { name, guests, orderType, selectedCategoryName, catering } = action.payload;
+            state.customerName = name ?? state.customerName;
+            state.guests = guests ?? state.guests;
+            state.orderType = orderType ?? state.orderType;
+            state.selectedCategoryName = selectedCategoryName ?? state.selectedCategoryName;
+            state.catering = catering
+                ? { ...state.catering, ...catering }
+                : state.catering;
         },
 
         removeCustomer: (state) => {
             state.customerName = "";
             state.guests = 1;
+            state.orderType = "Offline";
+            state.catering = {
+                paymentPlan: "Full",
+                institution: "",
+                whatsapp: "",
+                orderDate: getToday(),
+                eventDate: "",
+                deliveryTime: "",
+                dp: "",
+                note: "",
+            };
         }
 
     }

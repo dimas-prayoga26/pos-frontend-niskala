@@ -1,12 +1,16 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { menus } from "../../constants";
 import { GrRadialSelected } from "react-icons/gr";
 import { MdKeyboardArrowDown } from "react-icons/md";
 import { useDispatch, useSelector } from "react-redux";
-import { addItems, decreaseItem } from "../../redux/slices/cartSlice";
+import {
+  addItems,
+  decreaseItem,
+  setItemQuantity,
+} from "../../redux/slices/cartSlice";
+import { setCustomer } from "../../redux/slices/customerSlice";
 import { formatCurrency } from "../../utils";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { getCategories, getMenuItems } from "../../https";
+import { getAddOns, getCategories, getMenuItems } from "../../https";
 import butterChicken from "../../assets/images/butter-chicken-4.jpg";
 import palakPaneer from "../../assets/images/Saag-Paneer-1.jpg";
 import biryani from "../../assets/images/hyderabadibiryani.jpg";
@@ -61,11 +65,30 @@ const categoryColors = [
   "#285430",
 ];
 
+const CategoryLabel = ({ menu }) => (
+  <span className="inline-flex items-center gap-2">
+    {menu?.icon ? (
+      <span className="shrink-0">{menu.icon}</span>
+    ) : null}
+    <span>{menu?.name}</span>
+  </span>
+);
+
+const categoryIcons = {
+  Coffee: "☕",
+  "Non-Coffee": "🥤",
+  "Main Course": "🍚",
+  Snack: "🍟",
+  Catering: "🍱",
+};
+
 const MenuContainer = () => {
-  const [selected, setSelected] = useState(menus[0]);
+  const [selected, setSelected] = useState(null);
   const [isCategoryOpen, setIsCategoryOpen] = useState(false);
   const cartData = useSelector((state) => state.cart);
+  const orderType = useSelector((state) => state.customer.orderType || "Offline");
   const dispatch = useDispatch();
+  const isOnlineOrder = orderType === "Online";
 
   const { data: categoriesRes } = useQuery({
     queryKey: ["categories"],
@@ -79,31 +102,61 @@ const MenuContainer = () => {
     placeholderData: keepPreviousData,
   });
 
+  const { data: addOnsRes } = useQuery({
+    queryKey: ["add-ons"],
+    queryFn: () => getAddOns(),
+    placeholderData: keepPreviousData,
+  });
+
   const menuData = useMemo(() => {
     const categories = categoriesRes?.data?.data || [];
     const menuItems = menuItemsRes?.data?.data || [];
+    const addOns = addOnsRes?.data?.data || [];
+    const addOnsCategory = categories.find(
+      (category) => category.name === "Add Ons"
+    );
 
-    if (!categories.length || !menuItems.length) return menus;
+    const regularMenus =
+      categories.length && menuItems.length
+        ? categories
+            .map((category) => ({
+              id: category.id || category._id,
+              name: category.name,
+              icon: category.icon || categoryIcons[category.name] || "",
+              items: menuItems
+                .filter(
+                  (item) =>
+                    Number(item.categoryId) ===
+                    Number(category.id || category._id)
+                )
+                .map((item) => ({
+                  id: item.id || item._id,
+                  name: item.name,
+                  price: item.price,
+                  imageUrl: item.imageUrl,
+                })),
+            }))
+            .filter((menu) => menu.items.length > 0)
+        : [];
 
-    return categories
-      .map((category) => ({
-        id: category.id || category._id,
-        name: category.name,
-        icon: category.icon || "",
-        items: menuItems
-          .filter(
-            (item) =>
-              Number(item.categoryId) === Number(category.id || category._id)
-          )
-          .map((item) => ({
-            id: item.id || item._id,
-            name: item.name,
-            price: item.price,
-            imageUrl: item.imageUrl,
-          })),
-      }))
-      .filter((menu) => menu.items.length > 0);
-  }, [categoriesRes, menuItemsRes]);
+    const addOnMenu = addOns.length
+      ? [
+          {
+            id: "add-ons",
+            name: "Add Ons",
+            icon: addOnsCategory?.icon || "",
+            items: addOns.map((addOn) => ({
+              id: addOn.id || addOn._id || addOn.code,
+              name: addOn.name,
+              price: addOn.price,
+              imageUrl: addOn.imageUrl,
+            })),
+          },
+        ]
+      : [];
+
+    return [...regularMenus, ...addOnMenu];
+  }, [addOnsRes, categoriesRes, menuItemsRes]);
 
   useEffect(() => {
     if (!menuData.length) return;
@@ -113,13 +166,25 @@ const MenuContainer = () => {
     });
   }, [menuData]);
 
+  useEffect(() => {
+    if (!selected?.name) return;
+
+    dispatch(setCustomer({ selectedCategoryName: selected.name }));
+  }, [dispatch, selected?.name]);
+
   const getCartItemId = (item) => `${selected.id}-${item.id}`;
 
   const getItemQuantity = (id) =>
     cartData.find((item) => item.id === id)?.quantity || 0;
 
+  const getMenuPrice = (price) => {
+    const basePrice = Number(price) || 0;
+    return isOnlineOrder ? Math.round(basePrice * 1.2) : basePrice;
+  };
+
   const increment = (item) => {
     const cartItemId = getCartItemId(item);
+    const menuPrice = getMenuPrice(item.price);
 
     dispatch(
       addItems({
@@ -127,10 +192,38 @@ const MenuContainer = () => {
         menuItemId: cartItemId,
         name: item.name,
         categoryName: selected.name,
-        basePrice: item.price,
+        basePrice: menuPrice,
+        originalPrice: item.price,
         addOns: [],
-        pricePerQuantity: item.price,
+        pricePerQuantity: menuPrice,
         quantity: 1,
+      })
+    );
+  };
+
+  const buildCartItem = (item) => {
+    const cartItemId = getCartItemId(item);
+    const menuPrice = getMenuPrice(item.price);
+
+    return {
+      id: cartItemId,
+      menuItemId: cartItemId,
+      name: item.name,
+      categoryName: selected.name,
+      basePrice: menuPrice,
+      originalPrice: item.price,
+      addOns: [],
+      pricePerQuantity: menuPrice,
+    };
+  };
+
+  const updateQuantity = (item, value) => {
+    const quantity = Math.min(Math.max(Number(value) || 0, 0), 999);
+
+    dispatch(
+      setItemQuantity({
+        item: buildCartItem(item),
+        quantity,
       })
     );
   };
@@ -163,7 +256,15 @@ const MenuContainer = () => {
       >
         &minus;
       </button>
-      <span className="text-white text-sm sm:text-base">{quantity}</span>
+      <input
+        type="number"
+        min="0"
+        max="999"
+        value={quantity}
+        onChange={(event) => updateQuantity(item, event.target.value)}
+        onFocus={(event) => event.target.select()}
+        className="h-8 w-10 rounded-md bg-[#262626] text-center text-sm font-semibold text-white outline-none [appearance:textfield] sm:w-12 sm:text-base [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+      />
       <button
         onClick={() => increment(item)}
         className="text-[#a79981] text-xl sm:text-2xl"
@@ -185,8 +286,7 @@ const MenuContainer = () => {
           >
             <span>
               <span className="block text-lg font-semibold text-[#f5f5f5]">
-                {selected?.icon ? `${selected.icon} ` : ""}
-                {selected?.name}
+                <CategoryLabel menu={selected} />
               </span>
               <span className="mt-4 block text-sm font-semibold text-[#d0d0d0]">
                 {selected?.items?.length || 0} Items
@@ -213,8 +313,7 @@ const MenuContainer = () => {
                 >
                   <span>
                     <span className="block text-base font-semibold text-[#f5f5f5]">
-                      {menu.icon ? `${menu.icon} ` : ""}
-                      {menu.name}
+                      <CategoryLabel menu={menu} />
                     </span>
                     <span className="mt-1 block text-xs font-semibold text-[#ababab]">
                       {menu.items.length} Items
@@ -245,10 +344,9 @@ const MenuContainer = () => {
             >
               <div className="flex items-center justify-between w-full">
                 <h1 className="text-[#f5f5f5] text-lg font-semibold">
-                  {menu.icon ? `${menu.icon} ` : ""}
-                  {menu.name}
+                  <CategoryLabel menu={menu} />
                 </h1>
-                {selected.id === menu.id && (
+                {selected?.id === menu.id && (
                   <GrRadialSelected className="text-white" size={20} />
                 )}
               </div>
@@ -289,7 +387,7 @@ const MenuContainer = () => {
               </div>
               <div className="mt-3 flex w-full flex-col gap-2 sm:mt-4 sm:flex-row sm:items-center sm:justify-between">
                 <p className="text-base font-bold text-[#f5f5f5] sm:text-xl">
-                  {formatCurrency(item.price)}
+                  {formatCurrency(getMenuPrice(item.price))}
                 </p>
                 {renderQuantityControls(item, cartItemId, quantity)}
               </div>

@@ -1,31 +1,11 @@
-import React from "react";
-import { GrUpdate } from "react-icons/gr";
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import React, { useMemo, useState } from "react";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { enqueueSnackbar } from "notistack";
-import { getOrders, updateOrderStatus } from "../../https/index";
+import { getOrders } from "../../https/index";
 import { formatCurrency, formatDateAndTime } from "../../utils";
-import { useSelector } from "react-redux";
 
 const RecentOrders = () => {
-  const queryClient = useQueryClient();
-  const userData = useSelector((state) => state.user);
-  const canUpdateStatus = userData.role?.toLowerCase() === "cashier";
-
-  const handleStatusChange = ({orderId, orderStatus}) => {
-    console.log(orderId)
-    orderStatusUpdateMutation.mutate({orderId, orderStatus});
-  };
-
-  const orderStatusUpdateMutation = useMutation({
-    mutationFn: ({orderId, orderStatus}) => updateOrderStatus({orderId, orderStatus}),
-    onSuccess: (data) => {
-      enqueueSnackbar("Order status updated successfully!", { variant: "success" });
-      queryClient.invalidateQueries(["orders"]); // Refresh order list
-    },
-    onError: () => {
-      enqueueSnackbar("Failed to update order status!", { variant: "error" });
-    }
-  })
+  const [searchQuery, setSearchQuery] = useState("");
 
   const { data: resData, isError } = useQuery({
     queryKey: ["orders"],
@@ -39,18 +19,53 @@ const RecentOrders = () => {
     enqueueSnackbar("Something went wrong!", { variant: "error" });
   }
 
+  const orders = resData?.data.data || [];
+  const filteredOrders = useMemo(() => {
+    const keyword = searchQuery.trim().toLowerCase();
+
+    if (!keyword) return orders;
+
+    return orders.filter((order) => {
+      const orderCode =
+        order.orderId ||
+        order.orderCode ||
+        `ORD-${String(order.id).padStart(6, "0")}`;
+      const searchableText = [
+        orderCode,
+        order.customerDetails?.name,
+        formatDateAndTime(order.orderDate),
+        `${order.items.length} Items`,
+        order.orderType || "Customer",
+        formatCurrency(order.bills.totalWithTax),
+        order.paymentMethod,
+      ]
+        .join(" ")
+        .toLowerCase();
+
+      return searchableText.includes(keyword);
+    });
+  }, [orders, searchQuery]);
+
   return (
     <div className="container mx-auto bg-[#262626] p-4 rounded-lg">
-      <h2 className="text-[#f5f5f5] text-xl font-semibold mb-4">
-        Recent Orders
-      </h2>
+      <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <h2 className="text-[#f5f5f5] text-xl font-semibold">
+          Recent Orders
+        </h2>
+        <input
+          value={searchQuery}
+          onChange={(event) => setSearchQuery(event.target.value)}
+          type="search"
+          placeholder="Search orders"
+          className="w-full rounded-lg bg-[#1f1f1f] px-4 py-2 text-sm font-semibold text-[#f5f5f5] outline-none placeholder:text-[#777] md:max-w-xs"
+        />
+      </div>
       <div className="overflow-x-auto">
         <table className="w-full text-left text-[#f5f5f5]">
           <thead className="bg-[#333] text-[#ababab]">
             <tr>
               <th className="p-3">Order ID</th>
               <th className="p-3">Customer</th>
-              <th className="p-3">Status</th>
               <th className="p-3">Date & Time</th>
               <th className="p-3">Items</th>
               <th className="p-3">Order Type</th>
@@ -59,7 +74,7 @@ const RecentOrders = () => {
             </tr>
           </thead>
           <tbody>
-            {resData?.data.data.map((order, index) => (
+            {filteredOrders.map((order, index) => (
               <tr
                 key={index}
                 className="border-b border-gray-600 hover:bg-[#333]"
@@ -68,36 +83,6 @@ const RecentOrders = () => {
                   #{order.orderId || order.orderCode || `ORD-${String(order.id).padStart(6, "0")}`}
                 </td>
                 <td className="p-4">{order.customerDetails.name}</td>
-                <td className="p-4">
-                  {canUpdateStatus ? (
-                    <select
-                      className={`bg-[#1a1a1a] border border-gray-500 p-2 rounded-lg focus:outline-none ${
-                        order.orderStatus === "Completed"
-                          ? "text-green-500"
-                          : "text-yellow-500"
-                      }`}
-                      value={order.orderStatus}
-                      onChange={(e) => handleStatusChange({orderId: order._id, orderStatus: e.target.value})}
-                    >
-                      <option className="text-yellow-500" value="In Progress">
-                        In Progress
-                      </option>
-                      <option className="text-green-500" value="Completed">
-                        Completed
-                      </option>
-                    </select>
-                  ) : (
-                    <span
-                      className={`rounded-lg px-2 py-1 text-sm font-semibold ${
-                        order.orderStatus === "Completed"
-                          ? "bg-[#2e4a40] text-green-500"
-                          : "bg-[#4a452e] text-yellow-500"
-                      }`}
-                    >
-                      {order.orderStatus}
-                    </span>
-                  )}
-                </td>
                 <td className="p-4">{formatDateAndTime(order.orderDate)}</td>
                 <td className="p-4">{order.items.length} Items</td>
                 <td className="p-4">Customer</td>
@@ -107,6 +92,13 @@ const RecentOrders = () => {
                 </td>
               </tr>
             ))}
+            {filteredOrders.length === 0 && (
+              <tr>
+                <td className="p-4 text-center text-[#ababab]" colSpan={7}>
+                  No orders found
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>

@@ -128,8 +128,8 @@ const Register = ({setIsRegister}) => {
             Choose your role
           </label>
 
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-            {["Waiter", "Cashier", "Admin"].map((role) => {
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {["Cashier", "Admin"].map((role) => {
               return (
                 <button
                   key={role}

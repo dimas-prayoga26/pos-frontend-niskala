@@ -8,16 +8,27 @@ import { IoLogOut } from "react-icons/io5";
 import { useMutation } from "@tanstack/react-query";
 import { logout } from "../../https";
 import { removeUser } from "../../redux/slices/userSlice";
-import { useNavigate } from "react-router-dom";
-import { MdDashboard } from "react-icons/md";
+import { useLocation, useNavigate } from "react-router-dom";
+import { MdDashboard, MdRestaurantMenu } from "react-icons/md";
 
 const Header = () => {
   const userData = useSelector((state) => state.user);
   const dispatch = useDispatch();
   const navigate = useNavigate();
+  const location = useLocation();
+  const isDashboardPage = location.pathname === "/dashboard";
   const canOpenDashboard = ["admin", "cashier"].includes(
     userData.role?.toLowerCase()
   );
+  const displayRole = ["admin", "cashier"].includes(
+    userData.role?.toLowerCase()
+  )
+    ? userData.role
+    : "Cashier";
+  const displayName =
+    userData.name?.toLowerCase() === "waiter"
+      ? displayRole
+      : userData.name || displayRole;
 
   const logoutMutation = useMutation({
     mutationFn: () => logout(),
@@ -59,9 +70,18 @@ const Header = () => {
       {/* LOGGED USER DETAILS */}
       <div className="flex items-center gap-2 md:gap-4 shrink-0">
         {canOpenDashboard && (
-          <div onClick={() => navigate("/dashboard")} className="bg-[#1f1f1f] rounded-[15px] p-2 md:p-3 cursor-pointer">
-            <MdDashboard className="text-[#f5f5f5] text-xl md:text-2xl" />
-          </div>
+          <button
+            type="button"
+            onClick={() => navigate(isDashboardPage ? "/menu" : "/dashboard")}
+            title={isDashboardPage ? "Kembali ke menu" : "Buka dashboard"}
+            className="bg-[#1f1f1f] rounded-[15px] p-2 md:p-3 cursor-pointer"
+          >
+            {isDashboardPage ? (
+              <MdRestaurantMenu className="text-[#f5f5f5] text-xl md:text-2xl" />
+            ) : (
+              <MdDashboard className="text-[#f5f5f5] text-xl md:text-2xl" />
+            )}
+          </button>
         )}
         <div className="bg-[#1f1f1f] rounded-[15px] p-2 md:p-3 cursor-pointer">
           <FaBell className="text-[#f5f5f5] text-xl md:text-2xl" />
@@ -70,10 +90,10 @@ const Header = () => {
           <FaUserCircle className="text-[#f5f5f5] text-3xl md:text-4xl" />
           <div className="hidden sm:flex flex-col items-start">
             <h1 className="text-md text-[#f5f5f5] font-semibold tracking-wide">
-              {userData.name || "TEST USER"}
+              {displayName}
             </h1>
             <p className="text-xs text-[#ababab] font-medium">
-              {userData.role || "Role"}
+              {displayRole}
             </p>
           </div>
           <IoLogOut
