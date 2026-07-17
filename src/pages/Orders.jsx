@@ -3,7 +3,11 @@ import BottomNav from "../components/shared/BottomNav";
 import OrderCard from "../components/orders/OrderCard";
 import BackButton from "../components/shared/BackButton";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { getOrders, updateCateringPaymentStatus } from "../https/index";
+import {
+  addCateringPayment,
+  getOrders,
+  updateCateringPaymentStatus,
+} from "../https/index";
 import { enqueueSnackbar } from "notistack"
 
 const getTodayDateString = () => {
@@ -49,6 +53,21 @@ const Orders = () => {
     },
     onError: () => {
       enqueueSnackbar("Gagal mengubah status bayar catering", {
+        variant: "error",
+      });
+    },
+  });
+
+  const cateringPaymentAddMutation = useMutation({
+    mutationFn: addCateringPayment,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["orders"] });
+      enqueueSnackbar("Pembayaran catering berhasil ditambahkan", {
+        variant: "success",
+      });
+    },
+    onError: () => {
+      enqueueSnackbar("Gagal menambahkan pembayaran catering", {
         variant: "error",
       });
     },
@@ -121,6 +140,17 @@ const Orders = () => {
                   isUpdatingCateringPayment={
                     cateringPaymentMutation.isPending &&
                     (cateringPaymentMutation.variables?.orderId ===
+                      (order.id || order._id))
+                  }
+                  onCateringPaymentAdd={(amount) =>
+                    cateringPaymentAddMutation.mutate({
+                      orderId: order.id || order._id,
+                      amount,
+                    })
+                  }
+                  isAddingCateringPayment={
+                    cateringPaymentAddMutation.isPending &&
+                    (cateringPaymentAddMutation.variables?.orderId ===
                       (order.id || order._id))
                   }
                 />

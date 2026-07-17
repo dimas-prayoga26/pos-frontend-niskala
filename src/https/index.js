@@ -53,6 +53,8 @@ export const updateOrderStatus = ({ orderId, orderStatus }) =>
   axiosWrapper.put(`/api/order/${orderId}`, { orderStatus });
 export const updateCateringPaymentStatus = ({ orderId, isPaid }) =>
   axiosWrapper.put(`/api/order/${orderId}/catering-payment`, { isPaid });
+export const addCateringPayment = ({ orderId, amount }) =>
+  axiosWrapper.patch(`/api/order/${orderId}/catering-payment/add`, { amount });
 
 // Stock Item Endpoints
 export const addStockItem = (data) => axiosWrapper.post("/api/stock-item/", data);

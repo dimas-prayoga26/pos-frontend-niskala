@@ -600,14 +600,21 @@ const MenuManagement = () => {
             </label>
             <label className="mt-4 block text-sm font-semibold text-[#ababab]">
               Harga
-              <input
-                value={menuForm.price}
-                onChange={(event) => updateMenuForm("price", event.target.value)}
-                type="number"
-                min="0"
-                placeholder="18000"
-                className="mt-2 w-full rounded-lg bg-[#262626] px-4 py-3 text-sm text-[#f5f5f5] outline-none"
-              />
+              <div className="mt-2 flex overflow-hidden rounded-lg bg-[#262626]">
+                <span className="flex items-center px-4 text-sm font-bold text-[#a79981]">
+                  Rp
+                </span>
+                <input
+                  value={menuForm.price}
+                  onChange={(event) =>
+                    updateMenuForm("price", event.target.value)
+                  }
+                  type="number"
+                  min="0"
+                  placeholder="18000"
+                  className="w-full bg-transparent py-3 pr-4 text-sm text-[#f5f5f5] outline-none"
+                />
+              </div>
             </label>
             <label className="mt-4 block text-sm font-semibold text-[#ababab]">
               Image URL
