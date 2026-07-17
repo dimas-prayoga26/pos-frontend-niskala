@@ -3,10 +3,8 @@ import { formatCurrency, formatDateAndTime } from "../../utils/index";
 
 const OrderCard = ({
   order,
-  onCateringPaidChange,
   onCateringPaymentAdd,
   isAddingCateringPayment = false,
-  isUpdatingCateringPayment = false,
 }) => {
   const [showDetails, setShowDetails] = useState(false);
   const [paymentAmount, setPaymentAmount] = useState("");
@@ -15,18 +13,19 @@ const OrderCard = ({
   const isCatering = Boolean(cateringDetails);
   const isOnlineOrder =
     order.orderType === "Online" || (Number(order.bills?.onlineOrderCharge) || 0) > 0;
-  const isCateringPaid = Boolean(cateringDetails?.isPaid);
+  const cateringTotal = Number(order.bills?.totalWithTax) || 0;
+  const rawCateringPaid = Number(cateringDetails?.dp ?? order.bills?.dp ?? 0) || 0;
+  const isFullCateringPayment = cateringDetails?.paymentPlan !== "DP";
+  const cateringPaid = isFullCateringPayment
+    ? cateringTotal
+    : rawCateringPaid;
+  const cateringRemaining = Math.max(cateringTotal - cateringPaid, 0);
+  const isCateringPaid = isCatering && cateringRemaining === 0;
   const cateringPaymentLabel = isCateringPaid ? "Lunas" : "Belum Lunas";
   const cateringPaidLabel =
-    cateringDetails?.paymentPlan === "DP" && !isCateringPaid
+    cateringDetails?.paymentPlan === "DP" && cateringRemaining > 0
       ? "DP"
       : "Dibayar";
-  const nextCateringPaymentStatus = !isCateringPaid;
-  const cateringTotal = Number(order.bills?.totalWithTax) || 0;
-  const cateringPaid = isCateringPaid
-    ? cateringTotal
-    : Number(cateringDetails?.dp ?? order.bills?.dp ?? 0) || 0;
-  const cateringRemaining = Math.max(cateringTotal - cateringPaid, 0);
   const canAddCateringPayment = isCatering && cateringRemaining > 0;
   const formatEventDate = (value) => {
     if (!value) return "-";
@@ -189,27 +188,15 @@ const OrderCard = ({
                         Catat pembayaran masuk untuk order ini.
                       </p>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        onCateringPaidChange?.(nextCateringPaymentStatus)
-                      }
-                      disabled={isUpdatingCateringPayment}
-                      title={
-                        isCateringPaid
-                          ? "Klik untuk tandai belum lunas"
-                          : "Klik untuk tandai lunas"
-                      }
+                    <span
                       className={`rounded-md px-2 py-1 text-xs font-bold transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60 ${
                         isCateringPaid
                           ? "bg-[#2e5b46] text-[#bdf5d3]"
                           : "bg-[#5d4b24] text-[#ffe0a3]"
                       }`}
                     >
-                      {isUpdatingCateringPayment
-                        ? "Menyimpan..."
-                        : cateringPaymentLabel}
-                    </button>
+                      {cateringPaymentLabel}
+                    </span>
                   </div>
 
                   <div className="space-y-2 text-sm">
