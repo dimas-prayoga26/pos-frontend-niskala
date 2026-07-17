@@ -6,7 +6,6 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tansta
 import {
   addCateringPayment,
   getOrders,
-  updateCateringPaymentStatus,
 } from "../https/index";
 import { enqueueSnackbar } from "notistack"
 
@@ -39,24 +38,6 @@ const Orders = () => {
   if(isError) {
     enqueueSnackbar("Something went wrong!", {variant: "error"})
   }
-
-  const cateringPaymentMutation = useMutation({
-    mutationFn: updateCateringPaymentStatus,
-    onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({ queryKey: ["orders"] });
-      enqueueSnackbar(
-        variables.isPaid
-          ? "Order catering ditandai lunas"
-          : "Order catering ditandai belum lunas",
-        { variant: "success" }
-      );
-    },
-    onError: () => {
-      enqueueSnackbar("Gagal mengubah status bayar catering", {
-        variant: "error",
-      });
-    },
-  });
 
   const cateringPaymentAddMutation = useMutation({
     mutationFn: addCateringPayment,
@@ -131,17 +112,6 @@ const Orders = () => {
                 <OrderCard
                   key={order._id}
                   order={order}
-                  onCateringPaidChange={(isPaid) =>
-                    cateringPaymentMutation.mutate({
-                      orderId: order.id || order._id,
-                      isPaid,
-                    })
-                  }
-                  isUpdatingCateringPayment={
-                    cateringPaymentMutation.isPending &&
-                    (cateringPaymentMutation.variables?.orderId ===
-                      (order.id || order._id))
-                  }
                   onCateringPaymentAdd={(amount) =>
                     cateringPaymentAddMutation.mutate({
                       orderId: order.id || order._id,
