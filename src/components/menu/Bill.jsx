@@ -9,10 +9,12 @@ import {
 import { enqueueSnackbar } from "notistack";
 import { useMutation } from "@tanstack/react-query";
 import { removeAllItems } from "../../redux/slices/cartSlice";
-import { removeCustomer } from "../../redux/slices/customerSlice";
+import { removeCustomer, setCustomer } from "../../redux/slices/customerSlice";
 import Invoice from "../invoice/Invoice";
 import { formatCurrency } from "../../utils";
 import receiptLogo from "../../../../assets/logo1.png";
+
+const ONLINE_ORDER_RATE = 20;
 
 function loadMidtransScript(clientKey) {
   return new Promise((resolve) => {
@@ -37,29 +39,82 @@ const Bill = () => {
   const cartData = useSelector((state) => state.cart);
   const total = useSelector(getTotalPrice);
   const taxRate = 11;
-  const tax = (total * taxRate) / 100;
-  const totalPriceWithTax = total + tax;
+  const orderType = customerData.orderType || "Offline";
+  const onlineOrderCharge = 0;
+  const taxableTotal = total + onlineOrderCharge;
+  const tax = (taxableTotal * taxRate) / 100;
+  const totalPriceWithTax = taxableTotal + tax;
+  const isCateringOrder = cartData.some(
+    (item) => item.categoryName === "Catering"
+  );
+  const showCateringPayment =
+    isCateringOrder || customerData.selectedCategoryName === "Catering";
+  const cateringPaymentPlan = customerData.catering?.paymentPlan || "Full";
+  const isCateringDp = cateringPaymentPlan === "DP";
+  const cateringDp = isCateringOrder && isCateringDp
+    ? Math.max(Number(customerData.catering?.dp) || 0, 0)
+    : 0;
+  const remainingBalance =
+    isCateringOrder && isCateringDp
+      ? Math.max(totalPriceWithTax - cateringDp, 0)
+      : 0;
 
   const [paymentMethod, setPaymentMethod] = useState();
   const [showInvoice, setShowInvoice] = useState(false);
   const [orderInfo, setOrderInfo] = useState();
 
   const getCustomerName = () => customerData.customerName?.trim() || "Guest";
+  const updateCateringDp = (value) => {
+    dispatch(
+      setCustomer({
+        catering: {
+          dp: value,
+        },
+      })
+    );
+  };
+  const updateCateringPaymentPlan = (paymentPlan) => {
+    dispatch(
+      setCustomer({
+        catering: {
+          paymentPlan,
+          dp: paymentPlan === "Full" ? "" : customerData.catering?.dp || "",
+        },
+      })
+    );
+  };
 
   const buildOrderData = (paymentData) => ({
     customerDetails: {
       name: getCustomerName(),
-      guests: customerData.guests,
+      guests: customerData.guests || 1,
     },
+    orderType,
     orderStatus: "In Progress",
     bills: {
       total: total,
+      onlineOrderCharge,
       tax: tax,
       totalWithTax: totalPriceWithTax,
+      dp: cateringDp,
+      remainingBalance,
     },
     items: cartData,
     paymentMethod: paymentMethod,
     paymentData,
+    cateringDetails: isCateringOrder
+      ? {
+          institution: customerData.catering?.institution || "",
+          whatsapp: customerData.catering?.whatsapp || "",
+          orderDate: customerData.catering?.orderDate || "",
+          eventDate: customerData.catering?.eventDate || "",
+          deliveryTime: customerData.catering?.deliveryTime || "",
+          paymentPlan: cateringPaymentPlan,
+          dp: cateringDp,
+          isPaid: !isCateringDp || cateringDp >= totalPriceWithTax,
+          note: customerData.catering?.note || "",
+        }
+      : null,
   });
 
   const handlePlaceOrder = async () => {
@@ -78,7 +133,14 @@ const Bill = () => {
       return;
     }
 
-    if (paymentMethod === "Online") {
+    if (isCateringOrder && cateringDp > totalPriceWithTax) {
+      enqueueSnackbar("DP tidak boleh lebih besar dari total order.", {
+        variant: "warning",
+      });
+      return;
+    }
+
+    if (paymentMethod === "Non Tunai") {
       try {
         const clientKey = import.meta.env.VITE_MIDTRANS_CLIENT_KEY;
 
@@ -188,6 +250,14 @@ const Bill = () => {
         .replace(/>/g, "&gt;")
         .replace(/"/g, "&quot;")
         .replace(/'/g, "&#039;");
+    const formatReceiptDate = (value) => {
+      if (!value) return "-";
+
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) return value;
+
+      return date.toLocaleDateString("id-ID");
+    };
 
     if (cartData.length === 0) {
       enqueueSnackbar("Please add at least one menu item before printing!", {
@@ -326,17 +396,33 @@ const Bill = () => {
             <p class="receipt-title">Order Receipt</p>
             <div class="meta">
               <div class="meta-row"><span>Customer</span><strong>${escapeHtml(getCustomerName())}</strong></div>
-              <div class="meta-row"><span>Guests</span><strong>${customerData.guests || 1}</strong></div>
               <div class="meta-row"><span>Date</span><strong>${new Date().toLocaleString("id-ID")}</strong></div>
               <div class="meta-row"><span>Payment</span><strong>${escapeHtml(paymentMethod || "-")}</strong></div>
+              ${
+                isCateringOrder
+                  ? `<div class="meta-row"><span>Instansi</span><strong>${escapeHtml(customerData.catering?.institution || "-")}</strong></div>
+                     <div class="meta-row"><span>WhatsApp</span><strong>${escapeHtml(customerData.catering?.whatsapp || "-")}</strong></div>
+                     <div class="meta-row"><span>Tanggal Acara</span><strong>${escapeHtml(formatReceiptDate(customerData.catering?.eventDate))}</strong></div>
+                     <div class="meta-row"><span>Jam Kirim</span><strong>${escapeHtml(customerData.catering?.deliveryTime || "-")}</strong></div>`
+                  : ""
+              }
             </div>
             <div>${receiptRows}</div>
             <div class="totals">
               <div class="total-row"><span>Subtotal</span><strong>${formatCurrency(total)}</strong></div>
+              ${
+                onlineOrderCharge > 0
+                  ? `<div class="total-row"><span>Online (+${ONLINE_ORDER_RATE}%)</span><strong>${formatCurrency(onlineOrderCharge)}</strong></div>`
+                  : ""
+              }
               <div class="total-row"><span>Tax (${taxRate}%)</span><strong>${formatCurrency(tax)}</strong></div>
               <div class="total-row grand"><span>Total</span><span>${formatCurrency(totalPriceWithTax)}</span></div>
             </div>
-            <div class="footer">Thank you for your order</div>
+            ${
+              isCateringOrder && customerData.catering?.note
+                ? `<div class="footer">Catatan: ${escapeHtml(customerData.catering.note)}</div>`
+                : `<div class="footer">Thank you for your order</div>`
+            }
           </div>
         </body>
       </html>
@@ -360,6 +446,16 @@ const Bill = () => {
           {formatCurrency(total)}
         </h1>
       </div>
+      {onlineOrderCharge > 0 && (
+        <div className="flex items-center justify-between px-5 mt-2">
+          <p className="text-xs text-[#ababab] font-medium mt-2">
+            Online (+20%)
+          </p>
+          <h1 className="text-[#f5f5f5] text-md font-bold">
+            {formatCurrency(onlineOrderCharge)}
+          </h1>
+        </div>
+      )}
       <div className="flex items-center justify-between px-5 mt-2">
         <p className="text-xs text-[#ababab] font-medium mt-2">Tax(11%)</p>
         <h1 className="text-[#f5f5f5] text-md font-bold">
@@ -374,22 +470,74 @@ const Bill = () => {
           {formatCurrency(totalPriceWithTax)}
         </h1>
       </div>
+      {showCateringPayment && (
+        <div className="px-5 mt-3">
+          <label className="block text-[#ababab] mb-2 text-xs font-medium">
+            Pembayaran Catering
+          </label>
+          <div className="flex flex-col sm:flex-row items-center gap-3">
+            <button
+              onClick={() => updateCateringPaymentPlan("Full")}
+              className={`bg-[#1f1f1f] px-4 py-3 w-full rounded-lg text-[#ababab] font-semibold ${
+                cateringPaymentPlan === "Full" ? "bg-[#383737]" : ""
+              }`}
+            >
+              Bayar Full
+            </button>
+            <button
+              onClick={() => updateCateringPaymentPlan("DP")}
+              className={`bg-[#1f1f1f] px-4 py-3 w-full rounded-lg text-[#ababab] font-semibold ${
+                cateringPaymentPlan === "DP" ? "bg-[#383737]" : ""
+              }`}
+            >
+              DP
+            </button>
+          </div>
+          {isCateringDp && (
+            <div className="mt-3">
+              <label className="block text-[#ababab] mb-2 text-xs font-medium">
+                Nominal DP (Rp)
+              </label>
+              <input
+                value={customerData.catering?.dp || ""}
+                onChange={(event) => updateCateringDp(event.target.value)}
+                type="number"
+                min="0"
+                placeholder="0"
+                className="w-full rounded-lg bg-[#1f1f1f] px-4 py-3 text-sm text-white outline-none"
+              />
+            </div>
+          )}
+        </div>
+      )}
+      {isCateringOrder && isCateringDp && (
+        <>
+          <div className="flex items-center justify-between px-5 mt-2">
+            <p className="text-xs text-[#ababab] font-medium mt-2">
+              DP Catering
+            </p>
+            <h1 className="text-[#f5f5f5] text-md font-bold">
+              {formatCurrency(cateringDp)}
+            </h1>
+          </div>
+        </>
+      )}
       <div className="flex flex-col sm:flex-row items-center gap-3 px-5 mt-4">
         <button
-          onClick={() => setPaymentMethod("Cash")}
+          onClick={() => setPaymentMethod("Tunai")}
           className={`bg-[#1f1f1f] px-4 py-3 w-full rounded-lg text-[#ababab] font-semibold ${
-            paymentMethod === "Cash" ? "bg-[#383737]" : ""
+            paymentMethod === "Tunai" ? "bg-[#383737]" : ""
           }`}
         >
-          Cash
+          Tunai
         </button>
         <button
-          onClick={() => setPaymentMethod("Online")}
+          onClick={() => setPaymentMethod("Non Tunai")}
           className={`bg-[#1f1f1f] px-4 py-3 w-full rounded-lg text-[#ababab] font-semibold ${
-            paymentMethod === "Online" ? "bg-[#383737]" : ""
+            paymentMethod === "Non Tunai" ? "bg-[#383737]" : ""
           }`}
         >
-          Online
+          Non Tunai
         </button>
       </div>
 

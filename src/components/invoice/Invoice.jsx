@@ -15,6 +15,16 @@ const buildReceiptHtml = (orderInfo) => {
   const orderDate = orderInfo.orderDate
     ? new Date(orderInfo.orderDate)
     : new Date();
+  const onlineOrderCharge = Number(orderInfo.bills.onlineOrderCharge) || 0;
+  const cateringDetails = orderInfo.cateringDetails;
+  const formatReceiptDate = (value) => {
+    if (!value) return "-";
+
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return value;
+
+    return date.toLocaleDateString("id-ID");
+  };
 
   const itemRows = orderInfo.items
     .map((item) => {
@@ -49,21 +59,34 @@ const buildReceiptHtml = (orderInfo) => {
       <div class="meta">
         <div class="meta-row"><span>Order ID</span><strong>${escapeHtml(orderCode)}</strong></div>
         <div class="meta-row"><span>Customer</span><strong>${escapeHtml(orderInfo.customerDetails.name)}</strong></div>
-        <div class="meta-row"><span>Guests</span><strong>${orderInfo.customerDetails.guests || 1}</strong></div>
         <div class="meta-row"><span>Date</span><strong>${orderDate.toLocaleString("id-ID")}</strong></div>
         <div class="meta-row"><span>Payment</span><strong>${escapeHtml(orderInfo.paymentMethod || "-")}</strong></div>
+        ${
+          cateringDetails
+            ? `<div class="meta-row"><span>Instansi</span><strong>${escapeHtml(cateringDetails.institution || "-")}</strong></div>
+               <div class="meta-row"><span>WhatsApp</span><strong>${escapeHtml(cateringDetails.whatsapp || "-")}</strong></div>
+               <div class="meta-row"><span>Tgl Acara</span><strong>${escapeHtml(formatReceiptDate(cateringDetails.eventDate))}</strong></div>
+               <div class="meta-row"><span>Jam Kirim</span><strong>${escapeHtml(cateringDetails.deliveryTime || "-")}</strong></div>
+               <div class="meta-row"><span>Status Bayar</span><strong>${cateringDetails.isPaid ? "Lunas" : "Belum Lunas"}</strong></div>`
+            : ""
+        }
       </div>
 
       <div>${itemRows}</div>
 
       <div class="totals">
         <div class="total-row"><span>Subtotal</span><strong>${formatCurrency(orderInfo.bills.total)}</strong></div>
+        ${
+          onlineOrderCharge > 0
+            ? `<div class="total-row"><span>Online (+20%)</span><strong>${formatCurrency(onlineOrderCharge)}</strong></div>`
+            : ""
+        }
         <div class="total-row"><span>Tax</span><strong>${formatCurrency(orderInfo.bills.tax)}</strong></div>
         <div class="total-row grand"><span>Total</span><span>${formatCurrency(orderInfo.bills.totalWithTax)}</span></div>
       </div>
 
       ${
-        orderInfo.paymentMethod === "Online"
+        orderInfo.paymentMethod === "Non Tunai"
           ? `<div class="meta payment-meta">
               <div class="meta-row"><span>Midtrans</span><strong>${escapeHtml(orderInfo.paymentData?.midtrans_order_id || "-")}</strong></div>
               <div class="meta-row"><span>Type</span><strong>${escapeHtml(orderInfo.paymentData?.midtrans_payment_type || "-")}</strong></div>
@@ -71,7 +94,11 @@ const buildReceiptHtml = (orderInfo) => {
           : ""
       }
 
-      <div class="footer">Thank you for your order</div>
+      <div class="footer">${
+        cateringDetails?.note
+          ? `Catatan: ${escapeHtml(cateringDetails.note)}`
+          : "Thank you for your order"
+      }</div>
     </div>
   `;
 };

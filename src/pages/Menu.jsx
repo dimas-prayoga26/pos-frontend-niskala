@@ -1,12 +1,16 @@
 import React, { useEffect } from "react";
+import { useDispatch, useSelector } from "react-redux";
 import BottomNav from "../components/shared/BottomNav";
 import BackButton from "../components/shared/BackButton";
 import MenuContainer from "../components/menu/MenuContainer";
 import CustomerInfo from "../components/menu/CustomerInfo";
 import CartInfo from "../components/menu/CartInfo";
 import Bill from "../components/menu/Bill";
+import { setCustomer } from "../redux/slices/customerSlice";
 
 const Menu = () => {
+  const dispatch = useDispatch();
+  const orderType = useSelector((state) => state.customer.orderType || "Offline");
 
     useEffect(() => {
       document.title = "POS | Menu"
@@ -23,7 +27,31 @@ const Menu = () => {
               Menu
             </h1>
           </div>
-          <p className="text-sm text-[#ababab]">Select menu items and fill customer details.</p>
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+            <p className="text-sm text-[#ababab]">Order Type</p>
+            <div className="flex rounded-lg bg-[#1a1a1a] p-1">
+              <button
+                onClick={() => dispatch(setCustomer({ orderType: "Offline" }))}
+                className={`px-4 py-2 text-sm font-semibold rounded-md ${
+                  orderType === "Offline"
+                    ? "bg-[#a79981] text-[#101010]"
+                    : "text-[#ababab]"
+                }`}
+              >
+                Offline
+              </button>
+              <button
+                onClick={() => dispatch(setCustomer({ orderType: "Online" }))}
+                className={`px-4 py-2 text-sm font-semibold rounded-md ${
+                  orderType === "Online"
+                    ? "bg-[#a79981] text-[#101010]"
+                    : "text-[#ababab]"
+                }`}
+              >
+                Online +20%
+              </button>
+            </div>
+          </div>
         </div>
 
         <MenuContainer />

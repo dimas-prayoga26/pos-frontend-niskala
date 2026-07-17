@@ -2,13 +2,23 @@ import React, { useState, useEffect } from "react";
 import BottomNav from "../components/shared/BottomNav";
 import OrderCard from "../components/orders/OrderCard";
 import BackButton from "../components/shared/BackButton";
-import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { getOrders } from "../https/index";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { getOrders, updateCateringPaymentStatus } from "../https/index";
 import { enqueueSnackbar } from "notistack"
+
+const getTodayDateString = () => {
+  const today = new Date();
+  const year = today.getFullYear();
+  const month = String(today.getMonth() + 1).padStart(2, "0");
+  const day = String(today.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+};
 
 const Orders = () => {
 
-  const [selectedDate, setSelectedDate] = useState("");
+  const [selectedDate, setSelectedDate] = useState(getTodayDateString);
+  const queryClient = useQueryClient();
 
     useEffect(() => {
       document.title = "POS | Orders"
@@ -25,6 +35,24 @@ const Orders = () => {
   if(isError) {
     enqueueSnackbar("Something went wrong!", {variant: "error"})
   }
+
+  const cateringPaymentMutation = useMutation({
+    mutationFn: updateCateringPaymentStatus,
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["orders"] });
+      enqueueSnackbar(
+        variables.isPaid
+          ? "Order catering ditandai lunas"
+          : "Order catering ditandai belum lunas",
+        { variant: "success" }
+      );
+    },
+    onError: () => {
+      enqueueSnackbar("Gagal mengubah status bayar catering", {
+        variant: "error",
+      });
+    },
+  });
 
   const orders = resData?.data.data || [];
   const formatFilterDate = (date) => {
@@ -80,7 +108,23 @@ const Orders = () => {
         {
           filteredOrders.length > 0 ? (
             filteredOrders.map((order) => {
-              return <OrderCard key={order._id} order={order} />
+              return (
+                <OrderCard
+                  key={order._id}
+                  order={order}
+                  onCateringPaidChange={(isPaid) =>
+                    cateringPaymentMutation.mutate({
+                      orderId: order.id || order._id,
+                      isPaid,
+                    })
+                  }
+                  isUpdatingCateringPayment={
+                    cateringPaymentMutation.isPending &&
+                    (cateringPaymentMutation.variables?.orderId ===
+                      (order.id || order._id))
+                  }
+                />
+              )
             })
           ) : <p className="col-span-3 text-gray-500">No orders available</p>
         }
