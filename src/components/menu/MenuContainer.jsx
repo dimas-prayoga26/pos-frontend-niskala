@@ -123,6 +123,7 @@ const MenuContainer = () => {
               id: category.id || category._id,
               name: category.name,
               icon: category.icon || categoryIcons[category.name] || "",
+              taxRate: category.taxRate ?? category.tax ?? null,
               items: menuItems
                 .filter(
                   (item) =>
@@ -134,6 +135,12 @@ const MenuContainer = () => {
                   name: item.name,
                   price: item.price,
                   imageUrl: item.imageUrl,
+                  taxRate:
+                    item.category?.taxRate ??
+                    item.category?.tax ??
+                    category.taxRate ??
+                    category.tax ??
+                    null,
                 })),
             }))
             .filter((menu) => menu.items.length > 0)
@@ -192,6 +199,7 @@ const MenuContainer = () => {
         menuItemId: cartItemId,
         name: item.name,
         categoryName: selected.name,
+        taxRate: item.taxRate ?? selected.taxRate ?? null,
         basePrice: menuPrice,
         originalPrice: item.price,
         addOns: [],
@@ -210,6 +218,7 @@ const MenuContainer = () => {
       menuItemId: cartItemId,
       name: item.name,
       categoryName: selected.name,
+      taxRate: item.taxRate ?? selected.taxRate ?? null,
       basePrice: menuPrice,
       originalPrice: item.price,
       addOns: [],

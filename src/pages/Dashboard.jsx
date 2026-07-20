@@ -3,13 +3,14 @@ import Metrics from "../components/dashboard/Metrics";
 import RecentOrders from "../components/dashboard/RecentOrders";
 import StockManagement from "../components/dashboard/StockManagement";
 import MenuManagement from "../components/dashboard/MenuManagement";
+import SettingsManagement from "../components/dashboard/SettingsManagement";
 import { useSelector } from "react-redux";
 
 const Dashboard = () => {
   const userRole = useSelector((state) => state.user.role);
   const isAdmin = userRole?.toLowerCase() === "admin";
   const tabs = isAdmin
-    ? ["Metrics", "Orders", "Stock", "Menu"]
+    ? ["Metrics", "Orders", "Stock", "Menu", "Setting"]
     : ["Metrics", "Orders", "Stock"];
 
   useEffect(() => {
@@ -47,6 +48,7 @@ const Dashboard = () => {
       {activeTab === "Orders" && <RecentOrders />}
       {activeTab === "Stock" && <StockManagement />}
       {activeTab === "Menu" && isAdmin && <MenuManagement />}
+      {activeTab === "Setting" && isAdmin && <SettingsManagement />}
     </div>
   );
 };

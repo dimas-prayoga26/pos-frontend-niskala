@@ -6,6 +6,7 @@ const initialState = {
     customerName: "",
     guests: 1,
     orderType: "Offline",
+    orderPlatform: "",
     selectedCategoryName: "",
     catering: {
         paymentPlan: "Full",
@@ -25,10 +26,11 @@ const customerSlice = createSlice({
     initialState,
     reducers : {
         setCustomer: (state, action) => {
-            const { name, guests, orderType, selectedCategoryName, catering } = action.payload;
+            const { name, guests, orderType, orderPlatform, selectedCategoryName, catering } = action.payload;
             state.customerName = name ?? state.customerName;
             state.guests = guests ?? state.guests;
             state.orderType = orderType ?? state.orderType;
+            state.orderPlatform = orderPlatform ?? state.orderPlatform;
             state.selectedCategoryName = selectedCategoryName ?? state.selectedCategoryName;
             state.catering = catering
                 ? { ...state.catering, ...catering }
@@ -39,6 +41,7 @@ const customerSlice = createSlice({
             state.customerName = "";
             state.guests = 1;
             state.orderType = "Offline";
+            state.orderPlatform = "";
             state.catering = {
                 paymentPlan: "Full",
                 institution: "",

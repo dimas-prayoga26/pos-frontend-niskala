@@ -64,7 +64,7 @@ const OrderCard = ({
                 )}
                 {isOnlineOrder && (
                   <span className="rounded-md bg-[#2e5b46] px-2 py-1 text-xs font-bold text-[#bdf5d3]">
-                    Online
+                    {order.orderPlatform || "Online"}
                   </span>
                 )}
               </div>
@@ -136,6 +136,16 @@ const OrderCard = ({
                   <p>
                     <span className="text-[#f5f5f5]">Jenis Order:</span>{" "}
                     Catering
+                  </p>
+                )}
+                <p>
+                  <span className="text-[#f5f5f5]">Order Type:</span>{" "}
+                  {order.orderType || "-"}
+                </p>
+                {isOnlineOrder && (
+                  <p>
+                    <span className="text-[#f5f5f5]">Platform:</span>{" "}
+                    {order.orderPlatform || "-"}
                   </p>
                 )}
                 <p>
@@ -295,7 +305,7 @@ const OrderCard = ({
                 </div>
               )}
               <div className="mt-2 flex justify-between text-sm text-[#ababab]">
-                <span>Tax (11%)</span>
+                <span>Tax</span>
                 <span>{formatCurrency(order.bills.tax)}</span>
               </div>
               <div className="mt-3 flex justify-between text-lg font-bold text-[#f5f5f5]">

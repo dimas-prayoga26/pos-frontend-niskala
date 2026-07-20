@@ -2,12 +2,67 @@ import React, { useEffect } from "react";
 import BottomNav from "../components/shared/BottomNav";
 import Greetings from "../components/home/Greetings";
 import { BsCashCoin } from "react-icons/bs";
-import { GrInProgress } from "react-icons/gr";
+import { MdOutlineReceiptLong } from "react-icons/md";
 import MiniCard from "../components/home/MiniCard";
 import RecentOrders from "../components/home/RecentOrders";
 import PopularDishes from "../components/home/PopularDishes";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { getOrders } from "../https";
+import { getOrderReceivedAmount } from "../utils";
 
 const Home = () => {
+  const { data: ordersRes } = useQuery({
+    queryKey: ["orders"],
+    queryFn: getOrders,
+    placeholderData: keepPreviousData,
+  });
+
+  const getLocalDateKey = (value) => {
+    const date = value ? new Date(value) : new Date();
+
+    if (Number.isNaN(date.getTime())) return "";
+
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+
+    return `${year}-${month}-${day}`;
+  };
+  const getRelativeDateKey = (offsetDays) => {
+    const date = new Date();
+    date.setDate(date.getDate() + offsetDays);
+
+    return getLocalDateKey(date);
+  };
+  const getPercentageChange = (currentValue, previousValue) => {
+    if (!previousValue) return currentValue > 0 ? 100 : 0;
+
+    return Math.round(((currentValue - previousValue) / previousValue) * 100);
+  };
+
+  const orders = ordersRes?.data?.data || [];
+  const todayKey = getLocalDateKey();
+  const yesterdayKey = getRelativeDateKey(-1);
+  const todayOrders = orders.filter(
+    (order) => getLocalDateKey(order.orderDate) === todayKey
+  );
+  const yesterdayOrders = orders.filter(
+    (order) => getLocalDateKey(order.orderDate) === yesterdayKey
+  );
+  const todayRevenue = todayOrders.reduce((total, order) => {
+    return total + getOrderReceivedAmount(order);
+  }, 0);
+  const yesterdayRevenue = yesterdayOrders.reduce((total, order) => {
+    return total + getOrderReceivedAmount(order);
+  }, 0);
+  const revenuePercentageChange = getPercentageChange(
+    todayRevenue,
+    yesterdayRevenue
+  );
+  const orderPercentageChange = getPercentageChange(
+    todayOrders.length,
+    yesterdayOrders.length
+  );
 
     useEffect(() => {
       document.title = "POS | Home"
@@ -19,8 +74,19 @@ const Home = () => {
       <div className="flex-[3] min-w-0">
         <Greetings />
         <div className="grid grid-cols-1 sm:grid-cols-2 w-full gap-3 px-4 md:px-8 mt-8">
-          <MiniCard title="Total Earnings" icon={<BsCashCoin />} number={512} footerNum={1.6} />
-          <MiniCard title="In Progress" icon={<GrInProgress />} number={16} footerNum={3.6} />
+          <MiniCard
+            title="Total Pendapatan"
+            icon={<BsCashCoin />}
+            number={todayRevenue}
+            percentageChange={revenuePercentageChange}
+            isCurrency
+          />
+          <MiniCard
+            title="Order Hari Ini"
+            icon={<MdOutlineReceiptLong />}
+            number={todayOrders.length}
+            percentageChange={orderPercentageChange}
+          />
         </div>
         <RecentOrders />
       </div>

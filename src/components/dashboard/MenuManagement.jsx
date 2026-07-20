@@ -77,6 +77,7 @@ const emptyCategoryForm = {
   isActive: true,
   name: "",
   icon: "☕",
+  taxRate: "",
 };
 
 const emptyMenuForm = {
@@ -192,7 +193,10 @@ const MenuManagement = () => {
     if (!keyword) return categories;
 
     return categories.filter((category) =>
-      [category.name, category.icon].join(" ").toLowerCase().includes(keyword)
+      [category.name, category.icon, category.taxRate ?? category.tax ?? ""]
+        .join(" ")
+        .toLowerCase()
+        .includes(keyword)
     );
   }, [categories, categorySearch]);
 
@@ -276,9 +280,23 @@ const MenuManagement = () => {
       return;
     }
 
+    const parsedTaxRate =
+      categoryForm.taxRate === "" ? null : Number(categoryForm.taxRate);
+
+    if (
+      parsedTaxRate !== null &&
+      (!Number.isFinite(parsedTaxRate) || parsedTaxRate < 0 || parsedTaxRate > 100)
+    ) {
+      enqueueSnackbar("Tax category harus di antara 0 sampai 100%.", {
+        variant: "warning",
+      });
+      return;
+    }
+
     categoryMutation.mutate({
       name: categoryForm.name.trim(),
       icon: categoryForm.icon.trim(),
+      taxRate: parsedTaxRate,
       isActive: Boolean(categoryForm.isActive),
     });
   };
@@ -308,6 +326,10 @@ const MenuManagement = () => {
       isActive: category.isActive !== false,
       name: category.name,
       icon: category.icon || "☕",
+      taxRate:
+        category.taxRate === null || category.taxRate === undefined
+          ? ""
+          : String(category.taxRate),
     });
   };
 
@@ -421,6 +443,21 @@ const MenuManagement = () => {
               ))}
             </div>
             <label className="mt-4 block text-sm font-semibold text-[#ababab]">
+              Tax (%)
+              <input
+                value={categoryForm.taxRate}
+                onChange={(event) =>
+                  updateCategoryForm("taxRate", event.target.value)
+                }
+                type="number"
+                min="0"
+                max="100"
+                step="0.01"
+                placeholder="Kosong = 0%"
+                className="mt-2 w-full rounded-lg bg-[#262626] px-4 py-3 text-sm text-[#f5f5f5] outline-none"
+              />
+            </label>
+            <label className="mt-4 block text-sm font-semibold text-[#ababab]">
               Status
               <select
                 value={categoryForm.isActive ? "active" : "inactive"}
@@ -476,6 +513,7 @@ const MenuManagement = () => {
                   <tr>
                     <th className="p-3">Icon</th>
                     <th className="p-3">Category</th>
+                    <th className="p-3 text-center">Tax</th>
                     <th className="p-3 text-center">Status</th>
                     <th className="p-3 text-center">Aksi</th>
                   </tr>
@@ -488,6 +526,9 @@ const MenuManagement = () => {
                     >
                       <td className="p-4 text-xl">{category.icon || "-"}</td>
                       <td className="p-4 font-semibold">{category.name}</td>
+                      <td className="p-4 text-center">
+                        {category.taxRate ?? category.tax ?? 0}%
+                      </td>
                       <td className="p-4 text-center">
                         <span
                           className={`inline-flex rounded-md px-3 py-1 text-xs font-bold ${
@@ -521,7 +562,7 @@ const MenuManagement = () => {
                   ))}
                   {filteredCategories.length === 0 && (
                     <tr>
-                      <td className="p-4 text-center text-[#ababab]" colSpan={4}>
+                      <td className="p-4 text-center text-[#ababab]" colSpan={5}>
                         No categories found
                       </td>
                     </tr>

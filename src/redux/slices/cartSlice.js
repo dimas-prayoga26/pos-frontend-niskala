@@ -6,6 +6,8 @@ const getItemPrice = (item) => item.pricePerQuantity * item.quantity;
 const getAddOnTotal = (item) =>
   (item.addOns || []).reduce((total, addOn) => total + (Number(addOn.price) || 0), 0);
 const syncItemBasePrice = (existingItem, nextItem) => {
+  existingItem.taxRate = nextItem.taxRate ?? existingItem.taxRate ?? null;
+
   if (!nextItem.basePrice || existingItem.basePrice === nextItem.basePrice) return;
 
   existingItem.basePrice = nextItem.basePrice;

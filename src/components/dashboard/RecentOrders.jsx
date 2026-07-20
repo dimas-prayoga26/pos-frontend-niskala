@@ -20,6 +20,20 @@ const RecentOrders = () => {
   }
 
   const orders = resData?.data.data || [];
+  const getOrderTypeLabel = (order) => {
+    const isCatering =
+      Boolean(order.cateringDetails) ||
+      order.items?.some((item) => item.categoryName === "Catering");
+
+    if (isCatering) return "Catering";
+
+    if (order.orderType === "Online") {
+      return order.orderPlatform ? `Online / ${order.orderPlatform}` : "Online";
+    }
+
+    return order.orderType || "Offline";
+  };
+
   const filteredOrders = useMemo(() => {
     const keyword = searchQuery.trim().toLowerCase();
 
@@ -35,7 +49,8 @@ const RecentOrders = () => {
         order.customerDetails?.name,
         formatDateAndTime(order.orderDate),
         `${order.items.length} Items`,
-        order.orderType || "Customer",
+        getOrderTypeLabel(order),
+        order.orderPlatform,
         formatCurrency(order.bills.totalWithTax),
         order.paymentMethod,
       ]
@@ -85,7 +100,7 @@ const RecentOrders = () => {
                 <td className="p-4">{order.customerDetails.name}</td>
                 <td className="p-4">{formatDateAndTime(order.orderDate)}</td>
                 <td className="p-4">{order.items.length} Items</td>
-                <td className="p-4">Customer</td>
+                <td className="p-4">{getOrderTypeLabel(order)}</td>
                 <td className="p-4">{formatCurrency(order.bills.totalWithTax)}</td>
                 <td className="p-4">
                   {order.paymentMethod}

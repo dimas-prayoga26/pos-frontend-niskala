@@ -16,6 +16,26 @@ import receiptLogo from "../../../../assets/logo1.png";
 
 const ONLINE_ORDER_RATE = 20;
 
+const getItemTaxRate = (item) => {
+  const taxRate = Number(item.taxRate);
+
+  return Number.isFinite(taxRate) && taxRate > 0 ? taxRate : 0;
+};
+
+const getTaxLabel = (cartData) => {
+  const taxRates = [
+    ...new Set(cartData.map((item) => getItemTaxRate(item))),
+  ].sort((a, b) => a - b);
+
+  if (taxRates.length === 0 || taxRates.every((rate) => rate === 0)) {
+    return "Tax (0%)";
+  }
+
+  if (taxRates.length === 1) return `Tax (${taxRates[0]}%)`;
+
+  return "Tax (Mixed)";
+};
+
 function loadMidtransScript(clientKey) {
   return new Promise((resolve) => {
     if (window.snap) {
@@ -38,11 +58,14 @@ const Bill = () => {
   const customerData = useSelector((state) => state.customer);
   const cartData = useSelector((state) => state.cart);
   const total = useSelector(getTotalPrice);
-  const taxRate = 11;
   const orderType = customerData.orderType || "Offline";
   const onlineOrderCharge = 0;
   const taxableTotal = total + onlineOrderCharge;
-  const tax = (taxableTotal * taxRate) / 100;
+  const tax = cartData.reduce(
+    (sum, item) => sum + ((Number(item.price) || 0) * getItemTaxRate(item)) / 100,
+    0
+  );
+  const taxLabel = getTaxLabel(cartData);
   const totalPriceWithTax = taxableTotal + tax;
   const isCateringOrder = cartData.some(
     (item) => item.categoryName === "Catering"
@@ -90,6 +113,7 @@ const Bill = () => {
       guests: customerData.guests || 1,
     },
     orderType,
+    orderPlatform: customerData.orderPlatform || "",
     orderStatus: "In Progress",
     bills: {
       total: total,
@@ -130,6 +154,13 @@ const Bill = () => {
         variant: "warning",
       });
 
+      return;
+    }
+
+    if (orderType === "Online" && !customerData.orderPlatform) {
+      enqueueSnackbar("Please select online order platform!", {
+        variant: "warning",
+      });
       return;
     }
 
@@ -399,6 +430,11 @@ const Bill = () => {
               <div class="meta-row"><span>Date</span><strong>${new Date().toLocaleString("id-ID")}</strong></div>
               <div class="meta-row"><span>Payment</span><strong>${escapeHtml(paymentMethod || "-")}</strong></div>
               ${
+                orderType === "Online"
+                  ? `<div class="meta-row"><span>Platform</span><strong>${escapeHtml(customerData.orderPlatform || "-")}</strong></div>`
+                  : ""
+              }
+              ${
                 isCateringOrder
                   ? `<div class="meta-row"><span>Instansi</span><strong>${escapeHtml(customerData.catering?.institution || "-")}</strong></div>
                      <div class="meta-row"><span>WhatsApp</span><strong>${escapeHtml(customerData.catering?.whatsapp || "-")}</strong></div>
@@ -415,7 +451,7 @@ const Bill = () => {
                   ? `<div class="total-row"><span>Online (+${ONLINE_ORDER_RATE}%)</span><strong>${formatCurrency(onlineOrderCharge)}</strong></div>`
                   : ""
               }
-              <div class="total-row"><span>Tax (${taxRate}%)</span><strong>${formatCurrency(tax)}</strong></div>
+              <div class="total-row"><span>${taxLabel}</span><strong>${formatCurrency(tax)}</strong></div>
               <div class="total-row grand"><span>Total</span><span>${formatCurrency(totalPriceWithTax)}</span></div>
             </div>
             ${
@@ -457,7 +493,7 @@ const Bill = () => {
         </div>
       )}
       <div className="flex items-center justify-between px-5 mt-2">
-        <p className="text-xs text-[#ababab] font-medium mt-2">Tax(11%)</p>
+        <p className="text-xs text-[#ababab] font-medium mt-2">{taxLabel}</p>
         <h1 className="text-[#f5f5f5] text-md font-bold">
           {formatCurrency(tax)}
         </h1>

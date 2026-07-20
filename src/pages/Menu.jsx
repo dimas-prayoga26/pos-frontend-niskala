@@ -31,7 +31,9 @@ const Menu = () => {
             <p className="text-sm text-[#ababab]">Order Type</p>
             <div className="flex rounded-lg bg-[#1a1a1a] p-1">
               <button
-                onClick={() => dispatch(setCustomer({ orderType: "Offline" }))}
+                onClick={() =>
+                  dispatch(setCustomer({ orderType: "Offline", orderPlatform: "" }))
+                }
                 className={`px-4 py-2 text-sm font-semibold rounded-md ${
                   orderType === "Offline"
                     ? "bg-[#a79981] text-[#101010]"

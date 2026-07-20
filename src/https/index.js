@@ -55,6 +55,14 @@ export const updateCateringPaymentStatus = ({ orderId, isPaid }) =>
   axiosWrapper.put(`/api/order/${orderId}/catering-payment`, { isPaid });
 export const addCateringPayment = ({ orderId, amount }) =>
   axiosWrapper.patch(`/api/order/${orderId}/catering-payment/add`, { amount });
+export const getOrderPlatforms = (params = {}) =>
+  axiosWrapper.get("/api/order-platform", { params });
+export const addOrderPlatform = (data) =>
+  axiosWrapper.post("/api/order-platform", data);
+export const updateOrderPlatform = ({ platformId, ...platformData }) =>
+  axiosWrapper.put(`/api/order-platform/${platformId}`, platformData);
+export const deleteOrderPlatform = (platformId) =>
+  axiosWrapper.delete(`/api/order-platform/${platformId}`);
 
 // Stock Item Endpoints
 export const addStockItem = (data) => axiosWrapper.post("/api/stock-item/", data);

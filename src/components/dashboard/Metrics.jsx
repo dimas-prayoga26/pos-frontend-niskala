@@ -1,7 +1,7 @@
-import React from "react";
+import React, { useMemo, useState } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { metricsData } from "../../constants";
-import { getCategories, getMenuItems, getOrders } from "../../https";
+import { getCategories, getMenuItems, getOrders, getStockItems } from "../../https";
+import { formatCurrency, getOrderReceivedAmount } from "../../utils";
 
 const MetricCard = ({ item }) => {
   return (
@@ -11,24 +11,9 @@ const MetricCard = ({ item }) => {
     >
       <div className="flex justify-between items-center">
         <p className="font-medium text-xs text-[#f5f5f5]">{item.title}</p>
-        <div className="flex items-center gap-1">
-          <svg
-            className="w-3 h-3"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            strokeWidth="4"
-            fill="none"
-            style={{ color: item.isIncrease ? "#f5f5f5" : "red" }}
-          >
-            <path d={item.isIncrease ? "M5 15l7-7 7 7" : "M19 9l-7 7-7-7"} />
-          </svg>
-          <p
-            className="font-medium text-xs"
-            style={{ color: item.isIncrease ? "#f5f5f5" : "red" }}
-          >
-            {item.percentage}
-          </p>
-        </div>
+        <span className="rounded-md bg-black/20 px-2 py-1 text-xs font-bold text-[#f5f5f5]">
+          {item.badge}
+        </span>
       </div>
       <p className="mt-1 font-semibold text-2xl text-[#f5f5f5]">
         {item.value}
@@ -38,6 +23,8 @@ const MetricCard = ({ item }) => {
 };
 
 const Metrics = () => {
+  const [selectedPeriod, setSelectedPeriod] = useState("last-month");
+  const [isPeriodOpen, setIsPeriodOpen] = useState(false);
   const {
     data: categoriesRes,
     isLoading: isCategoriesLoading,
@@ -68,46 +55,146 @@ const Metrics = () => {
     placeholderData: keepPreviousData,
   });
 
+  const {
+    data: stockItemsRes,
+    isLoading: isStockItemsLoading,
+    isError: isStockItemsError,
+  } = useQuery({
+    queryKey: ["stock-items"],
+    queryFn: getStockItems,
+    placeholderData: keepPreviousData,
+  });
+
+  const periodOptions = [
+    { value: "today", label: "Today", badge: "Hari ini" },
+    { value: "last-7-days", label: "Last 7 Days", badge: "7 hari" },
+    { value: "last-month", label: "Last 1 Month", badge: "1 bulan" },
+    { value: "last-3-months", label: "Last 3 Months", badge: "3 bulan" },
+    { value: "all-time", label: "All Time", badge: "Semua" },
+  ];
+  const activePeriod =
+    periodOptions.find((period) => period.value === selectedPeriod) ||
+    periodOptions[2];
+
+  const getPeriodStartDate = (period) => {
+    const date = new Date();
+    date.setHours(0, 0, 0, 0);
+
+    if (period === "today") return date;
+
+    if (period === "last-7-days") {
+      date.setDate(date.getDate() - 6);
+      return date;
+    }
+
+    if (period === "last-month") {
+      date.setMonth(date.getMonth() - 1);
+      return date;
+    }
+
+    if (period === "last-3-months") {
+      date.setMonth(date.getMonth() - 3);
+      return date;
+    }
+
+    return null;
+  };
+
   const totalCategories = categoriesRes?.data?.data?.length || 0;
   const totalDishes = menuItemsRes?.data?.data?.length || 0;
   const orders = ordersRes?.data?.data || [];
-  const activeOrders = orders.filter((order) => {
-    return order.orderStatus === "In Progress";
+  const stockItems = stockItemsRes?.data?.data || [];
+  const periodStartDate = useMemo(
+    () => getPeriodStartDate(selectedPeriod),
+    [selectedPeriod]
+  );
+  const filteredOrders = useMemo(() => {
+    if (!periodStartDate) return orders;
+
+    return orders.filter((order) => {
+      const orderDate = new Date(order.orderDate);
+
+      if (Number.isNaN(orderDate.getTime())) return false;
+
+      return orderDate >= periodStartDate;
+    });
+  }, [orders, periodStartDate]);
+  const periodRevenue = filteredOrders.reduce(
+    (total, order) => total + getOrderReceivedAmount(order),
+    0
+  );
+  const averageOrderValue = filteredOrders.length
+    ? periodRevenue / filteredOrders.length
+    : 0;
+  const unpaidCateringOrders = filteredOrders.filter((order) => {
+    return order.cateringDetails && !order.cateringDetails.isPaid;
   }).length;
+  const stockNeedsOrder = stockItems.filter(
+    (item) => item.status === "HARUS ORDER"
+  ).length;
 
-  const isLoading = isOrdersLoading || isCategoriesLoading || isMenuItemsLoading;
-  const hasError = isOrdersError || isCategoriesError || isMenuItemsError;
+  const isLoading =
+    isOrdersLoading ||
+    isCategoriesLoading ||
+    isMenuItemsLoading ||
+    isStockItemsLoading;
+  const hasError =
+    isOrdersError ||
+    isCategoriesError ||
+    isMenuItemsError ||
+    isStockItemsError;
 
-  const itemDetails = [
+  const transactionMetrics = [
     {
-      title: "Total Categories",
+      title: "Pendapatan",
+      value: isLoading ? "..." : formatCurrency(periodRevenue),
+      badge: activePeriod.badge,
+      color: "#025cca",
+    },
+    {
+      title: "Total Order",
+      value: isLoading ? "..." : filteredOrders.length,
+      badge: activePeriod.badge,
+      color: "#02a05a",
+    },
+    {
+      title: "Rata-rata Transaksi",
+      value: isLoading ? "..." : formatCurrency(averageOrderValue),
+      badge: activePeriod.badge,
+      color: "#b58105",
+    },
+    {
+      title: "Catering Belum Lunas",
+      value: isLoading ? "..." : unpaidCateringOrders,
+      badge: activePeriod.badge,
+      color: "#be3e3f",
+    },
+  ];
+
+  const operationalMetrics = [
+    {
+      title: "Total Category",
       value: isCategoriesLoading ? "..." : totalCategories,
-      percentage: "Live",
+      badge: "Live",
       color: "#5b45b0",
-      isIncrease: true,
     },
     {
-      title: "Total Dishes",
+      title: "Total Menu",
       value: isMenuItemsLoading ? "..." : totalDishes,
-      percentage: "Live",
+      badge: "Live",
       color: "#285430",
-      isIncrease: true,
     },
     {
-      title: "Active Orders",
-      value: isLoading ? "..." : activeOrders,
-      percentage: "Live",
+      title: "Stok Yang Harus Diorder",
+      value: isStockItemsLoading ? "..." : stockNeedsOrder,
+      badge: "Restock",
       color: "#735f32",
-      isIncrease: true,
     },
     {
-      title: "Completed Orders",
-      value: isLoading
-        ? "..."
-        : orders.filter((order) => order.orderStatus === "Completed").length,
-      percentage: "Live",
+      title: "Total Stok Item",
+      value: isStockItemsLoading ? "..." : stockItems.length,
+      badge: "Live",
       color: "#7f167f",
-      isIncrease: true,
     },
   ];
 
@@ -115,39 +202,64 @@ const Metrics = () => {
     <div className="container mx-auto py-2 px-4 md:px-6">
       <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4">
         <div>
-          <h2 className="font-semibold text-[#f5f5f5] text-xl">
-            Overall Performance
-          </h2>
+          <h2 className="font-semibold text-[#f5f5f5] text-xl">Metrics</h2>
           <p className="text-sm text-[#ababab]">
-            Ringkasan performa transaksi dan aktivitas restoran.
+            Ringkasan transaksi dan operasional restoran.
           </p>
         </div>
-        <button className="flex items-center gap-1 px-4 py-2 rounded-md text-[#f5f5f5] bg-[#1a1a1a]">
-          Last 1 Month
-          <svg
-            className="w-3 h-3"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            strokeWidth="4"
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => setIsPeriodOpen((current) => !current)}
+            className="flex min-w-[150px] items-center justify-between gap-3 rounded-md bg-[#1a1a1a] px-4 py-2 text-[#f5f5f5]"
           >
-            <path d="M19 9l-7 7-7-7" />
-          </svg>
-        </button>
+            <span>{activePeriod.label}</span>
+            <svg
+              className={`h-3 w-3 transition-transform ${
+                isPeriodOpen ? "rotate-180" : ""
+              }`}
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth="4"
+            >
+              <path d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+          {isPeriodOpen && (
+            <div className="absolute right-0 top-[calc(100%+8px)] z-20 w-44 overflow-hidden rounded-lg border border-[#333] bg-[#1a1a1a] shadow-2xl shadow-black/40">
+              {periodOptions.map((period) => (
+                <button
+                  key={period.value}
+                  type="button"
+                  onClick={() => {
+                    setSelectedPeriod(period.value);
+                    setIsPeriodOpen(false);
+                  }}
+                  className={`block w-full px-4 py-3 text-left text-sm font-semibold hover:bg-[#262626] ${
+                    selectedPeriod === period.value
+                      ? "bg-[#a79981] text-[#101010]"
+                      : "text-[#f5f5f5]"
+                  }`}
+                >
+                  {period.label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-        {metricsData.map((metric, index) => {
+        {transactionMetrics.map((metric, index) => {
           return <MetricCard key={index} item={metric} />;
         })}
       </div>
 
       <div className="flex flex-col justify-between mt-12">
         <div>
-          <h2 className="font-semibold text-[#f5f5f5] text-xl">
-            Item Details
-          </h2>
+          <h2 className="font-semibold text-[#f5f5f5] text-xl">Operational</h2>
           <p className="text-sm text-[#ababab]">
-            Data kategori, menu, dan order customer dari aplikasi POS.
+            Data master menu dan stok dari aplikasi POS.
           </p>
           {hasError && (
             <p className="text-sm text-red-400 mt-1">
@@ -157,7 +269,7 @@ const Metrics = () => {
         </div>
 
         <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-          {itemDetails.map((item, index) => {
+          {operationalMetrics.map((item, index) => {
             return <MetricCard key={index} item={item} />;
           })}
         </div>
