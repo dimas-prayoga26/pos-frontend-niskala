@@ -10,6 +10,7 @@ import Header from "./components/shared/Header";
 import { useSelector } from "react-redux";
 import useLoadData from "./hooks/useLoadData";
 import FullScreenLoader from "./components/shared/FullScreenLoader"
+import useRealtimeData from "./hooks/useRealtimeData";
 
 function Layout() {
   const isLoading = useLoadData();
@@ -72,6 +73,8 @@ function ProtectedRoutes({ children }) {
 }
 
 function App() {
+  useRealtimeData();
+
   return (
     <Router>
       <Layout />

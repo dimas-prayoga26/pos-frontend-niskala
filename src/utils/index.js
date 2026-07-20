@@ -30,6 +30,19 @@ export const formatCurrency = (value) =>
     maximumFractionDigits: 0,
   }).format(Number(value) || 0);
 
+export const getOrderReceivedAmount = (order) => {
+  const totalWithTax = Number(order?.bills?.totalWithTax) || 0;
+
+  if (!order?.cateringDetails) return totalWithTax;
+
+  const paymentPlan = order.cateringDetails.paymentPlan || "Full";
+  const isPaid = Boolean(order.cateringDetails.isPaid);
+
+  if (paymentPlan !== "DP" || isPaid) return totalWithTax;
+
+  return Number(order.cateringDetails.dp ?? order.bills?.dp ?? 0) || 0;
+};
+
 export const formatDate = (date) => {
   const months = [
     'January', 'February', 'March', 'April', 'May', 'June',

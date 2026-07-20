@@ -10,68 +10,105 @@ import pooriSabji from '../assets/images/poori-sabji.webp';
 import roganJosh from '../assets/images/rogan-josh.jpg';
 import { color } from 'framer-motion';
 
-export const popularDishes = [
-    {
-      id: 1,
-      image: butterChicken,
-      name: 'Butter Chicken',
-      numberOfOrders: 250,
-    },
-    {
-      id: 2,
-      image: palakPaneer,
-      name: 'Palak Paneer',
-      numberOfOrders: 190,
-    },
-    {
-      id: 3,
-      image: biryani,
-      name: 'Hyderabadi Biryani',
-      numberOfOrders: 300,
-    },
-    {
-      id: 4,
-      image: masalaDosa,
-      name: 'Masala Dosa',
-      numberOfOrders: 220,
-    },
-    {
-      id: 5,
-      image: choleBhature,
-      name: 'Chole Bhature',
-      numberOfOrders: 270,
-    },
-    {
-      id: 6,
-      image: rajmaChawal,
-      name: 'Rajma Chawal',
-      numberOfOrders: 180,
-    },
-    {
-      id: 7,
-      image: paneerTikka,
-      name: 'Paneer Tikka',
-      numberOfOrders: 210,
-    },
-    {
-      id: 8,
-      image: gulabJamun,
-      name: 'Gulab Jamun',
-      numberOfOrders: 310,
-    },
-    {
-      id: 9,
-      image: pooriSabji,
-      name: 'Poori Sabji',
-      numberOfOrders: 140,
-    },
-    {
-      id: 10,
-      image: roganJosh,
-      name: 'Rogan Josh',
-      numberOfOrders: 160,
-    },
-  ];
+export const bestSellingMenus = [
+  {
+    id: 1,
+    image: butterChicken,
+    name: "Chicken Katsu Rice Bowl",
+    numberOfOrders: 250,
+    type: "Makanan",
+  },
+  {
+    id: 2,
+    image: palakPaneer,
+    name: "Ayam Geprek Rice Bowl",
+    numberOfOrders: 190,
+    type: "Makanan",
+  },
+  {
+    id: 3,
+    image: biryani,
+    name: "Beef Teriyaki Rice Bowl",
+    numberOfOrders: 300,
+    type: "Makanan",
+  },
+  {
+    id: 4,
+    image: masalaDosa,
+    name: "Indomie Goreng Telur",
+    numberOfOrders: 220,
+    type: "Makanan",
+  },
+  {
+    id: 5,
+    image: choleBhature,
+    name: "Kentang Goreng",
+    numberOfOrders: 270,
+    type: "Makanan",
+  },
+  {
+    id: 6,
+    image: rajmaChawal,
+    name: "Americano",
+    numberOfOrders: 180,
+    type: "Minuman",
+  },
+  {
+    id: 7,
+    image: paneerTikka,
+    name: "Cappuccino",
+    numberOfOrders: 210,
+    type: "Minuman",
+  },
+  {
+    id: 8,
+    image: gulabJamun,
+    name: "Latte",
+    numberOfOrders: 310,
+    type: "Minuman",
+  },
+  {
+    id: 9,
+    image: pooriSabji,
+    name: "Matcha",
+    numberOfOrders: 140,
+    type: "Minuman",
+  },
+  {
+    id: 10,
+    image: roganJosh,
+    name: "Thai Tea",
+    numberOfOrders: 160,
+    type: "Minuman",
+  },
+];
+
+export const cateringPackages = [
+  {
+    id: 1,
+    image: pooriSabji,
+    name: "Paket 20K / Box",
+    price: 20000,
+  },
+  {
+    id: 2,
+    image: rajmaChawal,
+    name: "Paket 28K / Box",
+    price: 28000,
+  },
+  {
+    id: 3,
+    image: biryani,
+    name: "Paket 30K / Box",
+    price: 30000,
+  },
+  {
+    id: 4,
+    image: paneerTikka,
+    name: "Paket 35K / Box",
+    price: 35000,
+  },
+];
 
 
 export const startersItem = [
@@ -361,20 +398,6 @@ export const menus = [
   { id: 7, name: "Alcoholic Drinks", icon: "🍺", items: alcoholicDrinks },
   { id: 8, name: "Salads", icon: "🥗", items: salads }
 ]
-
-export const metricsData = [
-  { title: "Revenue", value: "Rp 50.846,90", percentage: "12%", color: "#025cca", isIncrease: false },
-  { title: "Outbound Clicks", value: "10,342", percentage: "16%", color: "#02ca3a", isIncrease: true },
-  { title: "Total Customer", value: "19,720", percentage: "10%", color: "#f6b100", isIncrease: true },
-  { title: "Event Count", value: "20,000", percentage: "10%", color: "#be3e3f", isIncrease: false },
-];
-
-export const itemsData = [
-  { title: "Total Categories", value: "8", percentage: "12%", color: "#5b45b0", isIncrease: false },
-  { title: "Total Dishes", value: "50", percentage: "12%", color: "#285430", isIncrease: true },
-  { title: "Active Orders", value: "12", percentage: "12%", color: "#735f32", isIncrease: true },
-  { title: "Completed Orders", value: "10", color: "#7f167f"}
-];
 
 export const orders = [
   {

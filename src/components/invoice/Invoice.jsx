@@ -62,6 +62,11 @@ const buildReceiptHtml = (orderInfo) => {
         <div class="meta-row"><span>Date</span><strong>${orderDate.toLocaleString("id-ID")}</strong></div>
         <div class="meta-row"><span>Payment</span><strong>${escapeHtml(orderInfo.paymentMethod || "-")}</strong></div>
         ${
+          orderInfo.orderType === "Online"
+            ? `<div class="meta-row"><span>Platform</span><strong>${escapeHtml(orderInfo.orderPlatform || "-")}</strong></div>`
+            : ""
+        }
+        ${
           cateringDetails
             ? `<div class="meta-row"><span>Instansi</span><strong>${escapeHtml(cateringDetails.institution || "-")}</strong></div>
                <div class="meta-row"><span>WhatsApp</span><strong>${escapeHtml(cateringDetails.whatsapp || "-")}</strong></div>
