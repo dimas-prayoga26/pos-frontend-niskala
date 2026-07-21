@@ -31,17 +31,23 @@ const useRealtimeData = () => {
     const refreshPlatformData = () => {
       queryClient.invalidateQueries({ queryKey: ["order-platforms"] });
     };
+    const refreshRecapData = () => {
+      queryClient.invalidateQueries({ queryKey: ["recaps"] });
+      queryClient.invalidateQueries({ queryKey: ["recap-meta"] });
+    };
 
     socket.on("orders:changed", refreshOrders);
     socket.on("menu:changed", refreshMenuData);
     socket.on("stock:changed", refreshStockData);
     socket.on("platforms:changed", refreshPlatformData);
+    socket.on("recaps:changed", refreshRecapData);
 
     return () => {
       socket.off("orders:changed", refreshOrders);
       socket.off("menu:changed", refreshMenuData);
       socket.off("stock:changed", refreshStockData);
       socket.off("platforms:changed", refreshPlatformData);
+      socket.off("recaps:changed", refreshRecapData);
       socket.disconnect();
     };
   }, [queryClient]);
