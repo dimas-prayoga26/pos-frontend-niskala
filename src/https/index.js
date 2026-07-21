@@ -6,6 +6,7 @@ import { axiosWrapper } from "./axiosWrapper";
 export const login = (data) => axiosWrapper.post("/api/user/login", data);
 export const register = (data) => axiosWrapper.post("/api/user/register", data);
 export const getUserData = () => axiosWrapper.get("/api/user");
+export const getUsers = () => axiosWrapper.get("/api/user/all");
 export const logout = () => axiosWrapper.post("/api/user/logout");
 
 // Category Endpoints
@@ -63,6 +64,13 @@ export const updateOrderPlatform = ({ platformId, ...platformData }) =>
   axiosWrapper.put(`/api/order-platform/${platformId}`, platformData);
 export const deleteOrderPlatform = (platformId) =>
   axiosWrapper.delete(`/api/order-platform/${platformId}`);
+
+// Recap Endpoints
+export const getRecapMeta = (params = {}) =>
+  axiosWrapper.get("/api/recap/meta", { params });
+export const getRecaps = (periodType) => axiosWrapper.get(`/api/recap/${periodType}`);
+export const addRecap = ({ periodType, data }) =>
+  axiosWrapper.post(`/api/recap/${periodType}`, data);
 
 // Stock Item Endpoints
 export const addStockItem = (data) => axiosWrapper.post("/api/stock-item/", data);

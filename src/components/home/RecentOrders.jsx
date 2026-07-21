@@ -82,9 +82,26 @@ const RecentOrders = () => {
     <div className="px-4 md:px-8 mt-6">
       <div className="bg-[#1a1a1a] w-full min-h-[360px] md:h-[450px] rounded-lg">
         <div className="flex justify-between items-center px-6 py-4">
-          <h1 className="text-[#f5f5f5] text-lg font-semibold tracking-wide">
-            Pesanan Hari Ini
-          </h1>
+          <div>
+            <h1 className="text-[#f5f5f5] text-lg font-semibold tracking-wide">
+              Pesanan Hari Ini
+            </h1>
+            <p className="mt-1 text-sm text-[#ababab]">
+              Total pesanan:{" "}
+              <span className="font-semibold text-[#f5f5f5]">
+                {todayOrders.length}
+              </span>
+              {searchQuery.trim() && (
+                <>
+                  {" "}
+                  | Ditampilkan:{" "}
+                  <span className="font-semibold text-[#f5f5f5]">
+                    {filteredOrders.length}
+                  </span>
+                </>
+              )}
+            </p>
+          </div>
           <a href="" className="text-[#025cca] text-sm font-semibold">
             View all
           </a>
