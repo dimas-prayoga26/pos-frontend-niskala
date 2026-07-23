@@ -34,7 +34,7 @@ const buildReceiptHtml = (orderInfo) => {
             .join(", ")}</div>`
         : "";
       const variant = item.variant
-        ? `<div class="line-note">Variant: ${escapeHtml(item.variant)}</div>`
+        ? `<div class="line-note">Pilihan: ${escapeHtml(item.variant)}</div>`
         : "";
 
       return `
@@ -111,7 +111,7 @@ const buildReceiptHtml = (orderInfo) => {
 const receiptPrintStyle = `
   * { box-sizing: border-box; }
   @page {
-    size: 80mm auto;
+    size: 58mm auto;
     margin: 0;
   }
   body {
@@ -120,23 +120,23 @@ const receiptPrintStyle = `
     color: #171717;
     background: #fff;
     font-family: "Courier New", monospace;
-    font-size: 12px;
+    font-size: 10px;
   }
   .receipt {
-    width: 72mm;
+    width: 58mm;
     margin: 0 auto;
-    padding: 10px 8px 14px;
+    padding: 7px 4mm 10px;
   }
   .logo {
     display: block;
-    width: 118px;
+    width: 82px;
     height: auto;
-    margin: 0 auto 10px;
+    margin: 0 auto 7px;
   }
   .receipt-title {
     margin: 0;
     color: #171717;
-    font-size: 12px;
+    font-size: 10px;
     font-weight: 700;
     text-align: center;
     text-transform: uppercase;
@@ -144,8 +144,8 @@ const receiptPrintStyle = `
   .meta {
     border-top: 1px dashed #999;
     border-bottom: 1px dashed #999;
-    margin: 10px 0;
-    padding: 8px 0;
+    margin: 7px 0;
+    padding: 6px 0;
   }
   .payment-meta {
     border-top: 0;
@@ -155,41 +155,42 @@ const receiptPrintStyle = `
   .item-main {
     display: flex;
     justify-content: space-between;
-    gap: 8px;
+    gap: 5px;
   }
   .meta-row + .meta-row {
     margin-top: 4px;
   }
   .item {
     border-bottom: 1px dotted #bbb;
-    padding: 7px 0;
+    padding: 5px 0;
   }
   .item-main span {
-    max-width: 42mm;
+    max-width: 29mm;
+    overflow-wrap: anywhere;
   }
   .line-note {
     color: #666;
-    font-size: 11px;
+    font-size: 9px;
     margin-top: 2px;
   }
   .totals {
     border-bottom: 1px dashed #999;
-    padding: 8px 0;
+    padding: 6px 0;
   }
   .total-row {
-    margin-top: 5px;
+    margin-top: 4px;
   }
   .grand {
     border-top: 1px dashed #999;
-    font-size: 15px;
+    font-size: 12px;
     font-weight: 700;
-    margin-top: 8px;
-    padding-top: 8px;
+    margin-top: 6px;
+    padding-top: 6px;
   }
   .footer {
-    margin-top: 12px;
+    margin-top: 9px;
     text-align: center;
-    font-size: 11px;
+    font-size: 9px;
   }
 `;
 
@@ -197,7 +198,7 @@ const Invoice = ({ orderInfo, setShowInvoice }) => {
   const orderCode = orderInfo.orderId || orderInfo.orderCode || orderInfo.id;
 
   const handlePrint = () => {
-    const WinPrint = window.open("", "", "width=420,height=720");
+    const WinPrint = window.open("", "", "width=300,height=720");
 
     WinPrint.document.write(`
       <html>

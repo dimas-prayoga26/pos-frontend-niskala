@@ -20,6 +20,10 @@ export const deleteCategory = (categoryId) =>
 
 // Menu Item Endpoints
 export const addMenuItem = (data) => axiosWrapper.post("/api/menu-item/", data);
+export const uploadMenuImage = (data) =>
+  axiosWrapper.post("/api/menu-item/upload-image", data, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
 export const getMenuItems = (categoryIdOrParams) => {
   const params =
     categoryIdOrParams && typeof categoryIdOrParams === "object"

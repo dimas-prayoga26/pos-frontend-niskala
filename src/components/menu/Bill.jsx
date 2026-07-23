@@ -305,7 +305,7 @@ const Bill = () => {
               .join(", ")}</div>`
           : "";
         const variantText = item.variant
-          ? `<div class="line-note">Variant: ${escapeHtml(item.variant)}</div>`
+          ? `<div class="line-note">Pilihan: ${escapeHtml(item.variant)}</div>`
           : "";
 
         return `
@@ -322,7 +322,7 @@ const Bill = () => {
       })
       .join("");
 
-    const printWindow = window.open("", "_blank", "width=420,height=720");
+    const printWindow = window.open("", "_blank", "width=300,height=720");
 
     if (!printWindow) {
       enqueueSnackbar("Popup blocked. Please allow popups to print receipt.", {
@@ -338,7 +338,7 @@ const Bill = () => {
           <style>
             * { box-sizing: border-box; }
             @page {
-              size: 80mm auto;
+              size: 58mm auto;
               margin: 0;
             }
             body {
@@ -347,26 +347,26 @@ const Bill = () => {
               color: #171717;
               background: #fff;
               font-family: "Courier New", monospace;
-              font-size: 12px;
+              font-size: 10px;
             }
             .receipt {
-              width: 72mm;
+              width: 58mm;
               margin: 0 auto;
-              padding: 10px 8px 14px;
+              padding: 7px 4mm 10px;
             }
             .center {
               text-align: center;
             }
             .logo {
               display: block;
-              width: 118px;
+              width: 82px;
               height: auto;
-              margin: 0 auto 10px;
+              margin: 0 auto 7px;
             }
             .receipt-title {
               margin: 0;
               color: #171717;
-              font-size: 12px;
+              font-size: 10px;
               font-weight: 700;
               text-align: center;
               text-transform: uppercase;
@@ -374,50 +374,51 @@ const Bill = () => {
             .muted,
             .line-note {
               color: #666;
-              font-size: 11px;
+              font-size: 9px;
             }
             .meta {
               border-top: 1px dashed #999;
               border-bottom: 1px dashed #999;
-              margin: 10px 0;
-              padding: 8px 0;
+              margin: 7px 0;
+              padding: 6px 0;
             }
             .meta-row,
             .total-row,
             .item-main {
               display: flex;
               justify-content: space-between;
-              gap: 8px;
+              gap: 5px;
             }
             .item {
               border-bottom: 1px dotted #bbb;
-              padding: 7px 0;
+              padding: 5px 0;
             }
             .item-main span {
-              max-width: 42mm;
+              max-width: 29mm;
+              overflow-wrap: anywhere;
             }
             .totals {
               border-bottom: 1px dashed #999;
-              padding: 8px 0;
+              padding: 6px 0;
             }
             .total-row {
-              margin-top: 5px;
+              margin-top: 4px;
             }
             .grand {
               border-top: 1px dashed #999;
-              font-size: 15px;
+              font-size: 12px;
               font-weight: 700;
-              margin-top: 8px;
-              padding-top: 8px;
+              margin-top: 6px;
+              padding-top: 6px;
             }
             .footer {
-              margin-top: 12px;
+              margin-top: 9px;
               text-align: center;
-              font-size: 11px;
+              font-size: 9px;
             }
             @media print {
               body { padding: 0; }
-              .receipt { width: 72mm; }
+              .receipt { width: 58mm; }
             }
           </style>
         </head>

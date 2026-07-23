@@ -21,6 +21,7 @@ import paneerTikka from "../../assets/images/paneer-tika.webp";
 import gulabJamun from "../../assets/images/gulab-jamun.webp";
 import pooriSabji from "../../assets/images/poori-sabji.webp";
 import roganJosh from "../../assets/images/rogan-josh.jpg";
+import noImage from "../../assets/no-image.svg";
 
 const menuItemImages = {
   "Butter Chicken": butterChicken,
@@ -82,9 +83,13 @@ const categoryIcons = {
   Catering: "🍱",
 };
 
+const defaultSizeName = "Reguler";
+const backendBaseUrl = import.meta.env.VITE_BACKEND_URL || "";
+
 const MenuContainer = () => {
   const [selected, setSelected] = useState(null);
   const [isCategoryOpen, setIsCategoryOpen] = useState(false);
+  const [selectedSizeByItem, setSelectedSizeByItem] = useState({});
   const cartData = useSelector((state) => state.cart);
   const orderType = useSelector((state) => state.customer.orderType || "Offline");
   const dispatch = useDispatch();
@@ -134,7 +139,11 @@ const MenuContainer = () => {
                   id: item.id || item._id,
                   name: item.name,
                   price: item.price,
-                  imageUrl: item.imageUrl,
+                  regularPrice: item.regularPrice ?? item.price,
+                  largePrice: item.largePrice,
+                  variants: item.variants || [],
+                  sizes: item.sizes || [],
+                  imagePath: item.imagePath || null,
                   taxRate:
                     item.category?.taxRate ??
                     item.category?.tax ??
@@ -156,7 +165,7 @@ const MenuContainer = () => {
               id: addOn.id || addOn._id || addOn.code,
               name: addOn.name,
               price: addOn.price,
-              imageUrl: addOn.imageUrl,
+              imagePath: addOn.imagePath || null,
             })),
           },
         ]
@@ -179,7 +188,17 @@ const MenuContainer = () => {
     dispatch(setCustomer({ selectedCategoryName: selected.name }));
   }, [dispatch, selected?.name]);
 
-  const getCartItemId = (item) => `${selected.id}-${item.id}`;
+  const getSelectedSizeName = (item) => {
+    const sizes = item.sizes || [];
+    return selectedSizeByItem[item.id] || sizes[0]?.name || defaultSizeName;
+  };
+
+  const getCartItemId = (item) => {
+    const selectedSize = getSelectedSizeName(item);
+    const hasSizes = (item.sizes || []).length > 0;
+
+    return `${selected.id}-${item.id}${hasSizes ? `-${selectedSize}` : ""}`;
+  };
 
   const getItemQuantity = (id) =>
     cartData.find((item) => item.id === id)?.quantity || 0;
@@ -189,9 +208,47 @@ const MenuContainer = () => {
     return isOnlineOrder ? Math.round(basePrice * 1.2) : basePrice;
   };
 
+  const getBaseItemPrice = (item) => item.sizes?.[0]?.price ?? item.price;
+
+  const getOriginalSizePrices = (item) => {
+    if (item.sizes?.length > 1) {
+      return item.sizes.reduce((prices, size) => {
+        prices[size.name] = Number(size.price) || 0;
+        return prices;
+      }, {});
+    }
+
+    const largePrice = Number(item.largePrice) || 0;
+    if (!largePrice) return null;
+
+    return {
+      Reguler: Number(item.regularPrice ?? item.price) || 0,
+      Large: largePrice,
+    };
+  };
+
+  const getSizePrices = (item) => {
+    const originalSizePrices = getOriginalSizePrices(item);
+
+    if (!originalSizePrices) return null;
+
+    return {
+      Reguler: getMenuPrice(originalSizePrices.Reguler),
+      Large: getMenuPrice(originalSizePrices.Large),
+    };
+  };
+
+  const getDefaultMenuPrice = (item) =>
+    getSizePrices(item)?.[getSelectedSizeName(item)] ??
+    getMenuPrice(getBaseItemPrice(item));
+
   const increment = (item) => {
     const cartItemId = getCartItemId(item);
-    const menuPrice = getMenuPrice(item.price);
+    const originalSizePrices = getOriginalSizePrices(item);
+    const sizePrices = getSizePrices(item);
+    const selectedSize = getSelectedSizeName(item);
+    const menuPrice =
+      sizePrices?.[selectedSize] ?? getMenuPrice(getBaseItemPrice(item));
 
     dispatch(
       addItems({
@@ -201,7 +258,11 @@ const MenuContainer = () => {
         categoryName: selected.name,
         taxRate: item.taxRate ?? selected.taxRate ?? null,
         basePrice: menuPrice,
-        originalPrice: item.price,
+        originalPrice: originalSizePrices?.[selectedSize] ?? getBaseItemPrice(item),
+        originalSizePrices,
+        sizePrices,
+        sizeVariant: sizePrices ? selectedSize : null,
+        temperatureOptions: item.variants?.length ? item.variants : null,
         addOns: [],
         pricePerQuantity: menuPrice,
         quantity: 1,
@@ -211,7 +272,11 @@ const MenuContainer = () => {
 
   const buildCartItem = (item) => {
     const cartItemId = getCartItemId(item);
-    const menuPrice = getMenuPrice(item.price);
+    const originalSizePrices = getOriginalSizePrices(item);
+    const sizePrices = getSizePrices(item);
+    const selectedSize = getSelectedSizeName(item);
+    const menuPrice =
+      sizePrices?.[selectedSize] ?? getMenuPrice(getBaseItemPrice(item));
 
     return {
       id: cartItemId,
@@ -220,7 +285,11 @@ const MenuContainer = () => {
       categoryName: selected.name,
       taxRate: item.taxRate ?? selected.taxRate ?? null,
       basePrice: menuPrice,
-      originalPrice: item.price,
+      originalPrice: originalSizePrices?.[selectedSize] ?? getBaseItemPrice(item),
+      originalSizePrices,
+      sizePrices,
+      sizeVariant: sizePrices ? selectedSize : null,
+      temperatureOptions: item.variants?.length ? item.variants : null,
       addOns: [],
       pricePerQuantity: menuPrice,
     };
@@ -241,10 +310,20 @@ const MenuContainer = () => {
     dispatch(decreaseItem(id));
   };
 
-  const getItemImage = (item, index) =>
-    item.imageUrl ||
-    menuItemImages[item.name] ||
-    fallbackImages[index % fallbackImages.length];
+  const getItemImage = (item, index) => {
+    if (item.imagePath?.startsWith("/uploads/")) {
+      return `${backendBaseUrl}${item.imagePath}`;
+    }
+
+    return item.imagePath || noImage;
+  };
+
+  const selectItemSize = (item, sizeName) => {
+    setSelectedSizeByItem((current) => ({
+      ...current,
+      [item.id]: sizeName,
+    }));
+  };
 
   const selectedIndex = Math.max(
     menuData.findIndex((menu) => menu.id === selected?.id),
@@ -374,6 +453,8 @@ const MenuContainer = () => {
           const cartItemId = getCartItemId(item);
           const quantity = getItemQuantity(cartItemId);
           const itemImage = getItemImage(item, index);
+          const sizePrices = getSizePrices(item);
+          const selectedSizeName = getSelectedSizeName(item);
 
           return (
             <div
@@ -381,22 +462,41 @@ const MenuContainer = () => {
               className="flex min-h-[210px] flex-col justify-between rounded-lg bg-[#1a1a1a] p-3 hover:bg-[#2a2a2a] sm:min-h-[260px] sm:p-4"
             >
               <div>
-                <h1 className="min-h-[40px] text-sm font-semibold text-[#f5f5f5] leading-tight sm:min-h-0 sm:text-lg">
-                  {item.name}
-                </h1>
+                <div className="min-h-[64px] sm:min-h-[72px]">
+                  <h1 className="text-sm font-semibold leading-tight text-[#f5f5f5] sm:text-lg">
+                    {item.name}
+                  </h1>
+                  {sizePrices ? (
+                    <div className="mt-2 flex flex-wrap gap-1">
+                      {Object.keys(sizePrices).map((sizeName) => (
+                        <button
+                          key={sizeName}
+                          type="button"
+                          onClick={() => selectItemSize(item, sizeName)}
+                          className={`rounded-md border px-2 py-1 text-[10px] font-bold transition sm:text-xs ${
+                            selectedSizeName === sizeName
+                              ? "border-[#a79981] bg-[#a79981] text-[#101010]"
+                              : "border-[#303030] bg-[#222222] text-[#ababab] hover:border-[#a79981] hover:text-[#a79981]"
+                          }`}
+                        >
+                          {sizeName}
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
                 <img
                   src={itemImage}
                   alt={item.name}
                   onError={(event) => {
-                    event.currentTarget.src =
-                      fallbackImages[index % fallbackImages.length];
+                    event.currentTarget.src = noImage;
                   }}
                   className="mt-2 aspect-[4/3] w-full rounded-lg object-cover sm:mt-3 sm:aspect-[16/9]"
                 />
               </div>
               <div className="mt-3 flex w-full flex-col gap-2 sm:mt-4 sm:flex-row sm:items-center sm:justify-between">
                 <p className="text-base font-bold text-[#f5f5f5] sm:text-xl">
-                  {formatCurrency(getMenuPrice(item.price))}
+                  {formatCurrency(getDefaultMenuPrice(item))}
                 </p>
                 {renderQuantityControls(item, cartItemId, quantity)}
               </div>

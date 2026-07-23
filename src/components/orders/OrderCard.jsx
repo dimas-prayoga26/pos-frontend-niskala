@@ -273,7 +273,7 @@ const OrderCard = ({
                         </h3>
                         <p className="mt-1 text-xs text-[#ababab]">
                           Qty: {item.quantity}
-                          {item.variant ? ` / ${item.variant}` : ""}
+                          {item.variant ? ` / Pilihan: ${item.variant}` : ""}
                         </p>
                         {item.addOns?.length > 0 && (
                           <p className="mt-1 text-xs text-[#a79981]">

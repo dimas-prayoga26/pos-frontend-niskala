@@ -13,6 +13,7 @@ import {
   deleteMenuItem,
   getCategories,
   getMenuItems,
+  uploadMenuImage,
   updateCategory,
   updateMenuItem,
 } from "../../https";
@@ -85,7 +86,10 @@ const emptyMenuForm = {
   isAvailable: true,
   name: "",
   price: "",
-  imageUrl: "",
+  variants: [],
+  sizes: [],
+  imageFile: null,
+  imagePath: "",
 };
 
 const ITEMS_PER_PAGE = 10;
@@ -144,13 +148,25 @@ const MenuManagement = () => {
   });
 
   const menuItemMutation = useMutation({
-    mutationFn: (payload) =>
-      editingMenuItem
+    mutationFn: async ({ imageFile, ...payload }) => {
+      let imagePath = payload.imagePath;
+
+      if (imageFile) {
+        const formData = new FormData();
+        formData.append("image", imageFile);
+        const uploadRes = await uploadMenuImage(formData);
+        imagePath = uploadRes.data?.data?.imagePath || imagePath;
+      }
+
+      const nextPayload = { ...payload, imagePath };
+
+      return editingMenuItem
         ? updateMenuItem({
             menuItemId: editingMenuItem.id || editingMenuItem._id,
-            ...payload,
+            ...nextPayload,
           })
-        : addMenuItem(payload),
+        : addMenuItem(nextPayload);
+    },
     onSuccess: () => {
       refreshMenuData();
       enqueueSnackbar(
@@ -209,7 +225,7 @@ const MenuManagement = () => {
         String(item.categoryId || item.category?.id || item.category?._id) ===
           selectedCategoryId) &&
       (!keyword ||
-        [item.name, item.category?.name, item.price]
+        [item.name, item.category?.name, item.price, item.regularPrice, item.largePrice]
           .join(" ")
           .toLowerCase()
           .includes(keyword))
@@ -272,6 +288,52 @@ const MenuManagement = () => {
     setMenuForm((current) => ({ ...current, [field]: value }));
   };
 
+  const updateMenuVariant = (index, value) => {
+    setMenuForm((current) => ({
+      ...current,
+      variants: current.variants.map((variant, variantIndex) =>
+        variantIndex === index ? value : variant
+      ),
+    }));
+  };
+
+  const addMenuVariantField = () => {
+    setMenuForm((current) => ({
+      ...current,
+      variants: [...current.variants, ""],
+    }));
+  };
+
+  const removeMenuVariantField = (index) => {
+    setMenuForm((current) => ({
+      ...current,
+      variants: current.variants.filter((_, variantIndex) => variantIndex !== index),
+    }));
+  };
+
+  const updateMenuSize = (index, field, value) => {
+    setMenuForm((current) => ({
+      ...current,
+      sizes: current.sizes.map((size, sizeIndex) =>
+        sizeIndex === index ? { ...size, [field]: value } : size
+      ),
+    }));
+  };
+
+  const addMenuSizeField = () => {
+    setMenuForm((current) => ({
+      ...current,
+      sizes: [...current.sizes, { name: "", price: "" }],
+    }));
+  };
+
+  const removeMenuSizeField = (index) => {
+    setMenuForm((current) => ({
+      ...current,
+      sizes: current.sizes.filter((_, sizeIndex) => sizeIndex !== index),
+    }));
+  };
+
   const handleSubmitCategory = (event) => {
     event.preventDefault();
 
@@ -304,8 +366,19 @@ const MenuManagement = () => {
   const handleSubmitMenuItem = (event) => {
     event.preventDefault();
 
+    const sizes = menuForm.sizes
+      .map((size) => ({
+        name: size.name.trim(),
+        price: Number(size.price) || 0,
+      }))
+      .filter((size) => size.name && size.price >= 0);
+    const variants = menuForm.variants
+      .map((variant) => variant.trim())
+      .filter(Boolean);
+    const basePrice = Number(menuForm.price) || 0;
+
     if (!menuForm.categoryId || !menuForm.name.trim() || menuForm.price === "") {
-      enqueueSnackbar("Category, nama menu, dan harga wajib diisi.", {
+      enqueueSnackbar("Category, nama menu, dan harga dasar wajib diisi.", {
         variant: "warning",
       });
       return;
@@ -314,8 +387,13 @@ const MenuManagement = () => {
     menuItemMutation.mutate({
       categoryId: menuForm.categoryId,
       name: menuForm.name.trim(),
-      price: Number(menuForm.price) || 0,
-      imageUrl: menuForm.imageUrl.trim(),
+      price: basePrice,
+      regularPrice: basePrice,
+      largePrice: sizes[1]?.price ?? null,
+      variants,
+      sizes,
+      imageFile: menuForm.imageFile,
+      imagePath: menuForm.imagePath.trim(),
       isAvailable: Boolean(menuForm.isAvailable),
     });
   };
@@ -339,8 +417,14 @@ const MenuManagement = () => {
       categoryId: String(item.categoryId || item.category?.id || ""),
       isAvailable: item.isAvailable !== false,
       name: item.name,
-      price: String(item.price),
-      imageUrl: item.imageUrl || "",
+      price: String(item.price ?? ""),
+      variants: item.variants?.length ? item.variants : [],
+      sizes: (item.sizes || []).map((size) => ({
+        name: size.name,
+        price: String(size.price),
+      })),
+      imageFile: null,
+      imagePath: item.imagePath || "",
     });
   };
 
@@ -640,31 +724,129 @@ const MenuManagement = () => {
               />
             </label>
             <label className="mt-4 block text-sm font-semibold text-[#ababab]">
-              Harga
+              Harga Dasar
               <div className="mt-2 flex overflow-hidden rounded-lg bg-[#262626]">
-                <span className="flex items-center px-4 text-sm font-bold text-[#a79981]">
+                <span className="flex shrink-0 items-center px-4 text-sm font-bold text-[#a79981]">
                   Rp
                 </span>
                 <input
                   value={menuForm.price}
-                  onChange={(event) =>
-                    updateMenuForm("price", event.target.value)
-                  }
+                  onChange={(event) => updateMenuForm("price", event.target.value)}
                   type="number"
                   min="0"
                   placeholder="18000"
-                  className="w-full bg-transparent py-3 pr-4 text-sm text-[#f5f5f5] outline-none"
+                  className="min-w-0 w-full bg-transparent py-3 pr-4 text-sm text-[#f5f5f5] outline-none"
                 />
               </div>
             </label>
+            <div className="mt-4">
+              <div className="mb-2 flex items-center justify-between">
+                <span className="text-sm font-semibold text-[#ababab]">
+                  Ukuran & Harga
+                </span>
+                <button
+                  type="button"
+                  onClick={addMenuSizeField}
+                  className="rounded-md bg-[#333] px-3 py-1 text-xs font-bold text-[#f5f5f5]"
+                >
+                  Tambah
+                </button>
+              </div>
+              <div className="space-y-2">
+                {menuForm.sizes.map((size, index) => (
+                  <div
+                    key={index}
+                    className="grid grid-cols-[minmax(0,1fr)_minmax(118px,1fr)_36px] gap-2"
+                  >
+                    <input
+                      value={size.name}
+                      onChange={(event) =>
+                        updateMenuSize(index, "name", event.target.value)
+                      }
+                      placeholder="Reguler"
+                      className="min-w-0 rounded-lg bg-[#262626] px-3 py-3 text-sm text-[#f5f5f5] outline-none"
+                    />
+                    <div className="flex min-w-0 overflow-hidden rounded-lg bg-[#262626]">
+                      <span className="flex shrink-0 items-center px-2 text-sm font-bold text-[#a79981]">
+                        Rp
+                      </span>
+                      <input
+                        value={size.price}
+                        onChange={(event) =>
+                          updateMenuSize(index, "price", event.target.value)
+                        }
+                        type="number"
+                        min="0"
+                        placeholder="18000"
+                        className="min-w-0 w-full bg-transparent py-3 pr-2 text-sm text-[#f5f5f5] outline-none"
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => removeMenuSizeField(index)}
+                      className="w-9 rounded-lg bg-[#333] text-sm font-bold text-red-300"
+                    >
+                      X
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="mt-4">
+              <div className="mb-2 flex items-center justify-between">
+                <span className="text-sm font-semibold text-[#ababab]">
+                  Varian
+                </span>
+                <button
+                  type="button"
+                  onClick={addMenuVariantField}
+                  className="rounded-md bg-[#333] px-3 py-1 text-xs font-bold text-[#f5f5f5]"
+                >
+                  Tambah
+                </button>
+              </div>
+              <div className="space-y-2">
+                {menuForm.variants.map((variant, index) => (
+                  <div key={index} className="grid grid-cols-[1fr_auto] gap-2">
+                    <input
+                      value={variant}
+                      onChange={(event) =>
+                        updateMenuVariant(index, event.target.value)
+                      }
+                      placeholder="Cold / Hot / Less Sugar"
+                      className="rounded-lg bg-[#262626] px-3 py-3 text-sm text-[#f5f5f5] outline-none"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removeMenuVariantField(index)}
+                      className="rounded-lg bg-[#333] px-3 text-sm font-bold text-red-300"
+                    >
+                      X
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
             <label className="mt-4 block text-sm font-semibold text-[#ababab]">
-              Image URL
+              Upload Image
               <input
-                value={menuForm.imageUrl}
-                onChange={(event) => updateMenuForm("imageUrl", event.target.value)}
-                placeholder="https://..."
-                className="mt-2 w-full rounded-lg bg-[#262626] px-4 py-3 text-sm text-[#f5f5f5] outline-none"
+                type="file"
+                accept=".jpg,.jpeg,.png,image/jpeg,image/png"
+                onChange={(event) =>
+                  updateMenuForm("imageFile", event.target.files?.[0] || null)
+                }
+                className="mt-2 w-full rounded-lg bg-[#262626] px-4 py-3 text-sm text-[#f5f5f5] outline-none file:mr-3 file:rounded-md file:border-0 file:bg-[#a79981] file:px-3 file:py-2 file:text-sm file:font-bold file:text-[#101010]"
               />
+              {menuForm.imagePath && !menuForm.imageFile ? (
+                <span className="mt-2 block truncate text-xs text-[#ababab]">
+                  Gambar saat ini: {menuForm.imagePath}
+                </span>
+              ) : null}
+              {menuForm.imageFile ? (
+                <span className="mt-2 block truncate text-xs text-[#ababab]">
+                  File baru: {menuForm.imageFile.name}
+                </span>
+              ) : null}
             </label>
             <label className="mt-4 block text-sm font-semibold text-[#ababab]">
               Status
@@ -754,7 +936,21 @@ const MenuManagement = () => {
                     >
                       <td className="p-4 font-semibold">{item.name}</td>
                       <td className="p-4">{item.category?.name || "-"}</td>
-                      <td className="p-4">{formatCurrency(item.price)}</td>
+                      <td className="p-4">
+                        <div className="text-sm font-semibold">
+                          {(item.sizes?.length
+                            ? item.sizes
+                            : [{ name: "Harga", price: item.price }]
+                          ).map((size, sizeIndex) => (
+                            <p
+                              key={`${size.name}-${sizeIndex}`}
+                              className={sizeIndex ? "mt-1 text-[#a79981]" : ""}
+                            >
+                              {size.name} {formatCurrency(size.price)}
+                            </p>
+                          ))}
+                        </div>
+                      </td>
                       <td className="p-4 text-center">
                         <span
                           className={`inline-flex rounded-md px-3 py-1 text-xs font-bold ${

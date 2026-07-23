@@ -1,16 +1,12 @@
 import React, { useEffect, useRef } from "react";
-import { FaMinus } from "react-icons/fa6";
-import { RiDeleteBin2Fill } from "react-icons/ri";
+import { FaMinus, FaPlus } from "react-icons/fa6";
 import { useDispatch, useSelector } from "react-redux";
 import {
+  addItems,
   decreaseItem,
-  removeItem,
-  updateItemVariant,
+  updateItemTemperature,
 } from "../../redux/slices/cartSlice";
 import { formatCurrency } from "../../utils";
-
-const beverageVariants = ["Hot", "Cold"];
-const drinkCategories = ["Coffee", "Non-Coffee", "Beverages"];
 
 const CartInfo = () => {
   const cartData = useSelector((state) => state.cart);
@@ -26,16 +22,16 @@ const CartInfo = () => {
     }
   }, [cartData.length]);
 
-  const handleRemove = (itemId) => {
-    dispatch(removeItem(itemId));
+  const handleIncreaseQuantity = (item) => {
+    dispatch(addItems({ ...item, quantity: 1 }));
   };
 
   const handleDecreaseQuantity = (itemId) => {
     dispatch(decreaseItem(itemId));
   };
 
-  const updateVariant = (item, variant) => {
-    dispatch(updateItemVariant({ id: item.id, variant }));
+  const updateTemperature = (item, temperature) => {
+    dispatch(updateItemTemperature({ id: item.id, temperature }));
   };
 
   return (
@@ -82,11 +78,11 @@ const CartInfo = () => {
                 <div className="flex items-center justify-between mt-3">
                   <div className="flex items-center gap-2">
                     <button
-                      onClick={() => handleRemove(item.id)}
+                      onClick={() => handleIncreaseQuantity(item)}
                       className="grid h-8 w-8 place-items-center rounded-lg bg-[#252525] text-[#ababab] transition hover:text-[#a79981]"
-                      aria-label={`Remove ${item.name}`}
+                      aria-label={`Increase ${item.name}`}
                     >
-                      <RiDeleteBin2Fill size={17} />
+                      <FaPlus size={14} />
                     </button>
                     <button
                       onClick={() => handleDecreaseQuantity(item.id)}
@@ -101,19 +97,19 @@ const CartInfo = () => {
                   </p>
                 </div>
 
-                {drinkCategories.includes(item.categoryName) && (
+                {item.temperatureOptions && (
                   <div className="mt-3 grid grid-cols-2 gap-2">
-                    {beverageVariants.map((variant) => (
+                    {item.temperatureOptions.map((temperature) => (
                       <button
-                        key={variant}
-                        onClick={() => updateVariant(item, variant)}
+                        key={temperature}
+                        onClick={() => updateTemperature(item, temperature)}
                         className={`rounded-lg border px-3 py-2 text-xs font-bold transition ${
-                          item.variant === variant
+                          item.temperatureVariant === temperature
                             ? "border-[#a79981] bg-[#a79981] text-[#101010]"
                             : "border-[#303030] bg-[#222222] text-[#ababab] hover:border-[#a79981] hover:text-[#a79981]"
                         }`}
                       >
-                        {variant}
+                        {temperature}
                       </button>
                     ))}
                   </div>
