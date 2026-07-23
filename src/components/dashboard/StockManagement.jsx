@@ -36,6 +36,7 @@ const StockManagement = () => {
   const queryClient = useQueryClient();
   const userRole = useSelector((state) => state.user.role);
   const isAdmin = userRole?.toLowerCase() === "admin";
+  const [activeStockTab, setActiveStockTab] = useState("stock");
   const [searchQuery, setSearchQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -54,6 +55,12 @@ const StockManagement = () => {
   }
 
   const stockItems = stockItemsRes?.data?.data || [];
+  const shoppingItems = useMemo(() => {
+    return stockItems.filter((item) =>
+      ["HAMPIR HABIS", "HARUS ORDER"].includes(item.status)
+    );
+  }, [stockItems]);
+  const visibleItems = activeStockTab === "shopping" ? shoppingItems : stockItems;
 
   const refreshStockItems = () => {
     queryClient.invalidateQueries({ queryKey: ["stock-items"] });
@@ -110,9 +117,9 @@ const StockManagement = () => {
   const filteredItems = useMemo(() => {
     const keyword = searchQuery.trim().toLowerCase();
 
-    if (!keyword) return stockItems;
+    if (!keyword) return visibleItems;
 
-    return stockItems.filter((item) => {
+    return visibleItems.filter((item) => {
       const searchableText = [
         item.name,
         item.category,
@@ -127,7 +134,7 @@ const StockManagement = () => {
 
       return searchableText.includes(keyword);
     });
-  }, [stockItems, searchQuery]);
+  }, [visibleItems, searchQuery]);
 
   const totalPages = Math.max(
     Math.ceil(filteredItems.length / ITEMS_PER_PAGE),
@@ -141,7 +148,7 @@ const StockManagement = () => {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery]);
+  }, [activeStockTab, searchQuery]);
 
   useEffect(() => {
     if (currentPage > totalPages) setCurrentPage(totalPages);
@@ -218,6 +225,23 @@ const StockManagement = () => {
     setPendingDeleteItem(item);
   };
 
+  const getShoppingSuggestion = (item) => {
+    const stock = Number(item.stock) || 0;
+    const minimumStock = Number(item.minimumStock) || 0;
+    const unit = item.unit || "";
+    const neededToMinimum = Math.max(minimumStock - stock, 0);
+
+    if (item.status === "HARUS ORDER") {
+      if (neededToMinimum > 0) {
+        return `Beli min. ${neededToMinimum.toLocaleString("id-ID")} ${unit}`;
+      }
+
+      return "Beli segera";
+    }
+
+    return "Siapkan restock";
+  };
+
   return (
     <div className="container mx-auto bg-[#262626] p-4 rounded-lg">
       <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
@@ -229,13 +253,17 @@ const StockManagement = () => {
             Pantau stok bahan dan status restock.
           </p>
         </div>
-        <div className="flex w-full flex-col gap-2 sm:flex-row md:w-auto">
+        <div className="flex w-full flex-col gap-2 lg:w-auto lg:flex-row lg:flex-nowrap lg:items-center lg:justify-end">
           <input
             value={searchQuery}
             onChange={(event) => setSearchQuery(event.target.value)}
             type="search"
-            placeholder="Search stock"
-            className="w-full rounded-lg bg-[#1f1f1f] px-4 py-2 text-sm font-semibold text-[#f5f5f5] outline-none placeholder:text-[#777] md:w-72"
+            placeholder={
+              activeStockTab === "shopping"
+                ? "Cari bahan belanjaan"
+                : "Search stock"
+            }
+            className="w-full rounded-lg bg-[#1f1f1f] px-4 py-2 text-sm font-semibold text-[#f5f5f5] outline-none placeholder:text-[#777] lg:w-72"
           />
           {isAdmin && (
             <button
@@ -245,111 +273,184 @@ const StockManagement = () => {
                 setEditingStockId(null);
                 setShowAddModal(true);
               }}
-              className="rounded-lg bg-[#a79981] px-4 py-2 text-sm font-bold text-[#101010] hover:bg-[#b9aa91]"
+              className="shrink-0 rounded-lg bg-[#025cca] px-4 py-2 text-sm font-bold text-[#f5f5f5] hover:bg-[#0969df]"
             >
               Tambah Stok
             </button>
           )}
+          <div className="flex w-full shrink-0 gap-2 rounded-lg bg-[#1f1f1f] p-1 sm:w-fit">
+            {[
+              { key: "stock", label: "Stok Barang" },
+              { key: "shopping", label: "Bahan Belanjaan" },
+            ].map((tab) => (
+              <button
+                key={tab.key}
+                type="button"
+                onClick={() => setActiveStockTab(tab.key)}
+                className={`flex flex-1 items-center justify-center rounded-md px-4 py-2 text-sm font-bold transition sm:flex-none ${
+                  activeStockTab === tab.key
+                    ? "bg-[#a79981] text-[#101010]"
+                    : "text-[#ababab] hover:bg-[#2f2f2f] hover:text-[#f5f5f5]"
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
       <div className="overflow-x-auto">
-        <table className="w-full text-left text-[#f5f5f5]">
-          <thead className="bg-[#333] text-[#ababab]">
-            <tr>
-              <th className="p-3">Bahan</th>
-              <th className="p-3">Kategori</th>
-              <th className="p-3 text-center">Satuan</th>
-              <th className="p-3 text-center">Stok</th>
-              <th className="p-3 text-center">Minimum</th>
-              <th className="p-3 text-center">Status</th>
-              {isAdmin && <th className="p-3 text-center">Aksi</th>}
-            </tr>
-          </thead>
-          <tbody>
-            {paginatedItems.map((item) => (
-              <tr
-                key={item.id || item._id}
-                className="border-b border-gray-600 hover:bg-[#333]"
-              >
-                <td className="p-4">
-                  <p className="font-semibold">{item.name}</p>
-                  {item.supplier && (
-                    <p className="mt-1 text-xs font-medium text-[#ababab]">
-                      {item.supplier}
-                    </p>
-                  )}
-                </td>
-                <td className="p-4">{item.category || "-"}</td>
-                <td className="p-4 text-center">{item.unit || "-"}</td>
-                <td className="p-4">
-                  <div className="flex items-center justify-center gap-3">
-                    <button
-                      type="button"
-                      onClick={() => adjustStock(item, -1)}
-                      disabled={stockQuantityMutation.isPending}
-                      className="h-7 w-7 rounded-md bg-[#1f1f1f] font-bold text-[#ababab] hover:bg-[#333] disabled:opacity-60"
+        {activeStockTab === "shopping" ? (
+          <table className="w-full text-left text-[#f5f5f5]">
+            <thead className="bg-[#333] text-[#ababab]">
+              <tr>
+                <th className="p-3">Bahan</th>
+                <th className="p-3">Kategori</th>
+                <th className="p-3 text-center">Stok Saat Ini</th>
+                <th className="p-3 text-center">Minimum</th>
+                <th className="p-3">Saran Belanja</th>
+                <th className="p-3">Supplier</th>
+                <th className="p-3 text-center">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {paginatedItems.map((item) => (
+                <tr
+                  key={item.id || item._id}
+                  className="border-b border-gray-600 hover:bg-[#333]"
+                >
+                  <td className="p-4 font-semibold">{item.name}</td>
+                  <td className="p-4">{item.category || "-"}</td>
+                  <td className="p-4 text-center">
+                    {item.stock} {item.unit || ""}
+                  </td>
+                  <td className="p-4 text-center">
+                    {item.minimumStock} {item.unit || ""}
+                  </td>
+                  <td className="p-4 font-semibold text-[#d6c7ae]">
+                    {getShoppingSuggestion(item)}
+                  </td>
+                  <td className="p-4">{item.supplier || "-"}</td>
+                  <td className="p-4 text-center">
+                    <span
+                      className={`inline-flex min-w-[110px] items-center justify-center rounded-lg px-2 py-1 text-sm font-semibold ${
+                        statusClassNames[item.status] ||
+                        "bg-[#2e4a40] text-green-400"
+                      }`}
                     >
-                      -
-                    </button>
-                    <span className="min-w-8 text-center font-semibold">
-                      {item.stock}
+                      {item.status}
                     </span>
-                    <button
-                      type="button"
-                      onClick={() => adjustStock(item, 1)}
-                      disabled={stockQuantityMutation.isPending}
-                      className="h-7 w-7 rounded-md bg-[#1f1f1f] font-bold text-[#ababab] hover:bg-[#333] disabled:opacity-60"
-                    >
-                      +
-                    </button>
-                  </div>
-                </td>
-                <td className="p-4 text-center">{item.minimumStock}</td>
-                <td className="p-4 text-center">
-                  <span
-                    className={`inline-flex min-w-[110px] items-center justify-center rounded-lg px-2 py-1 text-sm font-semibold ${
-                      statusClassNames[item.status] ||
-                      "bg-[#2e4a40] text-green-400"
-                    }`}
-                  >
-                    {item.status}
-                  </span>
-                </td>
-                {isAdmin && (
+                  </td>
+                </tr>
+              ))}
+              {filteredItems.length === 0 && (
+                <tr>
+                  <td className="p-4 text-center text-[#ababab]" colSpan={7}>
+                    Tidak ada bahan belanjaan saat ini
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        ) : (
+          <table className="w-full text-left text-[#f5f5f5]">
+            <thead className="bg-[#333] text-[#ababab]">
+              <tr>
+                <th className="p-3">Bahan</th>
+                <th className="p-3">Kategori</th>
+                <th className="p-3 text-center">Satuan</th>
+                <th className="p-3 text-center">Stok</th>
+                <th className="p-3 text-center">Minimum</th>
+                <th className="p-3 text-center">Status</th>
+                {isAdmin && <th className="p-3 text-center">Aksi</th>}
+              </tr>
+            </thead>
+            <tbody>
+              {paginatedItems.map((item) => (
+                <tr
+                  key={item.id || item._id}
+                  className="border-b border-gray-600 hover:bg-[#333]"
+                >
                   <td className="p-4">
-                    <div className="flex items-center justify-center gap-4 text-sm font-semibold">
+                    <p className="font-semibold">{item.name}</p>
+                    {item.supplier && (
+                      <p className="mt-1 text-xs font-medium text-[#ababab]">
+                        {item.supplier}
+                      </p>
+                    )}
+                  </td>
+                  <td className="p-4">{item.category || "-"}</td>
+                  <td className="p-4 text-center">{item.unit || "-"}</td>
+                  <td className="p-4">
+                    <div className="flex items-center justify-center gap-3">
                       <button
                         type="button"
-                        onClick={() => handleEdit(item)}
-                        className="text-[#a79981] hover:text-[#d6c7ae]"
+                        onClick={() => adjustStock(item, -1)}
+                        disabled={stockQuantityMutation.isPending}
+                        className="h-7 w-7 rounded-md bg-[#1f1f1f] font-bold text-[#ababab] hover:bg-[#333] disabled:opacity-60"
                       >
-                        Ubah
+                        -
                       </button>
+                      <span className="min-w-8 text-center font-semibold">
+                        {item.stock}
+                      </span>
                       <button
                         type="button"
-                        onClick={() => handleDelete(item)}
-                        className="text-red-400 hover:text-red-300"
+                        onClick={() => adjustStock(item, 1)}
+                        disabled={stockQuantityMutation.isPending}
+                        className="h-7 w-7 rounded-md bg-[#1f1f1f] font-bold text-[#ababab] hover:bg-[#333] disabled:opacity-60"
                       >
-                        Hapus
+                        +
                       </button>
                     </div>
                   </td>
-                )}
-              </tr>
-            ))}
-            {filteredItems.length === 0 && (
-              <tr>
-                <td
-                  className="p-4 text-center text-[#ababab]"
-                  colSpan={isAdmin ? 7 : 6}
-                >
-                  No stock data found
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+                  <td className="p-4 text-center">{item.minimumStock}</td>
+                  <td className="p-4 text-center">
+                    <span
+                      className={`inline-flex min-w-[110px] items-center justify-center rounded-lg px-2 py-1 text-sm font-semibold ${
+                        statusClassNames[item.status] ||
+                        "bg-[#2e4a40] text-green-400"
+                      }`}
+                    >
+                      {item.status}
+                    </span>
+                  </td>
+                  {isAdmin && (
+                    <td className="p-4">
+                      <div className="flex items-center justify-center gap-4 text-sm font-semibold">
+                        <button
+                          type="button"
+                          onClick={() => handleEdit(item)}
+                          className="text-[#a79981] hover:text-[#d6c7ae]"
+                        >
+                          Ubah
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDelete(item)}
+                          className="text-red-400 hover:text-red-300"
+                        >
+                          Hapus
+                        </button>
+                      </div>
+                    </td>
+                  )}
+                </tr>
+              ))}
+              {filteredItems.length === 0 && (
+                <tr>
+                  <td
+                    className="p-4 text-center text-[#ababab]"
+                    colSpan={isAdmin ? 7 : 6}
+                  >
+                    No stock data found
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        )}
       </div>
 
       <div className="mt-4 flex flex-col gap-3 text-sm text-[#ababab] sm:flex-row sm:items-center sm:justify-between">

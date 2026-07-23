@@ -2,9 +2,18 @@ import React, { useMemo, useState } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { getMenuItems, getOrders } from "../../https";
 import { formatCurrency } from "../../utils";
+import noImage from "../../assets/no-image.svg";
 
 const drinkCategories = ["Coffee", "Non-Coffee", "Beverages"];
 const normalizeName = (value) => String(value || "").trim().toLowerCase();
+const backendBaseUrl = import.meta.env.VITE_BACKEND_URL || "";
+
+const resolveMenuImage = (imagePath) => {
+  if (!imagePath) return noImage;
+  if (imagePath.startsWith("/uploads/")) return `${backendBaseUrl}${imagePath}`;
+
+  return imagePath;
+};
 
 const PopularDishes = () => {
   const [selectedBestSellerType, setSelectedBestSellerType] =
@@ -46,14 +55,14 @@ const PopularDishes = () => {
           : "Makanan";
         const current = salesByName.get(normalizedName) || {
           id: menuItem?.id || item.id || normalizedName,
-          image: menuItem?.imageUrl,
+          image: menuItem?.imagePath,
           name,
           numberOfOrders: 0,
           type,
         };
 
         current.numberOfOrders += Number(item.quantity) || 0;
-        current.image = current.image || menuItem?.imageUrl;
+        current.image = current.image || menuItem?.imagePath;
         current.type = type;
         salesByName.set(normalizedName, current);
       });
@@ -85,7 +94,7 @@ const PopularDishes = () => {
 
         const current = salesByName.get(normalizedName) || {
           id: menuItem?.id || item.id || normalizedName,
-          image: menuItem?.imageUrl,
+          image: menuItem?.imagePath,
           name: item.name,
           price: menuItem?.price || item.pricePerQuantity || 0,
           numberOfOrders: 0,
@@ -107,7 +116,7 @@ const PopularDishes = () => {
       .slice(0, 3)
       .map((item) => ({
         id: item.id || item._id,
-        image: item.imageUrl,
+        image: item.imagePath,
         name: item.name,
         price: item.price,
         numberOfOrders: 0,
@@ -157,8 +166,11 @@ const PopularDishes = () => {
                     {index + 1}
                   </h1>
                   <img
-                    src={dish.image}
+                    src={resolveMenuImage(dish.image)}
                     alt={dish.name}
+                    onError={(event) => {
+                      event.currentTarget.src = noImage;
+                    }}
                     className="w-[50px] h-[50px] rounded-full object-cover"
                   />
                   <div>
@@ -201,8 +213,11 @@ const PopularDishes = () => {
                   {index + 1}
                 </h3>
                 <img
-                  src={item.image}
+                  src={resolveMenuImage(item.image)}
                   alt={item.name}
+                  onError={(event) => {
+                    event.currentTarget.src = noImage;
+                  }}
                   className="h-[50px] w-[50px] rounded-full object-cover"
                 />
                 <div className="min-w-0">
