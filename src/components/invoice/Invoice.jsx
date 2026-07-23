@@ -1,6 +1,6 @@
 import React from "react";
-import { formatCurrency } from "../../utils";
-import receiptLogo from "../../../../assets/logo1.png";
+import { formatCurrency, formatReceiptCurrency } from "../../utils";
+import receiptMark from "../../../../assets/Vector.svg";
 
 const buildReceiptHtml = (orderInfo) => {
   const escapeHtml = (value) =>
@@ -17,6 +17,13 @@ const buildReceiptHtml = (orderInfo) => {
     : new Date();
   const onlineOrderCharge = Number(orderInfo.bills.onlineOrderCharge) || 0;
   const cateringDetails = orderInfo.cateringDetails;
+  const formatReceiptDateTime = (date) => {
+    const pad = (number) => String(number).padStart(2, "0");
+
+    return `${pad(date.getDate())}/${pad(date.getMonth() + 1)}/${String(
+      date.getFullYear()
+    ).slice(-2)} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  };
   const formatReceiptDate = (value) => {
     if (!value) return "-";
 
@@ -41,9 +48,11 @@ const buildReceiptHtml = (orderInfo) => {
         <div class="item">
           <div class="item-main">
             <span>${escapeHtml(item.name)}</span>
-            <strong>${formatCurrency(item.price)}</strong>
           </div>
-          <div class="line-note">Qty: ${item.quantity}</div>
+          <div class="item-detail">
+            <span class="line-note">Qty: ${item.quantity}</span>
+            <strong>${formatReceiptCurrency(item.price)}</strong>
+          </div>
           ${variant}
           ${addOns}
         </div>
@@ -53,13 +62,17 @@ const buildReceiptHtml = (orderInfo) => {
 
   return `
     <div class="receipt">
-      <img class="logo" src="${receiptLogo}" alt="Niskala Coffee logo" />
+      <div class="brand">
+        <img class="logo-mark" src="${receiptMark}" alt="Niskala Coffee mark" />
+        <div class="brand-name">NISKALA</div>
+        <div class="brand-subtitle">COFFEE</div>
+      </div>
       <p class="receipt-title">Order Receipt</p>
 
       <div class="meta">
         <div class="meta-row"><span>Order ID</span><strong>${escapeHtml(orderCode)}</strong></div>
         <div class="meta-row"><span>Customer</span><strong>${escapeHtml(orderInfo.customerDetails.name)}</strong></div>
-        <div class="meta-row"><span>Date</span><strong>${orderDate.toLocaleString("id-ID")}</strong></div>
+        <div class="meta-row"><span>Date</span><strong>${formatReceiptDateTime(orderDate)}</strong></div>
         <div class="meta-row"><span>Payment</span><strong>${escapeHtml(orderInfo.paymentMethod || "-")}</strong></div>
         ${
           orderInfo.orderType === "Online"
@@ -80,14 +93,14 @@ const buildReceiptHtml = (orderInfo) => {
       <div>${itemRows}</div>
 
       <div class="totals">
-        <div class="total-row"><span>Subtotal</span><strong>${formatCurrency(orderInfo.bills.total)}</strong></div>
+        <div class="total-block"><span>Subtotal</span><strong>${formatReceiptCurrency(orderInfo.bills.total)}</strong></div>
         ${
           onlineOrderCharge > 0
-            ? `<div class="total-row"><span>Online (+20%)</span><strong>${formatCurrency(onlineOrderCharge)}</strong></div>`
+            ? `<div class="total-block"><span>Online (+20%)</span><strong>${formatReceiptCurrency(onlineOrderCharge)}</strong></div>`
             : ""
         }
-        <div class="total-row"><span>Tax</span><strong>${formatCurrency(orderInfo.bills.tax)}</strong></div>
-        <div class="total-row grand"><span>Total</span><span>${formatCurrency(orderInfo.bills.totalWithTax)}</span></div>
+        <div class="total-block"><span>Tax</span><strong>${formatReceiptCurrency(orderInfo.bills.tax)}</strong></div>
+        <div class="total-block grand"><span>Total</span><strong>${formatReceiptCurrency(orderInfo.bills.totalWithTax)}</strong></div>
       </div>
 
       ${
@@ -117,33 +130,62 @@ const receiptPrintStyle = `
   body {
     margin: 0;
     padding: 0;
-    color: #171717;
+    color: #000;
     background: #fff;
-    font-family: "Courier New", monospace;
-    font-size: 10px;
+    font-family: "Arial Narrow", Arial, Helvetica, sans-serif;
+    font-size: 7px;
+    font-weight: 900;
+    line-height: 1.28;
+    letter-spacing: 0;
+    text-rendering: geometricPrecision;
+    -webkit-text-stroke: 0.06px #000;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
   }
   .receipt {
-    width: 58mm;
+    width: 44mm;
     margin: 0 auto;
-    padding: 7px 4mm 10px;
+    padding: 5px 2mm 8px 0;
   }
-  .logo {
+  .brand {
+    text-align: center;
+    margin-bottom: 5px;
+  }
+  .logo-mark {
     display: block;
-    width: 82px;
+    width: 24px;
     height: auto;
-    margin: 0 auto 7px;
+    margin: 0 auto 3px;
+    filter: grayscale(1) contrast(400%) brightness(0);
+    opacity: 1;
+  }
+  .brand-name {
+    color: #000;
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: 12px;
+    font-weight: 900;
+    line-height: 1;
+    text-transform: uppercase;
+    -webkit-text-stroke: 0.06px #000;
+  }
+  .brand-subtitle {
+    color: #000;
+    font-size: 5px;
+    font-weight: 900;
+    line-height: 1.1;
+    text-transform: uppercase;
   }
   .receipt-title {
     margin: 0;
-    color: #171717;
-    font-size: 10px;
-    font-weight: 700;
+    color: #000;
+    font-size: 7px;
+    font-weight: 900;
     text-align: center;
     text-transform: uppercase;
   }
   .meta {
-    border-top: 1px dashed #999;
-    border-bottom: 1px dashed #999;
+    border-top: 1px dashed #000;
+    border-bottom: 1px dashed #000;
     margin: 7px 0;
     padding: 6px 0;
   }
@@ -151,46 +193,98 @@ const receiptPrintStyle = `
     border-top: 0;
   }
   .meta-row,
-  .total-row,
-  .item-main {
+  .item-main,
+  .item-detail {
     display: flex;
+    justify-content: flex-start;
+    gap: 2px;
+  }
+  .meta-row span {
+    display: inline-flex;
+    flex: 0 0 16mm;
     justify-content: space-between;
-    gap: 5px;
+    padding-right: 2mm;
+  }
+  .meta-row span::after {
+    content: " :";
   }
   .meta-row + .meta-row {
     margin-top: 4px;
   }
+  strong {
+    color: #000;
+    font-weight: 900;
+    -webkit-text-stroke: 0.08px #000;
+  }
   .item {
-    border-bottom: 1px dotted #bbb;
-    padding: 5px 0;
+    border-bottom: 1px dotted #000;
+    padding: 4px 0;
   }
   .item-main span {
+    flex: 1 1 auto;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+  }
+  .item-detail strong,
+  .total-block strong {
+    display: block;
+    color: #000;
+    font-weight: 900;
+    white-space: nowrap;
+    overflow: visible;
+    -webkit-text-stroke: 0.08px #000;
+  }
+  .item-detail {
+    justify-content: space-between;
+    margin-top: 2px;
+  }
+  .item-detail strong {
+    flex: 0 0 auto;
+    margin-left: 2mm;
+    margin-right: 3mm;
+    text-align: right;
+    font-size: 7px;
+  }
+  .meta-row strong {
+    flex: 1 1 auto;
     max-width: 29mm;
+    text-align: left;
     overflow-wrap: anywhere;
   }
   .line-note {
-    color: #666;
-    font-size: 9px;
+    color: #000;
+    font-size: 6px;
+    font-weight: 900;
     margin-top: 2px;
   }
   .totals {
-    border-bottom: 1px dashed #999;
-    padding: 6px 0;
+    border-bottom: 1px dashed #000;
+    padding: 6px 6mm;
   }
-  .total-row {
-    margin-top: 4px;
+  .total-block {
+    display: flex;
+    justify-content: space-between;
+    gap: 2mm;
+    width: 100%;
+    margin-left: 0;
+    margin-top: 5px;
+    text-align: left;
+  }
+  .total-block strong {
+    flex: 1 1 auto;
+    text-align: right;
   }
   .grand {
-    border-top: 1px dashed #999;
-    font-size: 12px;
-    font-weight: 700;
+    border-top: 1px dashed #000;
+    font-size: 9px;
+    font-weight: 900;
     margin-top: 6px;
     padding-top: 6px;
   }
   .footer {
     margin-top: 9px;
     text-align: center;
-    font-size: 9px;
+    font-size: 5px;
   }
 `;
 
@@ -232,12 +326,23 @@ const Invoice = ({ orderInfo, setShowInvoice }) => {
         }}
       >
         <div className="mb-3 flex justify-center" style={{ marginBottom: 12 }}>
-          <img
-            src={receiptLogo}
-            alt="Niskala Coffee logo"
-            className="object-contain"
-            style={{ width: 58, height: "auto", display: "block" }}
-          />
+          <div className="text-center">
+            <img
+              src={receiptMark}
+              alt="Niskala Coffee mark"
+              className="object-contain"
+              style={{
+                width: 34,
+                height: "auto",
+                display: "block",
+                margin: "0 auto 4px",
+              }}
+            />
+            <div style={{ fontFamily: "Georgia, serif", fontWeight: 700 }}>
+              NISKALA
+            </div>
+            <div style={{ fontSize: 9, fontWeight: 700 }}>COFFEE</div>
+          </div>
         </div>
 
         <div

@@ -30,6 +30,9 @@ export const formatCurrency = (value) =>
     maximumFractionDigits: 0,
   }).format(Number(value) || 0);
 
+export const formatReceiptCurrency = (value) =>
+  `Rp ${Math.round(Number(value) || 0).toLocaleString("id-ID")}`;
+
 export const getOrderReceivedAmount = (order) => {
   const totalWithTax = Number(order?.bills?.totalWithTax) || 0;
 
