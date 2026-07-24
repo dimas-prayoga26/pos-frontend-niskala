@@ -18,6 +18,7 @@ const OrderCard = ({
   isDeletingOrder = false,
 }) => {
   const [showDetails, setShowDetails] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isActionMenuOpen, setIsActionMenuOpen] = useState(false);
   const [paymentAmount, setPaymentAmount] = useState("");
   const orderCode = order.orderId || order.orderCode || `ORD-${String(order.id).padStart(6, "0")}`;
@@ -55,13 +56,9 @@ const OrderCard = ({
   };
   const handleDeleteOrder = () => {
     setIsActionMenuOpen(false);
-
-    const isConfirmed = window.confirm(
-      `Hapus pesanan #${orderCode}? Data pesanan akan dihapus permanen.`
-    );
-
-    if (!isConfirmed) return;
-
+    setShowDeleteConfirm(true);
+  };
+  const handleConfirmDelete = () => {
     onOrderDelete?.();
   };
 
@@ -354,6 +351,60 @@ const OrderCard = ({
                 <span>Total</span>
                 <span>{formatCurrency(order.bills.totalWithTax)}</span>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4">
+          <div className="w-full max-w-sm overflow-hidden rounded-lg border border-[#3a2a2a] bg-[#1f1f1f] text-[#f5f5f5] shadow-2xl shadow-black/50">
+            <div className="border-b border-[#333] p-4">
+              <div className="flex items-start gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-red-500/10 text-red-400">
+                  <MdDeleteOutline size={22} />
+                </div>
+                <div className="min-w-0">
+                  <h2 className="text-lg font-bold">Hapus Pesanan?</h2>
+                  <p className="mt-1 text-sm text-[#ababab]">
+                    Pesanan #{orderCode} akan dihapus permanen dari sistem.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-2 p-4 text-sm">
+              <div className="flex justify-between gap-3 text-[#ababab]">
+                <span>Customer</span>
+                <span className="font-semibold text-[#f5f5f5]">
+                  {order.customerDetails?.name || "-"}
+                </span>
+              </div>
+              <div className="flex justify-between gap-3 text-[#ababab]">
+                <span>Total</span>
+                <span className="font-semibold text-[#f5f5f5]">
+                  {formatCurrency(order.bills?.totalWithTax || 0)}
+                </span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 border-t border-[#333] p-4">
+              <button
+                type="button"
+                onClick={() => setShowDeleteConfirm(false)}
+                disabled={isDeletingOrder}
+                className="rounded-lg bg-[#2a2a2a] px-4 py-3 text-sm font-bold text-[#ababab] transition hover:bg-[#333] hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDelete}
+                disabled={isDeletingOrder}
+                className="rounded-lg bg-red-500 px-4 py-3 text-sm font-bold text-white transition hover:bg-red-400 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isDeletingOrder ? "Menghapus..." : "Hapus"}
+              </button>
             </div>
           </div>
         </div>
