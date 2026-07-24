@@ -8,7 +8,7 @@ import RecentOrders from "../components/home/RecentOrders";
 import PopularDishes from "../components/home/PopularDishes";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { getOrders } from "../https";
-import { getOrderReceivedAmount } from "../utils";
+import { getJakartaDateKey, getOrderReceivedAmount } from "../utils";
 
 const Home = () => {
   const { data: ordersRes } = useQuery({
@@ -17,22 +17,11 @@ const Home = () => {
     placeholderData: keepPreviousData,
   });
 
-  const getLocalDateKey = (value) => {
-    const date = value ? new Date(value) : new Date();
-
-    if (Number.isNaN(date.getTime())) return "";
-
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, "0");
-    const day = String(date.getDate()).padStart(2, "0");
-
-    return `${year}-${month}-${day}`;
-  };
   const getRelativeDateKey = (offsetDays) => {
-    const date = new Date();
-    date.setDate(date.getDate() + offsetDays);
+    const date = new Date(`${getJakartaDateKey()}T00:00:00+07:00`);
+    date.setUTCDate(date.getUTCDate() + offsetDays);
 
-    return getLocalDateKey(date);
+    return getJakartaDateKey(date);
   };
   const getPercentageChange = (currentValue, previousValue) => {
     if (!previousValue) return currentValue > 0 ? 100 : 0;
@@ -41,13 +30,13 @@ const Home = () => {
   };
 
   const orders = ordersRes?.data?.data || [];
-  const todayKey = getLocalDateKey();
+  const todayKey = getJakartaDateKey();
   const yesterdayKey = getRelativeDateKey(-1);
   const todayOrders = orders.filter(
-    (order) => getLocalDateKey(order.orderDate) === todayKey
+    (order) => getJakartaDateKey(order.orderDate) === todayKey
   );
   const yesterdayOrders = orders.filter(
-    (order) => getLocalDateKey(order.orderDate) === yesterdayKey
+    (order) => getJakartaDateKey(order.orderDate) === yesterdayKey
   );
   const todayRevenue = todayOrders.reduce((total, order) => {
     return total + getOrderReceivedAmount(order);

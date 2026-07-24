@@ -1,22 +1,11 @@
 import React from "react";
-import { getAvatarName } from "../../utils/index";
+import { formatJakartaDateTime, getAvatarName } from "../../utils/index";
 
 const OrderList = ({ order }) => {
   const orderCode =
     order.orderId || order.orderCode || `ORD-${String(order.id).padStart(6, "0")}`;
   const avatarName = getAvatarName(order.customerDetails.name).slice(0, 2);
-  const orderDate = new Date(order.orderDate);
-  const formattedOrderDate = Number.isNaN(orderDate.getTime())
-    ? "-"
-    : `${orderDate.toLocaleDateString("en-US", {
-        month: "long",
-        day: "2-digit",
-        year: "numeric",
-      })} ${orderDate.toLocaleTimeString("id-ID", {
-        hour: "2-digit",
-        minute: "2-digit",
-        hour12: false,
-      })}`;
+  const formattedOrderDate = formatJakartaDateTime(order.orderDate);
 
   return (
     <div className="mb-3 grid grid-cols-[52px_minmax(0,1fr)] items-center gap-3 rounded-lg px-0 py-1 sm:grid-cols-[52px_minmax(0,1.1fr)_minmax(160px,0.8fr)_minmax(190px,1fr)] sm:gap-4">

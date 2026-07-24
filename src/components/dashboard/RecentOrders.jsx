@@ -2,20 +2,15 @@ import React, { useMemo, useState } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { enqueueSnackbar } from "notistack";
 import { getOrders } from "../../https/index";
-import { formatCurrency, formatDateAndTime } from "../../utils";
-
-const getDateInputValue = (date = new Date()) => {
-  const localDate = new Date(date);
-  const offsetDate = new Date(
-    localDate.getTime() - localDate.getTimezoneOffset() * 60000
-  );
-
-  return offsetDate.toISOString().split("T")[0];
-};
+import {
+  formatCurrency,
+  formatDateAndTime,
+  getJakartaDateKey,
+} from "../../utils";
 
 const RecentOrders = () => {
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedDate, setSelectedDate] = useState(getDateInputValue());
+  const [selectedDate, setSelectedDate] = useState(getJakartaDateKey());
 
   const { data: resData, isError } = useQuery({
     queryKey: ["orders"],
@@ -48,7 +43,7 @@ const RecentOrders = () => {
     return orders.filter((order) => {
       if (!selectedDate) return true;
 
-      return getDateInputValue(order.orderDate) === selectedDate;
+      return getJakartaDateKey(order.orderDate) === selectedDate;
     });
   }, [orders, selectedDate]);
 

@@ -1,5 +1,9 @@
 import React, { useEffect, useState } from "react";
 import { useSelector } from "react-redux";
+import {
+  formatJakartaDate,
+  formatJakartaTime,
+} from "../../utils";
 
 const Greetings = () => {
   const userData = useSelector((state) => state.user);
@@ -19,34 +23,10 @@ const Greetings = () => {
     return () => clearInterval(timer);
   }, []);
 
-  const formatDate = (date) => {
-    const months = [
-      "January",
-      "February",
-      "March",
-      "April",
-      "May",
-      "June",
-      "July",
-      "August",
-      "September",
-      "October",
-      "November",
-      "December",
-    ];
-    return `${months[date.getMonth()]} ${String(date.getDate()).padStart(
-      2,
-      "0"
-    )}, ${date.getFullYear()}`;
-  };
-
-  const formatTime = (date) =>
-    `${String(date.getHours()).padStart(2, "0")}:${String(
-      date.getMinutes()
-    ).padStart(2, "0")}:${String(date.getSeconds()).padStart(2, "0")}`;
-
   const getGreeting = (date) => {
-    const hour = date.getHours();
+    const hour = Number(
+      formatJakartaTime(date, { second: undefined }).slice(0, 2)
+    );
 
     if (hour < 12) return "Good Morning";
     if (hour < 18) return "Good Afternoon";
@@ -65,9 +45,9 @@ const Greetings = () => {
       </div>
       <div className="sm:text-right">
         <h1 className="text-[#f5f5f5] text-2xl md:text-3xl font-bold tracking-wide">
-          {formatTime(dateTime)}
+          {formatJakartaTime(dateTime)}
         </h1>
-        <p className="text-[#ababab] text-sm">{formatDate(dateTime)}</p>
+        <p className="text-[#ababab] text-sm">{formatJakartaDate(dateTime)}</p>
       </div>
     </div>
   );
