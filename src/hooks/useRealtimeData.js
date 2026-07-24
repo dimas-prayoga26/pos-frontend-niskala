@@ -3,6 +3,12 @@ import { useQueryClient } from "@tanstack/react-query";
 import { io } from "socket.io-client";
 
 const socketUrl = import.meta.env.VITE_BACKEND_URL;
+const realtimeTransports = (
+  import.meta.env.VITE_REALTIME_TRANSPORTS || "polling"
+)
+  .split(",")
+  .map((transport) => transport.trim())
+  .filter(Boolean);
 
 const useRealtimeData = () => {
   const queryClient = useQueryClient();
@@ -12,7 +18,7 @@ const useRealtimeData = () => {
 
     const socket = io(socketUrl, {
       withCredentials: true,
-      transports: ["websocket", "polling"],
+      transports: realtimeTransports,
     });
 
     const refreshOrders = () => {
