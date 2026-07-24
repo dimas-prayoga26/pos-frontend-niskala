@@ -7,10 +7,16 @@ import store from "./redux/store.js";
 import { SnackbarProvider } from "notistack";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
+const queryRefetchInterval =
+  Number(import.meta.env.VITE_QUERY_REFETCH_INTERVAL_MS) || 15000;
+
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime : 30000,
+      staleTime: 5000,
+      refetchInterval: queryRefetchInterval > 0 ? queryRefetchInterval : false,
+      refetchOnWindowFocus: "always",
+      refetchOnReconnect: "always",
     }
   }
 })
