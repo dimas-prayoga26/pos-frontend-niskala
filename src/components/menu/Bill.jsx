@@ -1,16 +1,13 @@
 import React, { useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { getTotalPrice } from "../../redux/slices/cartSlice";
-import {
-  addOrder,
-  createMidtransTransaction,
-  verifyMidtransPayment,
-} from "../../https/index";
+import { addOrder } from "../../https/index";
 import { enqueueSnackbar } from "notistack";
 import { useMutation } from "@tanstack/react-query";
 import { removeAllItems } from "../../redux/slices/cartSlice";
 import { removeCustomer, setCustomer } from "../../redux/slices/customerSlice";
 import Invoice from "../invoice/Invoice";
+import NonCashPaymentModal from "./NonCashPaymentModal";
 import {
   formatCurrency,
   formatJakartaReceiptDate,
@@ -40,22 +37,6 @@ const getTaxLabel = (cartData) => {
 
   return "Tax (Mixed)";
 };
-
-function loadMidtransScript(clientKey) {
-  return new Promise((resolve) => {
-    if (window.snap) {
-      resolve(true);
-      return;
-    }
-
-    const script = document.createElement("script");
-    script.src = "https://app.sandbox.midtrans.com/snap/snap.js";
-    script.setAttribute("data-client-key", clientKey);
-    script.onload = () => resolve(true);
-    script.onerror = () => resolve(false);
-    document.body.appendChild(script);
-  });
-}
 
 const Bill = () => {
   const dispatch = useDispatch();
@@ -88,6 +69,7 @@ const Bill = () => {
       : 0;
 
   const [paymentMethod, setPaymentMethod] = useState();
+  const [showNonCashPayment, setShowNonCashPayment] = useState(false);
   const [showInvoice, setShowInvoice] = useState(false);
   const [orderInfo, setOrderInfo] = useState();
 
@@ -112,7 +94,7 @@ const Bill = () => {
     );
   };
 
-  const buildOrderData = (paymentData) => ({
+  const buildOrderData = (paymentData, selectedPaymentMethod = paymentMethod) => ({
     customerDetails: {
       name: getCustomerName(),
       guests: customerData.guests || 1,
@@ -129,7 +111,7 @@ const Bill = () => {
       remainingBalance,
     },
     items: cartData,
-    paymentMethod: paymentMethod,
+    paymentMethod: selectedPaymentMethod,
     paymentData,
     cateringDetails: isCateringOrder
       ? {
@@ -177,85 +159,22 @@ const Bill = () => {
     }
 
     if (paymentMethod === "Non Tunai") {
-      try {
-        const clientKey = import.meta.env.VITE_MIDTRANS_CLIENT_KEY;
-
-        if (!clientKey) {
-          enqueueSnackbar("Midtrans client key is not configured.", {
-            variant: "warning",
-          });
-          return;
-        }
-
-        const scriptLoaded = await loadMidtransScript(clientKey);
-
-        if (!scriptLoaded) {
-          enqueueSnackbar("Midtrans SDK failed to load. Are you online?", {
-            variant: "warning",
-          });
-          return;
-        }
-
-        const reqData = {
-          amount: totalPriceWithTax,
-          customerDetails: {
-            name: getCustomerName(),
-          },
-        };
-
-        const { data } = await createMidtransTransaction(reqData);
-
-        window.snap.pay(data.transaction.token, {
-          onSuccess: async function (response) {
-            try {
-              const verification = await verifyMidtransPayment({
-                order_id: response.order_id,
-              });
-
-              enqueueSnackbar(verification.data.message, {
-                variant: "success",
-              });
-
-              const orderData = buildOrderData({
-                midtrans_order_id: response.order_id,
-                midtrans_transaction_id: response.transaction_id,
-                midtrans_payment_type: response.payment_type,
-                midtrans_transaction_status: response.transaction_status,
-              });
-
-              orderMutation.mutate(orderData);
-            } catch (error) {
-              console.log(error);
-              enqueueSnackbar("Payment verification failed!", {
-                variant: "error",
-              });
-            }
-          },
-          onPending: function () {
-            enqueueSnackbar("Payment is pending.", {
-              variant: "warning",
-            });
-          },
-          onError: function () {
-            enqueueSnackbar("Payment failed!", {
-              variant: "error",
-            });
-          },
-          onClose: function () {
-            enqueueSnackbar("Payment popup closed.", {
-              variant: "info",
-            });
-          },
-        });
-      } catch (error) {
-        console.log(error);
-        enqueueSnackbar("Payment Failed!", {
-          variant: "error",
-        });
-      }
+      setShowNonCashPayment(true);
     } else {
       orderMutation.mutate(buildOrderData());
     }
+  };
+
+  const handleConfirmNonCashPayment = (selectedPaymentMethod) => {
+    orderMutation.mutate(
+      buildOrderData(
+        {
+          manual_payment_type: selectedPaymentMethod,
+          manual_payment_amount: totalPriceWithTax,
+        },
+        selectedPaymentMethod
+      )
+    );
   };
 
   const orderMutation = useMutation({
@@ -265,6 +184,7 @@ const Bill = () => {
       console.log(data);
 
       setOrderInfo(data);
+      setShowNonCashPayment(false);
 
       enqueueSnackbar("Order Placed!", {
         variant: "success",
@@ -679,6 +599,15 @@ const Bill = () => {
 
       {showInvoice && (
         <Invoice orderInfo={orderInfo} setShowInvoice={setShowInvoice} />
+      )}
+      {showNonCashPayment && (
+        <NonCashPaymentModal
+          amount={totalPriceWithTax}
+          customerName={getCustomerName()}
+          isSubmitting={orderMutation.isPending}
+          onClose={() => setShowNonCashPayment(false)}
+          onConfirm={handleConfirmNonCashPayment}
+        />
       )}
     </>
   );
