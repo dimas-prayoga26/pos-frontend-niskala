@@ -11,7 +11,12 @@ import { useMutation } from "@tanstack/react-query";
 import { removeAllItems } from "../../redux/slices/cartSlice";
 import { removeCustomer, setCustomer } from "../../redux/slices/customerSlice";
 import Invoice from "../invoice/Invoice";
-import { formatCurrency, formatReceiptCurrency } from "../../utils";
+import {
+  formatCurrency,
+  formatJakartaReceiptDate,
+  formatJakartaReceiptDateTime,
+  formatReceiptCurrency,
+} from "../../utils";
 import receiptMark from "../../../../assets/Vector.svg";
 
 const ONLINE_ORDER_RATE = 20;
@@ -281,22 +286,6 @@ const Bill = () => {
         .replace(/>/g, "&gt;")
         .replace(/"/g, "&quot;")
         .replace(/'/g, "&#039;");
-    const formatReceiptDate = (value) => {
-      if (!value) return "-";
-
-      const date = new Date(value);
-      if (Number.isNaN(date.getTime())) return value;
-
-      return date.toLocaleDateString("id-ID");
-    };
-    const formatReceiptDateTime = (value) => {
-      const date = value ? new Date(value) : new Date();
-      const pad = (number) => String(number).padStart(2, "0");
-
-      return `${pad(date.getDate())}/${pad(date.getMonth() + 1)}/${String(
-        date.getFullYear()
-      ).slice(-2)} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
-    };
 
     if (cartData.length === 0) {
       enqueueSnackbar("Please add at least one menu item before printing!", {
@@ -523,7 +512,7 @@ const Bill = () => {
             <p class="receipt-title">Order Receipt</p>
             <div class="meta">
               <div class="meta-row"><span>Customer</span><strong>${escapeHtml(getCustomerName())}</strong></div>
-              <div class="meta-row"><span>Date</span><strong>${formatReceiptDateTime()}</strong></div>
+              <div class="meta-row"><span>Date</span><strong>${formatJakartaReceiptDateTime()}</strong></div>
               <div class="meta-row"><span>Payment</span><strong>${escapeHtml(paymentMethod || "-")}</strong></div>
               ${
                 orderType === "Online"
@@ -534,7 +523,7 @@ const Bill = () => {
                 isCateringOrder
                   ? `<div class="meta-row"><span>Instansi</span><strong>${escapeHtml(customerData.catering?.institution || "-")}</strong></div>
                      <div class="meta-row"><span>WhatsApp</span><strong>${escapeHtml(customerData.catering?.whatsapp || "-")}</strong></div>
-                     <div class="meta-row"><span>Tgl Acara</span><strong>${escapeHtml(formatReceiptDate(customerData.catering?.eventDate))}</strong></div>
+                     <div class="meta-row"><span>Tgl Acara</span><strong>${escapeHtml(formatJakartaReceiptDate(customerData.catering?.eventDate))}</strong></div>
                      <div class="meta-row"><span>Jam Kirim</span><strong>${escapeHtml(customerData.catering?.deliveryTime || "-")}</strong></div>`
                   : ""
               }

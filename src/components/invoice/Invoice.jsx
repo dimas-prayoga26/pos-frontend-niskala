@@ -1,5 +1,10 @@
 import React from "react";
-import { formatCurrency, formatReceiptCurrency } from "../../utils";
+import {
+  formatCurrency,
+  formatJakartaReceiptDate,
+  formatJakartaReceiptDateTime,
+  formatReceiptCurrency,
+} from "../../utils";
 import receiptMark from "../../../../assets/Vector.svg";
 
 const buildReceiptHtml = (orderInfo) => {
@@ -12,26 +17,8 @@ const buildReceiptHtml = (orderInfo) => {
       .replace(/'/g, "&#039;");
 
   const orderCode = orderInfo.orderId || orderInfo.orderCode || orderInfo.id;
-  const orderDate = orderInfo.orderDate
-    ? new Date(orderInfo.orderDate)
-    : new Date();
   const onlineOrderCharge = Number(orderInfo.bills.onlineOrderCharge) || 0;
   const cateringDetails = orderInfo.cateringDetails;
-  const formatReceiptDateTime = (date) => {
-    const pad = (number) => String(number).padStart(2, "0");
-
-    return `${pad(date.getDate())}/${pad(date.getMonth() + 1)}/${String(
-      date.getFullYear()
-    ).slice(-2)} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
-  };
-  const formatReceiptDate = (value) => {
-    if (!value) return "-";
-
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return value;
-
-    return date.toLocaleDateString("id-ID");
-  };
 
   const itemRows = orderInfo.items
     .map((item) => {
@@ -72,7 +59,7 @@ const buildReceiptHtml = (orderInfo) => {
       <div class="meta">
         <div class="meta-row"><span>Order ID</span><strong>${escapeHtml(orderCode)}</strong></div>
         <div class="meta-row"><span>Customer</span><strong>${escapeHtml(orderInfo.customerDetails.name)}</strong></div>
-        <div class="meta-row"><span>Date</span><strong>${formatReceiptDateTime(orderDate)}</strong></div>
+        <div class="meta-row"><span>Date</span><strong>${formatJakartaReceiptDateTime(orderInfo.orderDate)}</strong></div>
         <div class="meta-row"><span>Payment</span><strong>${escapeHtml(orderInfo.paymentMethod || "-")}</strong></div>
         ${
           orderInfo.orderType === "Online"
@@ -83,7 +70,7 @@ const buildReceiptHtml = (orderInfo) => {
           cateringDetails
             ? `<div class="meta-row"><span>Instansi</span><strong>${escapeHtml(cateringDetails.institution || "-")}</strong></div>
                <div class="meta-row"><span>WhatsApp</span><strong>${escapeHtml(cateringDetails.whatsapp || "-")}</strong></div>
-               <div class="meta-row"><span>Tgl Acara</span><strong>${escapeHtml(formatReceiptDate(cateringDetails.eventDate))}</strong></div>
+               <div class="meta-row"><span>Tgl Acara</span><strong>${escapeHtml(formatJakartaReceiptDate(cateringDetails.eventDate))}</strong></div>
                <div class="meta-row"><span>Jam Kirim</span><strong>${escapeHtml(cateringDetails.deliveryTime || "-")}</strong></div>
                <div class="meta-row"><span>Status Bayar</span><strong>${cateringDetails.isPaid ? "Lunas" : "Belum Lunas"}</strong></div>`
             : ""

@@ -4,6 +4,7 @@ import OrderList from "./OrderList";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { enqueueSnackbar } from "notistack";
 import { getOrders } from "../../https/index";
+import { formatJakartaDateTime, getJakartaDateKey } from "../../utils";
 
 const RecentOrders = () => {
   const [searchQuery, setSearchQuery] = useState("");
@@ -21,20 +22,9 @@ const RecentOrders = () => {
   }
 
   const orders = resData?.data?.data || [];
-  const getLocalDateKey = (value) => {
-    const date = value ? new Date(value) : new Date();
-
-    if (Number.isNaN(date.getTime())) return "";
-
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, "0");
-    const day = String(date.getDate()).padStart(2, "0");
-
-    return `${year}-${month}-${day}`;
-  };
-  const todayKey = getLocalDateKey();
+  const todayKey = getJakartaDateKey();
   const todayOrders = orders.filter(
-    (order) => getLocalDateKey(order.orderDate) === todayKey
+    (order) => getJakartaDateKey(order.orderDate) === todayKey
   );
 
   const filteredOrders = useMemo(() => {
@@ -47,18 +37,7 @@ const RecentOrders = () => {
         order.orderId ||
         order.orderCode ||
         `ORD-${String(order.id).padStart(6, "0")}`;
-      const orderDate = new Date(order.orderDate);
-      const formattedOrderDate = Number.isNaN(orderDate.getTime())
-        ? ""
-        : `${orderDate.toLocaleDateString("en-US", {
-            month: "long",
-            day: "2-digit",
-            year: "numeric",
-          })} ${orderDate.toLocaleTimeString("id-ID", {
-            hour: "2-digit",
-            minute: "2-digit",
-            hour12: false,
-          })}`;
+      const formattedOrderDate = formatJakartaDateTime(order.orderDate);
 
       const searchableText = [
         order.customerDetails?.name,

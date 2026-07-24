@@ -54,6 +54,8 @@ export const verifyMidtransPayment = (data) =>
 // Order Endpoints
 export const addOrder = (data) => axiosWrapper.post("/api/order/", data);
 export const getOrders = () => axiosWrapper.get("/api/order");
+export const deleteOrder = (orderId) =>
+  axiosWrapper.delete(`/api/order/${orderId}`);
 export const updateOrderStatus = ({ orderId, orderStatus }) =>
   axiosWrapper.put(`/api/order/${orderId}`, { orderStatus });
 export const updateCateringPaymentStatus = ({ orderId, isPaid }) =>

@@ -5,22 +5,15 @@ import BackButton from "../components/shared/BackButton";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   addCateringPayment,
+  deleteOrder,
   getOrders,
 } from "../https/index";
 import { enqueueSnackbar } from "notistack"
-
-const getTodayDateString = () => {
-  const today = new Date();
-  const year = today.getFullYear();
-  const month = String(today.getMonth() + 1).padStart(2, "0");
-  const day = String(today.getDate()).padStart(2, "0");
-
-  return `${year}-${month}-${day}`;
-};
+import { getJakartaDateKey } from "../utils";
 
 const Orders = () => {
 
-  const [selectedDate, setSelectedDate] = useState(getTodayDateString);
+  const [selectedDate, setSelectedDate] = useState(getJakartaDateKey);
   const queryClient = useQueryClient();
 
     useEffect(() => {
@@ -54,23 +47,26 @@ const Orders = () => {
     },
   });
 
+  const orderDeleteMutation = useMutation({
+    mutationFn: deleteOrder,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["orders"] });
+      enqueueSnackbar("Pesanan berhasil dihapus", {
+        variant: "success",
+      });
+    },
+    onError: () => {
+      enqueueSnackbar("Gagal menghapus pesanan", {
+        variant: "error",
+      });
+    },
+  });
+
   const orders = resData?.data.data || [];
-  const formatFilterDate = (date) => {
-    const orderDate = new Date(date);
-
-    if (Number.isNaN(orderDate.getTime())) return "";
-
-    const year = orderDate.getFullYear();
-    const month = String(orderDate.getMonth() + 1).padStart(2, "0");
-    const day = String(orderDate.getDate()).padStart(2, "0");
-
-    return `${year}-${month}-${day}`;
-  };
-
   const filteredOrders = orders.filter((order) => {
     if (!selectedDate) return true;
 
-    return formatFilterDate(order.orderDate) === selectedDate;
+    return getJakartaDateKey(order.orderDate) === selectedDate;
   });
 
   return (
@@ -108,20 +104,29 @@ const Orders = () => {
         {
           filteredOrders.length > 0 ? (
             filteredOrders.map((order) => {
+              const orderId = order.id || order._id;
+
               return (
                 <OrderCard
-                  key={order._id}
+                  key={orderId}
                   order={order}
                   onCateringPaymentAdd={(amount) =>
                     cateringPaymentAddMutation.mutate({
-                      orderId: order.id || order._id,
+                      orderId,
                       amount,
                     })
                   }
                   isAddingCateringPayment={
                     cateringPaymentAddMutation.isPending &&
                     (cateringPaymentAddMutation.variables?.orderId ===
-                      (order.id || order._id))
+                      orderId)
+                  }
+                  onOrderDelete={() =>
+                    orderDeleteMutation.mutate(orderId)
+                  }
+                  isDeletingOrder={
+                    orderDeleteMutation.isPending &&
+                    orderDeleteMutation.variables === orderId
                   }
                 />
               )

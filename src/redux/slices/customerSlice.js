@@ -1,6 +1,7 @@
 import { createSlice } from "@reduxjs/toolkit";
+import { getJakartaDateKey } from "../../utils";
 
-const getToday = () => new Date().toISOString().slice(0, 10);
+const getToday = () => getJakartaDateKey();
 
 const initialState = {
     customerName: "",

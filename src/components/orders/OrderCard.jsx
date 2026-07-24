@@ -1,12 +1,24 @@
 import React, { useState } from "react";
-import { formatCurrency, formatDateAndTime } from "../../utils/index";
+import {
+  MdDeleteOutline,
+  MdInfoOutline,
+  MdMoreVert,
+} from "react-icons/md";
+import {
+  formatCurrency,
+  formatDateAndTime,
+  formatJakartaReceiptDate,
+} from "../../utils/index";
 
 const OrderCard = ({
   order,
   onCateringPaymentAdd,
+  onOrderDelete,
   isAddingCateringPayment = false,
+  isDeletingOrder = false,
 }) => {
   const [showDetails, setShowDetails] = useState(false);
+  const [isActionMenuOpen, setIsActionMenuOpen] = useState(false);
   const [paymentAmount, setPaymentAmount] = useState("");
   const orderCode = order.orderId || order.orderCode || `ORD-${String(order.id).padStart(6, "0")}`;
   const cateringDetails = order.cateringDetails;
@@ -27,15 +39,6 @@ const OrderCard = ({
       ? "DP"
       : "Dibayar";
   const canAddCateringPayment = isCatering && cateringRemaining > 0;
-  const formatEventDate = (value) => {
-    if (!value) return "-";
-
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return value;
-
-    return date.toLocaleDateString("id-ID");
-  };
-
   const handleSubmitPayment = (event) => {
     event.preventDefault();
 
@@ -45,6 +48,21 @@ const OrderCard = ({
 
     onCateringPaymentAdd?.(amount);
     setPaymentAmount("");
+  };
+  const handleViewDetails = () => {
+    setIsActionMenuOpen(false);
+    setShowDetails(true);
+  };
+  const handleDeleteOrder = () => {
+    setIsActionMenuOpen(false);
+
+    const isConfirmed = window.confirm(
+      `Hapus pesanan #${orderCode}? Data pesanan akan dihapus permanen.`
+    );
+
+    if (!isConfirmed) return;
+
+    onOrderDelete?.();
   };
 
   return (
@@ -72,13 +90,37 @@ const OrderCard = ({
                 Order ID: #{orderCode}
               </p>
             </div>
-            <div className="flex flex-col sm:items-end gap-2">
+            <div className="relative flex flex-col sm:items-end gap-2">
               <button
-                onClick={() => setShowDetails(true)}
-                className="rounded-lg border border-[#a79981]/50 px-3 py-1.5 text-xs font-semibold text-[#a79981] hover:bg-[#a79981] hover:text-[#101010]"
+                type="button"
+                onClick={() => setIsActionMenuOpen((current) => !current)}
+                className="flex h-9 w-9 items-center justify-center rounded-lg border border-[#a79981]/50 text-[#a79981] transition hover:bg-[#a79981] hover:text-[#101010] disabled:cursor-not-allowed disabled:opacity-60"
+                aria-label="Order actions"
+                disabled={isDeletingOrder}
               >
-                View Details
+                <MdMoreVert size={20} />
               </button>
+              {isActionMenuOpen && (
+                <div className="absolute right-0 top-[calc(100%+8px)] z-20 w-44 overflow-hidden rounded-lg border border-[#333] bg-[#1a1a1a] shadow-2xl shadow-black/40">
+                  <button
+                    type="button"
+                    onClick={handleViewDetails}
+                    className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm font-semibold text-[#f5f5f5] hover:bg-[#262626]"
+                  >
+                    <MdInfoOutline size={18} />
+                    Lihat Detail
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleDeleteOrder}
+                    disabled={isDeletingOrder}
+                    className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm font-semibold text-red-400 hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    <MdDeleteOutline size={18} />
+                    {isDeletingOrder ? "Menghapus..." : "Hapus Pesanan"}
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -164,7 +206,7 @@ const OrderCard = ({
                     </p>
                     <p>
                       <span className="text-[#f5f5f5]">Tanggal Acara:</span>{" "}
-                      {formatEventDate(cateringDetails.eventDate)}
+                      {formatJakartaReceiptDate(cateringDetails.eventDate)}
                     </p>
                     <p>
                       <span className="text-[#f5f5f5]">Jam Kirim:</span>{" "}
