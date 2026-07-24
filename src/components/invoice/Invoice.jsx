@@ -90,15 +90,6 @@ const buildReceiptHtml = (orderInfo) => {
         <div class="total-block grand"><span>Total</span><strong>${formatReceiptCurrency(orderInfo.bills.totalWithTax)}</strong></div>
       </div>
 
-      ${
-        orderInfo.paymentMethod === "Non Tunai"
-          ? `<div class="meta payment-meta">
-              <div class="meta-row"><span>Midtrans</span><strong>${escapeHtml(orderInfo.paymentData?.midtrans_order_id || "-")}</strong></div>
-              <div class="meta-row"><span>Type</span><strong>${escapeHtml(orderInfo.paymentData?.midtrans_payment_type || "-")}</strong></div>
-            </div>`
-          : ""
-      }
-
       <div class="footer">${
         cateringDetails?.note
           ? `Catatan: ${escapeHtml(cateringDetails.note)}`
