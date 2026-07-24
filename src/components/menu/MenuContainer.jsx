@@ -462,7 +462,7 @@ const MenuContainer = () => {
               className="flex min-h-[210px] flex-col justify-between rounded-lg bg-[#1a1a1a] p-3 hover:bg-[#2a2a2a] sm:min-h-[260px] sm:p-4"
             >
               <div>
-                <div className="min-h-[64px] sm:min-h-[72px]">
+                <div className={sizePrices ? "min-h-[64px] sm:min-h-[72px]" : ""}>
                   <h1 className="text-sm font-semibold leading-tight text-[#f5f5f5] sm:text-lg">
                     {item.name}
                   </h1>
