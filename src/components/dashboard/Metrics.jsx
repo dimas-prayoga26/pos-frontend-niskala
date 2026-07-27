@@ -13,7 +13,7 @@ import {
   FiTrendingUp,
   FiTruck,
 } from "react-icons/fi";
-import * as XLSX from "xlsx";
+import * as XLSX from "xlsx-js-style";
 import {
   getCategories,
   getMenuItems,
@@ -119,9 +119,190 @@ const getOrderItemCount = (order) =>
     0
   );
 
-const appendSheet = (workbook, sheetName, rows, widths = []) => {
-  const worksheet = XLSX.utils.aoa_to_sheet(rows);
-  worksheet["!cols"] = widths.map((width) => ({ wch: width }));
+const rupiahExcelFormat = '"Rp" #,##0;[Red]-"Rp" #,##0;"Rp" 0';
+
+const excelStyles = {
+  title: {
+    font: { bold: true, sz: 16, color: { rgb: "FFFFFF" } },
+    fill: { fgColor: { rgb: "1F4E3D" } },
+    alignment: { horizontal: "center", vertical: "center" },
+  },
+  subtitle: {
+    font: { bold: true, color: { rgb: "1F4E3D" } },
+    fill: { fgColor: { rgb: "E8F3ED" } },
+    alignment: { horizontal: "left", vertical: "center" },
+  },
+  header: {
+    font: { bold: true, color: { rgb: "101010" } },
+    fill: { fgColor: { rgb: "A79981" } },
+    alignment: { horizontal: "center", vertical: "center", wrapText: true },
+    border: {
+      top: { style: "thin", color: { rgb: "806F59" } },
+      right: { style: "thin", color: { rgb: "806F59" } },
+      bottom: { style: "thin", color: { rgb: "806F59" } },
+      left: { style: "thin", color: { rgb: "806F59" } },
+    },
+  },
+  cell: {
+    alignment: { vertical: "top", wrapText: true },
+    border: {
+      top: { style: "thin", color: { rgb: "D9D9D9" } },
+      right: { style: "thin", color: { rgb: "D9D9D9" } },
+      bottom: { style: "thin", color: { rgb: "D9D9D9" } },
+      left: { style: "thin", color: { rgb: "D9D9D9" } },
+    },
+  },
+  label: {
+    font: { bold: true, color: { rgb: "1F1F1F" } },
+    fill: { fgColor: { rgb: "F7F3EC" } },
+    alignment: { vertical: "top", wrapText: true },
+    border: {
+      top: { style: "thin", color: { rgb: "D6C7AE" } },
+      right: { style: "thin", color: { rgb: "D6C7AE" } },
+      bottom: { style: "thin", color: { rgb: "D6C7AE" } },
+      left: { style: "thin", color: { rgb: "D6C7AE" } },
+    },
+  },
+};
+
+const getHeaderValueType = (header) => {
+  const normalizedHeader = String(header || "").toLowerCase();
+
+  if (
+    /(omzet|hpp|laba|total|offline|online|catering|harga|cash|qris|transfer|pengeluaran|selisih|saldo|diterima|dp|sisa)/i.test(
+      normalizedHeader
+    )
+  ) {
+    return "currency";
+  }
+
+  if (/(trans|items|order cat|stok|minimal|qty)/i.test(normalizedHeader)) {
+    return "number";
+  }
+
+  return "text";
+};
+
+const getSummaryValueType = (label) => {
+  const normalizedLabel = String(label || "").toLowerCase();
+
+  if (normalizedLabel.includes("stok harus order")) return "text";
+  if (normalizedLabel.includes("catering aktif")) return "number";
+
+  if (
+    /(omzet|laba|offline|online|catering|saldo|hpp|kas)/i.test(
+      normalizedLabel
+    )
+  ) {
+    return "currency";
+  }
+
+  return "text";
+};
+
+const applyStyle = (worksheet, rowIndex, columnIndex, style) => {
+  const address = XLSX.utils.encode_cell({ r: rowIndex, c: columnIndex });
+  worksheet[address] = worksheet[address] || { t: "s", v: "" };
+  worksheet[address].s = {
+    ...(worksheet[address].s || {}),
+    ...style,
+  };
+};
+
+const applyValueFormat = (worksheet, address, valueType) => {
+  if (!worksheet[address]) return;
+
+  if (valueType === "currency") {
+    worksheet[address].z = rupiahExcelFormat;
+    worksheet[address].s = {
+      ...(worksheet[address].s || {}),
+      alignment: { horizontal: "right", vertical: "top", wrapText: true },
+    };
+  }
+
+  if (valueType === "number") {
+    worksheet[address].z = "#,##0";
+    worksheet[address].s = {
+      ...(worksheet[address].s || {}),
+      alignment: { horizontal: "right", vertical: "top", wrapText: true },
+    };
+  }
+};
+
+const appendSheet = (workbook, sheetName, rows, widths = [], options = {}) => {
+  const isSummarySheet = options.variant === "summary";
+  const tableRows = isSummarySheet ? [["Metrik", "Nilai"], ...rows] : rows;
+  const title = options.title || `NISKALA COFFEE & EATERY - ${sheetName.toUpperCase()}`;
+  const subtitle =
+    options.subtitle ||
+    (options.downloadedAt
+      ? `Laporan ${sheetName} | Diunduh ${options.downloadedAt}`
+      : `Laporan ${sheetName}`);
+  const exportedRows = [[title], [subtitle], [], ...tableRows];
+  const headerRowIndex = 3;
+  const maxColumnCount = Math.max(
+    widths.length,
+    ...exportedRows.map((row) => row.length),
+    2
+  );
+  const worksheet = XLSX.utils.aoa_to_sheet(exportedRows);
+  const lastRowIndex = exportedRows.length - 1;
+  const lastColumnIndex = maxColumnCount - 1;
+  const headerValues = exportedRows[headerRowIndex] || [];
+
+  worksheet["!cols"] = Array.from({ length: maxColumnCount }, (_, index) => ({
+    wch: widths[index] || 16,
+  }));
+  worksheet["!rows"] = exportedRows.map((_, index) => ({
+    hpt: index === 0 ? 26 : index === 1 ? 20 : 18,
+  }));
+  worksheet["!merges"] = [
+    {
+      s: { r: 0, c: 0 },
+      e: { r: 0, c: lastColumnIndex },
+    },
+    {
+      s: { r: 1, c: 0 },
+      e: { r: 1, c: lastColumnIndex },
+    },
+  ];
+  worksheet["!freeze"] = { xSplit: 0, ySplit: headerRowIndex + 1 };
+  worksheet["!views"] = [{ state: "frozen", xSplit: 0, ySplit: headerRowIndex + 1 }];
+  worksheet["!autofilter"] = {
+    ref: XLSX.utils.encode_range({
+      s: { r: headerRowIndex, c: 0 },
+      e: { r: lastRowIndex, c: lastColumnIndex },
+    }),
+  };
+
+  applyStyle(worksheet, 0, 0, excelStyles.title);
+  applyStyle(worksheet, 1, 0, excelStyles.subtitle);
+
+  for (let columnIndex = 0; columnIndex < maxColumnCount; columnIndex += 1) {
+    applyStyle(worksheet, headerRowIndex, columnIndex, excelStyles.header);
+  }
+
+  for (let rowIndex = headerRowIndex + 1; rowIndex <= lastRowIndex; rowIndex += 1) {
+    for (let columnIndex = 0; columnIndex < maxColumnCount; columnIndex += 1) {
+      const address = XLSX.utils.encode_cell({ r: rowIndex, c: columnIndex });
+      const row = exportedRows[rowIndex] || [];
+      const cellValue = row[columnIndex];
+
+      if (cellValue === undefined) continue;
+
+      worksheet[address] = worksheet[address] || { t: "s", v: cellValue };
+      worksheet[address].s = columnIndex === 0 ? excelStyles.label : excelStyles.cell;
+
+      const valueType = isSummarySheet
+        ? columnIndex === 1
+          ? getSummaryValueType(row[0])
+          : "text"
+        : getHeaderValueType(headerValues[columnIndex]);
+
+      applyValueFormat(worksheet, address, valueType);
+    }
+  }
+
   XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
 };
 
@@ -671,9 +852,6 @@ const Metrics = () => {
       workbook,
       "Ringkasan",
       [
-        ["NISKALA COFFEE & EATERY - RINGKASAN"],
-        ["Diunduh", todayKey],
-        [],
         ["Omzet hari ini", sumOrderRevenue(ordersInRange(todayKey, todayKey))],
         [
           `Omzet minggu ini (${weekStartKey} s.d. ${weekEndKey})`,
@@ -689,7 +867,13 @@ const Metrics = () => {
         ["Catering aktif (belum terkirim)", activeCateringCount],
         ["Stok HARUS ORDER", stockNeedsOrderNames || "-"],
       ],
-      [34, 28]
+      [42, 34],
+      {
+        variant: "summary",
+        title: "NISKALA COFFEE & EATERY - RINGKASAN USAHA",
+        subtitle: `Diunduh ${todayKey} | Periode bulan ${getMonthLabel(monthKey)}`,
+        downloadedAt: todayKey,
+      }
     );
 
     appendSheet(
