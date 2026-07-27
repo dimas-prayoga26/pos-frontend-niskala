@@ -5,6 +5,7 @@ import {
   formatJakartaReceiptDateTime,
   formatReceiptCurrency,
 } from "../../utils";
+import { printReceiptDocument } from "../../utils/printReceipt";
 import receiptMark from "../../../../assets/Vector.svg";
 
 const buildReceiptHtml = (orderInfo) => {
@@ -270,24 +271,17 @@ const Invoice = ({ orderInfo, setShowInvoice }) => {
   const orderCode = orderInfo.orderId || orderInfo.orderCode || orderInfo.id;
 
   const handlePrint = () => {
-    const WinPrint = window.open("", "", "width=300,height=720");
-
-    WinPrint.document.write(`
-      <html>
-        <head>
-          <title>Order Receipt</title>
-          <style>${receiptPrintStyle}</style>
-        </head>
-        <body>${buildReceiptHtml(orderInfo)}</body>
-      </html>
-    `);
-
-    WinPrint.document.close();
-    WinPrint.focus();
-    setTimeout(() => {
-      WinPrint.print();
-      WinPrint.close();
-    }, 300);
+    printReceiptDocument({
+      documentHtml: `
+        <html>
+          <head>
+            <title>Order Receipt</title>
+            <style>${receiptPrintStyle}</style>
+          </head>
+          <body>${buildReceiptHtml(orderInfo)}</body>
+        </html>
+      `,
+    });
   };
 
   return (

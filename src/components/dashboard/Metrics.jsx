@@ -1,6 +1,18 @@
 import React, { useMemo, useState } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { FiDownload } from "react-icons/fi";
+import {
+  FiArchive,
+  FiBookOpen,
+  FiCreditCard,
+  FiDollarSign,
+  FiDownload,
+  FiGrid,
+  FiMonitor,
+  FiPackage,
+  FiShoppingBag,
+  FiTrendingUp,
+  FiTruck,
+} from "react-icons/fi";
 import * as XLSX from "xlsx";
 import {
   getCategories,
@@ -113,19 +125,92 @@ const appendSheet = (workbook, sheetName, rows, widths = []) => {
   XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
 };
 
+const cardToneStyles = {
+  sales: {
+    card: "border-blue-500/30 bg-blue-500/10",
+    icon: "bg-blue-500/15 text-blue-200",
+    value: "text-blue-50",
+  },
+  catering: {
+    card: "border-violet-500/30 bg-violet-500/10",
+    icon: "bg-violet-500/15 text-violet-200",
+    value: "text-violet-50",
+  },
+  offline: {
+    card: "border-emerald-500/30 bg-emerald-500/10",
+    icon: "bg-emerald-500/15 text-emerald-200",
+    value: "text-emerald-50",
+  },
+  online: {
+    card: "border-sky-500/30 bg-sky-500/10",
+    icon: "bg-sky-500/15 text-sky-200",
+    value: "text-sky-50",
+  },
+  cash: {
+    card: "border-indigo-500/30 bg-indigo-500/10",
+    icon: "bg-indigo-500/15 text-indigo-200",
+    value: "text-indigo-50",
+  },
+  cost: {
+    card: "border-amber-500/30 bg-amber-500/10",
+    icon: "bg-amber-500/15 text-amber-200",
+    value: "text-amber-50",
+  },
+  profit: {
+    card: "border-teal-500/30 bg-teal-500/10",
+    icon: "bg-teal-500/15 text-teal-200",
+    value: "text-teal-50",
+  },
+  net: {
+    card: "border-green-500/30 bg-green-500/10",
+    icon: "bg-green-500/15 text-green-200",
+    value: "text-green-50",
+  },
+  warning: {
+    card: "border-orange-500/30 bg-orange-500/10",
+    icon: "bg-orange-500/15 text-orange-200",
+    value: "text-orange-50",
+  },
+  neutral: {
+    card: "border-[#3a3a3a] bg-[#232323]",
+    icon: "bg-[#333] text-[#d8d8d8]",
+    value: "text-[#f5f5f5]",
+  },
+};
+
 const MetricCard = ({ item, className = "" }) => {
+  const Icon = item.icon;
+  const tone = cardToneStyles[item.tone] || cardToneStyles.neutral;
+
   return (
     <div
-      className={`min-h-[96px] shadow-sm rounded-lg p-4 ${className}`}
-      style={{ backgroundColor: item.color }}
+      className={`min-h-[124px] rounded-lg border p-4 shadow-sm ${tone.card} ${className}`}
     >
-      <div className="flex justify-between items-center">
-        <p className="font-medium text-xs text-[#f5f5f5]">{item.title}</p>
-        <span className="rounded-md bg-black/20 px-2 py-1 text-xs font-bold text-[#f5f5f5]">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-3">
+          {Icon && (
+            <span
+              className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-md ${tone.icon}`}
+            >
+              <Icon className="text-lg" />
+            </span>
+          )}
+          <div className="min-w-0">
+            <p className="truncate text-sm font-bold text-[#f5f5f5]">
+              {item.title}
+            </p>
+            {item.description && (
+              <p className="mt-1 text-xs leading-4 text-[#ababab]">
+                {item.description}
+              </p>
+            )}
+          </div>
+        </div>
+        <span className="shrink-0 rounded-md bg-black/20 px-2 py-1 text-xs font-bold text-[#f5f5f5]">
           {item.badge}
         </span>
       </div>
-      <p className="mt-1 font-semibold text-2xl text-[#f5f5f5]">
+      <p className={`mt-4 text-2xl font-bold ${tone.value}`}>
         {item.value}
       </p>
     </div>
@@ -150,6 +235,58 @@ const MetricCardSlider = ({ items, renderItem }) => {
           />
         )
       )}
+    </div>
+  );
+};
+
+const ProfitFlow = ({ revenue, cost, grossProfit, netProfit, isLoading }) => {
+  const steps = [
+    {
+      label: "Penjualan",
+      value: isLoading ? "..." : formatCurrency(revenue),
+      tone: "sales",
+    },
+    {
+      label: "HPP",
+      value: isLoading ? "..." : formatCurrency(cost),
+      tone: "cost",
+    },
+    {
+      label: "Untung Kotor",
+      value: isLoading ? "..." : formatCurrency(grossProfit),
+      tone: "profit",
+    },
+    {
+      label: "Untung Bersih",
+      value: isLoading ? "..." : formatCurrency(netProfit),
+      tone: "net",
+    },
+  ];
+
+  return (
+    <div className="mt-5 rounded-lg border border-[#333] bg-[#202020] p-4">
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
+        {steps.map((step, index) => {
+          const tone = cardToneStyles[step.tone] || cardToneStyles.neutral;
+
+          return (
+            <div key={step.label} className="flex items-center gap-3">
+              <div className={`h-2 w-2 rounded-full ${tone.icon}`} />
+              <div className="min-w-0">
+                <p className="text-xs font-semibold text-[#ababab]">
+                  {step.label}
+                </p>
+                <p className="truncate text-sm font-bold text-[#f5f5f5]">
+                  {step.value}
+                </p>
+              </div>
+              {index < steps.length - 1 && (
+                <span className="ml-auto hidden text-[#666] md:block">-</span>
+              )}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 };
@@ -368,82 +505,106 @@ const Metrics = () => {
 
   const transactionMetrics = [
     {
-      title: "Pendapatan",
+      title: "Total Penjualan",
       value: isLoading ? "..." : formatCurrency(periodRevenue),
       badge: activePeriod.badge,
-      color: "#245b8f",
+      description: "Semua uang masuk dari order.",
+      icon: FiDollarSign,
+      tone: "sales",
     },
     {
-      title: "Pendapatan Catering",
+      title: "Penjualan Catering",
       value: isLoading ? "..." : formatCurrency(cateringRevenue),
       badge: activePeriod.badge,
-      color: "#6b4f7a",
+      description: "Order paket dan acara.",
+      icon: FiTruck,
+      tone: "catering",
     },
     {
-      title: "Pendapatan Pesanan Offline",
+      title: "Penjualan Offline",
       value: isLoading ? "..." : formatCurrency(offlineRevenue),
       badge: activePeriod.badge,
-      color: "#28704f",
+      description: "Transaksi langsung di kasir.",
+      icon: FiShoppingBag,
+      tone: "offline",
     },
     {
-      title: "Pendapatan Pesanan Online",
+      title: "Penjualan Online",
       value: isLoading ? "..." : formatCurrency(onlineRevenue),
       badge: activePeriod.badge,
-      color: "#8a6428",
+      description: "Order dari platform online.",
+      icon: FiMonitor,
+      tone: "online",
     },
   ];
 
   const operationalMetrics = [
     {
-      title: "Stok Yang Harus Diorder",
+      title: "Perlu Belanja Stok",
       value: isStockItemsLoading ? "..." : stockNeedsOrder,
       badge: "Restock",
-      color: "#6d5a34",
+      description: "Bahan yang sudah di bawah batas aman.",
+      icon: FiPackage,
+      tone: "warning",
     },
     {
-      title: "Total Stok Item",
+      title: "Jenis Bahan",
       value: isStockItemsLoading ? "..." : stockItems.length,
       badge: "Aktif",
-      color: "#6b326c",
+      description: "Daftar bahan yang tercatat.",
+      icon: FiArchive,
+      tone: "neutral",
     },
     {
-      title: "Total Kategori",
+      title: "Kategori Menu",
       value: isCategoriesLoading ? "..." : totalCategories,
       badge: "Aktif",
-      color: "#514472",
+      description: "Kelompok menu yang tersedia.",
+      icon: FiGrid,
+      tone: "neutral",
     },
     {
       title: "Total Menu",
       value: isMenuItemsLoading ? "..." : totalDishes,
       badge: "Aktif",
-      color: "#315f3f",
+      description: "Menu yang masuk master data.",
+      icon: FiBookOpen,
+      tone: "offline",
     },
   ];
 
   const financialMetrics = [
     {
-      title: "Saldo Kas",
+      title: "Uang Masuk Tercatat",
       value: isFinancialLoading ? "..." : formatCurrency(cashBalanceTotal),
       badge: activePeriod.badge,
-      color: "#514f82",
+      description: "Cash, QRIS, dan transfer setelah pengeluaran.",
+      icon: FiCreditCard,
+      tone: "cash",
     },
     {
-      title: "HPP Bahan",
+      title: "HPP",
       value: isFinancialLoading ? "..." : formatCurrency(materialSpendTotal),
       badge: activePeriod.badge,
-      color: "#7b6439",
+      description: "Perkiraan biaya bahan dari rekap.",
+      icon: FiPackage,
+      tone: "cost",
     },
     {
-      title: "Laba Kotor",
+      title: "Untung Kotor",
       value: isFinancialLoading ? "..." : formatCurrency(grossProfitTotal),
       badge: activePeriod.badge,
-      color: "#365f5c",
+      description: "Penjualan dikurangi modal bahan.",
+      icon: FiTrendingUp,
+      tone: "profit",
     },
     {
-      title: "Laba Bersih",
+      title: "Untung Bersih",
       value: isFinancialLoading ? "..." : formatCurrency(netProfitTotal),
       badge: activePeriod.badge,
-      color: "#744766",
+      description: "Untung setelah pengeluaran harian.",
+      icon: FiDollarSign,
+      tone: "net",
     },
   ];
 
@@ -524,7 +685,7 @@ const Metrics = () => {
         [" - Online", sumOrderRevenue(currentMonthOnlineOrders)],
         [" - Catering", sumOrderRevenue(currentMonthCateringOrders)],
         ["Saldo kas", currentMonthCashBalance],
-        ["HPP bahan bulan ini", currentMonthHpp],
+        ["HPP bulan ini", currentMonthHpp],
         ["Catering aktif (belum terkirim)", activeCateringCount],
         ["Stok HARUS ORDER", stockNeedsOrderNames || "-"],
       ],
@@ -788,9 +949,11 @@ const Metrics = () => {
     <div className="container mx-auto py-2 px-4 md:px-6">
       <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4">
         <div>
-          <h2 className="font-semibold text-[#f5f5f5] text-xl">Metrik</h2>
+          <h2 className="font-semibold text-[#f5f5f5] text-xl">
+            Ringkasan Usaha
+          </h2>
           <p className="text-sm text-[#ababab]">
-            Ringkasan transaksi dan operasional restoran.
+            Gambaran cepat penjualan, untung, stok, dan menu.
           </p>
         </div>
         <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
@@ -846,15 +1009,31 @@ const Metrics = () => {
         </div>
       </div>
 
-      <MetricCardSlider items={transactionMetrics} />
+      <div className="mt-8">
+        <div>
+          <h2 className="font-semibold text-[#f5f5f5] text-xl">Penjualan</h2>
+          <p className="text-sm text-[#ababab]">
+            Uang masuk dari semua channel penjualan.
+          </p>
+        </div>
+        <MetricCardSlider items={transactionMetrics} />
+      </div>
 
       <div className="flex flex-col justify-between mt-12">
         <div>
-          <h2 className="font-semibold text-[#f5f5f5] text-xl">Keuangan</h2>
+          <h2 className="font-semibold text-[#f5f5f5] text-xl">Keuntungan</h2>
           <p className="text-sm text-[#ababab]">
-            Ringkasan laba, saldo kas, dan HPP bahan sesuai periode filter.
+            Alur sederhana dari penjualan, modal bahan, sampai untung bersih.
           </p>
         </div>
+
+        <ProfitFlow
+          revenue={periodRevenue}
+          cost={materialSpendTotal}
+          grossProfit={grossProfitTotal}
+          netProfit={netProfitTotal}
+          isLoading={isLoading || isFinancialLoading}
+        />
 
         <MetricCardSlider
           items={financialMetrics}
@@ -870,9 +1049,9 @@ const Metrics = () => {
 
       <div className="flex flex-col justify-between mt-12">
         <div>
-          <h2 className="font-semibold text-[#f5f5f5] text-xl">Operasional</h2>
+          <h2 className="font-semibold text-[#f5f5f5] text-xl">Stok & Menu</h2>
           <p className="text-sm text-[#ababab]">
-            Data master menu dan stok dari aplikasi POS.
+            Ringkasan bahan, kategori, dan daftar menu.
           </p>
           {hasError && (
             <p className="text-sm text-red-400 mt-1">

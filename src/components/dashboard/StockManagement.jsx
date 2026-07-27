@@ -32,6 +32,11 @@ const statusClassNames = {
   AMAN: "bg-[#2e4a40] text-green-400",
 };
 
+const stockTabs = [
+  { key: "stock", label: "Stok Barang" },
+  { key: "shopping", label: "Bahan Belanjaan" },
+];
+
 const StockManagement = () => {
   const queryClient = useQueryClient();
   const userRole = useSelector((state) => state.user.role);
@@ -61,10 +66,27 @@ const StockManagement = () => {
     );
   }, [stockItems]);
   const visibleItems = activeStockTab === "shopping" ? shoppingItems : stockItems;
+  const activeStockTitle =
+    activeStockTab === "shopping" ? "Bahan Belanjaan" : "Stok Barang";
+  const activeStockDescription =
+    activeStockTab === "shopping"
+      ? "Daftar bahan yang perlu disiapkan untuk restock."
+      : "Daftar bahan, kategori, jumlah stok, dan status restock.";
 
   const refreshStockItems = () => {
     queryClient.invalidateQueries({ queryKey: ["stock-items"] });
   };
+
+  useEffect(() => {
+    if (!showAddModal && !pendingDeleteItem) return undefined;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [showAddModal, pendingDeleteItem]);
 
   const stockItemAddMutation = useMutation({
     mutationFn: addStockItem,
@@ -247,60 +269,69 @@ const StockManagement = () => {
       <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
           <h2 className="text-[#f5f5f5] text-xl font-semibold">
-            Stock Management
+            Stok Management
           </h2>
           <p className="mt-1 text-sm text-[#ababab]">
             Pantau stok bahan dan status restock.
           </p>
         </div>
-        <div className="flex w-full flex-col gap-2 lg:w-auto lg:flex-row lg:flex-nowrap lg:items-center lg:justify-end">
-          <input
-            value={searchQuery}
-            onChange={(event) => setSearchQuery(event.target.value)}
-            type="search"
-            placeholder={
-              activeStockTab === "shopping"
-                ? "Cari bahan belanjaan"
-                : "Search stock"
-            }
-            className="w-full rounded-lg bg-[#1f1f1f] px-4 py-2 text-sm font-semibold text-[#f5f5f5] outline-none placeholder:text-[#777] lg:w-72"
-          />
-          {isAdmin && (
+        <div className="flex w-full shrink-0 gap-2 rounded-lg bg-[#1f1f1f] p-1 sm:w-fit">
+          {stockTabs.map((tab) => (
             <button
+              key={tab.key}
               type="button"
-              onClick={() => {
-                setStockForm(emptyStockForm);
-                setEditingStockId(null);
-                setShowAddModal(true);
-              }}
-              className="shrink-0 rounded-lg bg-[#025cca] px-4 py-2 text-sm font-bold text-[#f5f5f5] hover:bg-[#0969df]"
+              onClick={() => setActiveStockTab(tab.key)}
+              className={`flex flex-1 items-center justify-center rounded-md px-4 py-2 text-sm font-bold transition sm:flex-none ${
+                activeStockTab === tab.key
+                  ? "bg-[#a79981] text-[#101010]"
+                  : "text-[#ababab] hover:bg-[#2f2f2f] hover:text-[#f5f5f5]"
+              }`}
             >
-              Tambah Stok
+              {tab.label}
             </button>
-          )}
-          <div className="flex w-full shrink-0 gap-2 rounded-lg bg-[#1f1f1f] p-1 sm:w-fit">
-            {[
-              { key: "stock", label: "Stok Barang" },
-              { key: "shopping", label: "Bahan Belanjaan" },
-            ].map((tab) => (
-              <button
-                key={tab.key}
-                type="button"
-                onClick={() => setActiveStockTab(tab.key)}
-                className={`flex flex-1 items-center justify-center rounded-md px-4 py-2 text-sm font-bold transition sm:flex-none ${
-                  activeStockTab === tab.key
-                    ? "bg-[#a79981] text-[#101010]"
-                    : "text-[#ababab] hover:bg-[#2f2f2f] hover:text-[#f5f5f5]"
-                }`}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
+          ))}
         </div>
       </div>
 
-      <div className="overflow-x-auto">
+      <div className="rounded-lg bg-[#1f1f1f] p-4">
+        <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h3 className="text-lg font-bold text-[#f5f5f5]">
+              {activeStockTitle}
+            </h3>
+            <p className="mt-1 text-sm text-[#ababab]">
+              {activeStockDescription}
+            </p>
+          </div>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            {isAdmin && (
+              <button
+                type="button"
+                onClick={() => {
+                  setStockForm(emptyStockForm);
+                  setEditingStockId(null);
+                  setShowAddModal(true);
+                }}
+                className="rounded-lg bg-[#a79981] px-4 py-2 text-sm font-bold text-[#101010] hover:bg-[#b7aa94]"
+              >
+                Tambah Stok
+              </button>
+            )}
+            <input
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              type="search"
+              placeholder={
+                activeStockTab === "shopping"
+                  ? "Cari bahan belanjaan"
+                  : "Search stock"
+              }
+              className="rounded-lg bg-[#262626] px-4 py-2 text-sm text-[#f5f5f5] outline-none placeholder:text-[#777]"
+            />
+          </div>
+        </div>
+
+        <div className="overflow-x-auto">
         {activeStockTab === "shopping" ? (
           <table className="w-full text-left text-[#f5f5f5]">
             <thead className="bg-[#333] text-[#ababab]">
@@ -451,59 +482,65 @@ const StockManagement = () => {
             </tbody>
           </table>
         )}
-      </div>
+        </div>
 
-      <div className="mt-4 flex flex-col gap-3 text-sm text-[#ababab] sm:flex-row sm:items-center sm:justify-between">
-        <p>
-          Showing{" "}
-          {filteredItems.length === 0
-            ? 0
-            : (currentPage - 1) * ITEMS_PER_PAGE + 1}
-          {" - "}
-          {Math.min(currentPage * ITEMS_PER_PAGE, filteredItems.length)} of{" "}
-          {filteredItems.length}
-        </p>
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setCurrentPage((page) => Math.max(page - 1, 1))}
-            disabled={currentPage === 1}
-            className="rounded-lg bg-[#1f1f1f] px-3 py-2 font-semibold text-[#f5f5f5] disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            Prev
-          </button>
-          <span className="px-2 font-semibold text-[#f5f5f5]">
-            {currentPage} / {totalPages}
-          </span>
-          <button
-            type="button"
-            onClick={() =>
-              setCurrentPage((page) => Math.min(page + 1, totalPages))
-            }
-            disabled={currentPage === totalPages}
-            className="rounded-lg bg-[#1f1f1f] px-3 py-2 font-semibold text-[#f5f5f5] disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            Next
-          </button>
+        <div className="mt-4 flex flex-col gap-3 text-sm text-[#ababab] sm:flex-row sm:items-center sm:justify-between">
+          <p>
+            Showing{" "}
+            {filteredItems.length === 0
+              ? 0
+              : (currentPage - 1) * ITEMS_PER_PAGE + 1}
+            {" - "}
+            {Math.min(currentPage * ITEMS_PER_PAGE, filteredItems.length)} of{" "}
+            {filteredItems.length}
+          </p>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setCurrentPage((page) => Math.max(page - 1, 1))}
+              disabled={currentPage === 1}
+              className="rounded-lg bg-[#262626] px-3 py-2 font-semibold text-[#f5f5f5] disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Prev
+            </button>
+            <span className="px-2 font-semibold text-[#f5f5f5]">
+              {currentPage} / {totalPages}
+            </span>
+            <button
+              type="button"
+              onClick={() =>
+                setCurrentPage((page) => Math.min(page + 1, totalPages))
+              }
+              disabled={currentPage === totalPages}
+              className="rounded-lg bg-[#262626] px-3 py-2 font-semibold text-[#f5f5f5] disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Next
+            </button>
+          </div>
         </div>
       </div>
 
       {isAdmin && showAddModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-black/70 p-4">
           <form
             onSubmit={handleSubmitStock}
-            className="w-full max-w-xl rounded-lg bg-[#262626] p-5 text-[#f5f5f5] shadow-2xl"
+            className="max-h-[88vh] w-full max-w-2xl overflow-y-auto rounded-lg bg-[#1f1f1f] p-4 pb-0 text-[#f5f5f5] shadow-2xl scrollbar-hide"
           >
-            <div className="mb-4 flex items-center justify-between gap-3">
-              <h3 className="text-xl font-bold">
-                {editingStockId ? "Ubah Stok" : "Tambah Stok"}
-              </h3>
+            <div className="mb-4 flex flex-col gap-2 border-b border-[#333] pb-4 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <h3 className="text-lg font-bold">
+                  {editingStockId ? "Ubah Stok" : "Tambah Stok"}
+                </h3>
+                <p className="mt-1 text-sm text-[#ababab]">
+                  Isi data bahan, satuan, stok, minimum, dan supplier.
+                </p>
+              </div>
               <button
                 type="button"
                 onClick={closeAddModal}
-                className="rounded-lg bg-[#333] px-3 py-1 text-sm text-[#ababab] hover:text-white"
+                className="w-fit rounded-lg bg-[#333] px-4 py-2 text-sm font-bold text-[#f5f5f5]"
               >
-                Close
+                Tutup
               </button>
             </div>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -513,7 +550,7 @@ const StockManagement = () => {
                   value={stockForm.name}
                   onChange={(event) => updateStockForm("name", event.target.value)}
                   placeholder="Sirup vanila"
-                  className="mt-2 w-full rounded-lg bg-[#1f1f1f] px-4 py-3 text-sm text-[#f5f5f5] outline-none"
+                  className="mt-2 w-full rounded-lg bg-[#262626] px-4 py-3 text-sm text-[#f5f5f5] outline-none"
                 />
               </label>
               <label className="text-sm font-semibold text-[#ababab]">
@@ -524,7 +561,7 @@ const StockManagement = () => {
                     updateStockForm("category", event.target.value)
                   }
                   placeholder="Kopi"
-                  className="mt-2 w-full rounded-lg bg-[#1f1f1f] px-4 py-3 text-sm text-[#f5f5f5] outline-none"
+                  className="mt-2 w-full rounded-lg bg-[#262626] px-4 py-3 text-sm text-[#f5f5f5] outline-none"
                 />
               </label>
               <label className="text-sm font-semibold text-[#ababab]">
@@ -533,7 +570,7 @@ const StockManagement = () => {
                   value={stockForm.unit}
                   onChange={(event) => updateStockForm("unit", event.target.value)}
                   placeholder="kg"
-                  className="mt-2 w-full rounded-lg bg-[#1f1f1f] px-4 py-3 text-sm text-[#f5f5f5] outline-none"
+                  className="mt-2 w-full rounded-lg bg-[#262626] px-4 py-3 text-sm text-[#f5f5f5] outline-none"
                 />
               </label>
               <label className="text-sm font-semibold text-[#ababab]">
@@ -544,7 +581,7 @@ const StockManagement = () => {
                   type="number"
                   min="0"
                   step="0.1"
-                  className="mt-2 w-full rounded-lg bg-[#1f1f1f] px-4 py-3 text-sm text-[#f5f5f5] outline-none"
+                  className="mt-2 w-full rounded-lg bg-[#262626] px-4 py-3 text-sm text-[#f5f5f5] outline-none"
                 />
               </label>
               <label className="text-sm font-semibold text-[#ababab]">
@@ -557,7 +594,7 @@ const StockManagement = () => {
                   type="number"
                   min="0"
                   step="0.1"
-                  className="mt-2 w-full rounded-lg bg-[#1f1f1f] px-4 py-3 text-sm text-[#f5f5f5] outline-none"
+                  className="mt-2 w-full rounded-lg bg-[#262626] px-4 py-3 text-sm text-[#f5f5f5] outline-none"
                 />
               </label>
               <label className="text-sm font-semibold text-[#ababab]">
@@ -568,18 +605,11 @@ const StockManagement = () => {
                     updateStockForm("supplier", event.target.value)
                   }
                   placeholder="Toko bahan"
-                  className="mt-2 w-full rounded-lg bg-[#1f1f1f] px-4 py-3 text-sm text-[#f5f5f5] outline-none"
+                  className="mt-2 w-full rounded-lg bg-[#262626] px-4 py-3 text-sm text-[#f5f5f5] outline-none"
                 />
               </label>
             </div>
-            <div className="mt-5 flex justify-end gap-3">
-              <button
-                type="button"
-                onClick={closeAddModal}
-                className="rounded-lg bg-[#333] px-4 py-2 text-sm font-semibold text-[#f5f5f5]"
-              >
-                Batal
-              </button>
+            <div className="sticky bottom-0 -mx-4 mt-5 flex gap-2 border-t border-[#333] bg-[#1f1f1f] px-4 py-4">
               <button
                 type="submit"
                 disabled={
@@ -594,6 +624,13 @@ const StockManagement = () => {
                   : editingStockId
                     ? "Simpan Perubahan"
                     : "Tambah Stok"}
+              </button>
+              <button
+                type="button"
+                onClick={closeAddModal}
+                className="rounded-lg bg-[#333] px-4 py-2 text-sm font-bold text-[#f5f5f5]"
+              >
+                Batal
               </button>
             </div>
           </form>

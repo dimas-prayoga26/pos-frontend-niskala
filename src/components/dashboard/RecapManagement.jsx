@@ -184,7 +184,7 @@ const recapFormFields = [
   { id: "offlineRevenue", label: "Omzet offline (Rp)", type: "text", currency: true },
   { id: "onlineRevenue", label: "Omzet online (Rp)", type: "text", currency: true },
   { id: "cateringRevenue", label: "Omzet catering (Rp)", type: "text", currency: true },
-  { id: "hppTotal", label: "HPP Bahan (Rp)", type: "text", currency: true },
+  { id: "hppTotal", label: "HPP (Rp)", type: "text", currency: true },
   { id: "dailyExpense", label: "Pengeluaran hari ini (Rp)", type: "text", currency: true },
   { id: "cashIn", label: "Cash masuk (Rp)", type: "text", currency: true },
   { id: "qrisIn", label: "QRIS masuk (Rp)", type: "text", currency: true },
@@ -833,6 +833,14 @@ const RecapManagement = () => {
             color: "#be3e3f",
           },
         ];
+  const activeRecapTab = recapTabs.find((tab) => tab.key === activeTab);
+  const activeRecapTitle = `Rekap ${activeRecapTab?.label || ""}`.trim();
+  const activeRecapDescription =
+    activeTab === "weekly"
+      ? "Ringkasan omzet, channel, dan action plan mingguan."
+      : activeTab === "monthly"
+        ? "Ringkasan omzet, HPP, laba, dan strategi bulanan."
+        : "Daftar rekap transaksi, kas, HPP, dan menu terlaris harian.";
 
   const updateRecapForm = (field, value) => {
     setRecapForm((current) => ({ ...current, [field]: value }));
@@ -1004,21 +1012,13 @@ const RecapManagement = () => {
     <div className="container mx-auto rounded-lg bg-[#262626] p-4">
       <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div>
-          <h2 className="text-xl font-semibold text-[#f5f5f5]">Recap</h2>
+          <h2 className="text-xl font-semibold text-[#f5f5f5]">Rekap</h2>
           <p className="mt-1 text-sm text-[#ababab]">
             Rekap transaksi berdasarkan periode harian, mingguan, dan bulanan.
           </p>
         </div>
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-          <button
-            type="button"
-            onClick={openRecapModal}
-            className="rounded-lg bg-[#025cca] px-4 py-2 text-sm font-bold text-[#f5f5f5] hover:bg-[#0969df]"
-          >
-            Tambah Rekap
-          </button>
-          <div className="flex rounded-lg bg-[#1f1f1f] p-1">
-            {recapTabs.map((tab) => (
+        <div className="flex rounded-lg bg-[#1f1f1f] p-1">
+          {recapTabs.map((tab) => (
             <button
               key={tab.key}
               type="button"
@@ -1031,8 +1031,7 @@ const RecapManagement = () => {
             >
               {tab.label}
             </button>
-            ))}
-          </div>
+          ))}
         </div>
       </div>
 
@@ -1051,7 +1050,25 @@ const RecapManagement = () => {
         ))}
       </div>
 
-      <div className="mt-6 overflow-x-auto rounded-lg bg-[#1f1f1f] p-4">
+      <div className="mt-6 rounded-lg bg-[#1f1f1f] p-4">
+        <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h3 className="text-lg font-bold text-[#f5f5f5]">
+              {activeRecapTitle}
+            </h3>
+            <p className="mt-1 text-sm text-[#ababab]">
+              {activeRecapDescription}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={openRecapModal}
+            className="rounded-lg bg-[#a79981] px-4 py-2 text-sm font-bold text-[#101010] hover:bg-[#b7aa94]"
+          >
+            Tambah Rekap
+          </button>
+        </div>
+        <div className="overflow-x-auto">
         <table className="w-full text-left text-[#f5f5f5]">
           <thead className="bg-[#333] text-[#ababab]">
             {activeTab === "daily" ? (
@@ -1210,6 +1227,7 @@ const RecapManagement = () => {
             )}
           </tbody>
         </table>
+        </div>
       </div>
 
       {isRecapModalOpen && (
@@ -1353,7 +1371,7 @@ const RecapManagement = () => {
                   <button
                     type="submit"
                     disabled={saveWeeklyRecapMutation.isPending}
-                    className="rounded-lg bg-[#025cca] px-4 py-2 text-sm font-bold text-[#f5f5f5] hover:bg-[#0969df]"
+                    className="rounded-lg bg-[#a79981] px-4 py-2 text-sm font-bold text-[#101010] hover:bg-[#b7aa94]"
                   >
                     {saveWeeklyRecapMutation.isPending
                       ? "Menyimpan..."
@@ -1472,7 +1490,7 @@ const RecapManagement = () => {
                   <button
                     type="submit"
                     disabled={saveMonthlyRecapMutation.isPending}
-                    className="rounded-lg bg-[#025cca] px-4 py-2 text-sm font-bold text-[#f5f5f5] hover:bg-[#0969df]"
+                    className="rounded-lg bg-[#a79981] px-4 py-2 text-sm font-bold text-[#101010] hover:bg-[#b7aa94]"
                   >
                     {saveMonthlyRecapMutation.isPending
                       ? "Menyimpan..."
@@ -1618,7 +1636,7 @@ const RecapManagement = () => {
                 <button
                   type="submit"
                   disabled={saveDailyRecapMutation.isPending}
-                  className="rounded-lg bg-[#025cca] px-4 py-2 text-sm font-bold text-[#f5f5f5] hover:bg-[#0969df]"
+                  className="rounded-lg bg-[#a79981] px-4 py-2 text-sm font-bold text-[#101010] hover:bg-[#b7aa94]"
                 >
                   {saveDailyRecapMutation.isPending ? "Menyimpan..." : "Simpan"}
                 </button>

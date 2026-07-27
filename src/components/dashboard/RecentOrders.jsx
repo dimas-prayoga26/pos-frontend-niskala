@@ -78,47 +78,54 @@ const RecentOrders = () => {
       .sort((first, second) => new Date(second.orderDate) - new Date(first.orderDate))
       .slice(0, 10);
   }, [ordersByDate, searchQuery]);
+  const resultLabel = searchQuery.trim()
+    ? `${filteredOrders.length} dari ${ordersByDate.length} pesanan`
+    : `${ordersByDate.length} pesanan`;
 
   return (
     <div className="container mx-auto bg-[#262626] p-4 rounded-lg">
       <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
           <h2 className="text-[#f5f5f5] text-xl font-semibold">
-            Pesanan Terbaru
+            Pesanan
           </h2>
           <p className="mt-1 text-sm text-[#ababab]">
-            Total pesanan:{" "}
-            <span className="font-semibold text-[#f5f5f5]">
-              {ordersByDate.length}
-            </span>
-            {searchQuery.trim() && (
-              <>
-                {" "}
-                | Ditampilkan:{" "}
-                <span className="font-semibold text-[#f5f5f5]">
-                  {filteredOrders.length}
-                </span>
-              </>
-            )}
+            Pantau pesanan berdasarkan tanggal, customer, tipe order, dan pembayaran.
           </p>
         </div>
-        <div className="flex w-full flex-col gap-2 sm:flex-row md:w-auto">
-          <input
-            value={selectedDate}
-            onChange={(event) => setSelectedDate(event.target.value)}
-            type="date"
-            className="w-full rounded-lg bg-[#1f1f1f] px-4 py-2 text-sm font-semibold text-[#f5f5f5] outline-none [color-scheme:dark] sm:w-[180px]"
-          />
-          <input
-            value={searchQuery}
-            onChange={(event) => setSearchQuery(event.target.value)}
-            type="search"
-            placeholder="Cari pesanan"
-            className="w-full rounded-lg bg-[#1f1f1f] px-4 py-2 text-sm font-semibold text-[#f5f5f5] outline-none placeholder:text-[#777] sm:w-[320px]"
-          />
-        </div>
       </div>
-      <div className="overflow-x-auto">
+
+      <div className="rounded-lg bg-[#1f1f1f] p-4">
+        <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h3 className="text-lg font-bold text-[#f5f5f5]">
+              Daftar Pesanan
+            </h3>
+            <p className="mt-1 text-sm text-[#ababab]">
+              Ditampilkan:{" "}
+              <span className="font-semibold text-[#f5f5f5]">
+                {resultLabel}
+              </span>
+            </p>
+          </div>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <input
+              value={selectedDate}
+              onChange={(event) => setSelectedDate(event.target.value)}
+              type="date"
+              className="rounded-lg bg-[#262626] px-4 py-2 text-sm text-[#f5f5f5] outline-none [color-scheme:dark]"
+            />
+            <input
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              type="search"
+              placeholder="Cari pesanan"
+              className="rounded-lg bg-[#262626] px-4 py-2 text-sm text-[#f5f5f5] outline-none placeholder:text-[#777]"
+            />
+          </div>
+        </div>
+
+        <div className="overflow-x-auto">
         <table className="w-full text-left text-[#f5f5f5]">
           <thead className="bg-[#333] text-[#ababab]">
             <tr>
@@ -159,6 +166,7 @@ const RecentOrders = () => {
             )}
           </tbody>
         </table>
+        </div>
       </div>
     </div>
   );
