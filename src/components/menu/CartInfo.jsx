@@ -35,16 +35,16 @@ const CartInfo = () => {
   };
 
   return (
-    <div className="px-4 py-2">
+    <div className="min-h-0 px-4 py-2 xl:flex xl:flex-1 xl:flex-col">
       <h1 className="text-lg text-[#e4e4e4] font-semibold tracking-wide">
         Order Details
       </h1>
       <div
-        className="mt-4 overflow-y-auto scrollbar-hide max-h-[320px] xl:h-[380px]"
+        className="mt-4 overflow-y-auto scrollbar-hide max-h-[320px] xl:min-h-[220px] xl:flex-1"
         ref={scrollRef}
       >
         {cartData.length === 0 ? (
-          <p className="text-[#ababab] text-sm flex justify-center items-center min-h-[220px] xl:h-[380px]">
+          <p className="text-[#ababab] text-sm flex justify-center items-center min-h-[220px] xl:h-full">
             Your cart is empty. Start adding items!
           </p>
         ) : (

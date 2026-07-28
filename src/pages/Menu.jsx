@@ -59,13 +59,13 @@ const Menu = () => {
         <MenuContainer />
       </div>
       {/* Right Div */}
-      <div className="flex-[1] bg-[#1a1a1a] mx-4 xl:mx-0 xl:mt-4 xl:mr-3 rounded-lg pt-2 overflow-hidden">
+      <div className="flex-[1] bg-[#1a1a1a] mx-4 xl:mx-0 xl:mt-4 xl:mr-3 rounded-lg pt-2 overflow-hidden xl:sticky xl:top-4 xl:self-start xl:max-h-[calc(100vh-2rem)] xl:flex xl:flex-col">
         {/* Customer Info */}
         <CustomerInfo />
-        <hr className="border-[#2a2a2a] border-t-2" />
+        <hr className="shrink-0 border-[#2a2a2a] border-t-2" />
         {/* Cart Items */}
         <CartInfo />
-        <hr className="border-[#2a2a2a] border-t-2" />
+        <hr className="shrink-0 border-[#2a2a2a] border-t-2" />
         {/* Bills */}
         <Bill />
       </div>
