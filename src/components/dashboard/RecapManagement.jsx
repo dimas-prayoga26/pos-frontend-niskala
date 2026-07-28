@@ -8,7 +8,13 @@ import {
 import { enqueueSnackbar } from "notistack";
 import { useSelector } from "react-redux";
 import Select from "react-select";
-import { addRecap, getMenuItems, getOrders, getRecaps, getUsers } from "../../https";
+import {
+  addRecap,
+  getMenuItems,
+  getOrders,
+  getRecaps,
+  getUsers,
+} from "../../https";
 import {
   formatCurrency,
   getOrderHppTotal,
@@ -1223,7 +1229,7 @@ const RecapManagement = () => {
 
     if (dailyRecapDateKeys.has(selectedDateKey)) {
       enqueueSnackbar(
-        "Rekap harian tanggal ini sudah dibuat. Satu tanggal hanya bisa punya satu rekap harian.",
+        "Rekap harian untuk tanggal ini sudah dibuat. Kamu tidak bisa membuat rekap harian lagi di tanggal yang sama.",
         { variant: "warning" }
       );
       return;
