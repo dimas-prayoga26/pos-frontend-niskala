@@ -1,5 +1,12 @@
 import React, { useMemo, useState } from "react";
-import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import {
+  keepPreviousData,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
+import { enqueueSnackbar } from "notistack";
+import { useSelector } from "react-redux";
 import {
   FiArchive,
   FiBookOpen,
@@ -9,12 +16,14 @@ import {
   FiGrid,
   FiMonitor,
   FiPackage,
+  FiPlus,
   FiShoppingBag,
   FiTrendingUp,
   FiTruck,
 } from "react-icons/fi";
 import * as XLSX from "xlsx-js-style";
 import {
+  addDailyCash,
   getCategories,
   getMenuItems,
   getOrders,
@@ -122,6 +131,28 @@ const getOrderItemCount = (order) =>
     (total, item) => total + (Number(item.quantity) || 1),
     0
   );
+
+const normalizeNominalInput = (value) => {
+  const digitsOnly = String(value).replace(/\D/g, "");
+
+  return digitsOnly || "0";
+};
+
+const formatNominalInput = (value) =>
+  Number(normalizeNominalInput(value)).toLocaleString("id-ID");
+
+const createEmptyKasForm = () => ({
+  recapId: "",
+  method: "cash",
+  amount: "",
+  note: "",
+});
+
+const kasMethodOptions = [
+  { value: "cash", label: "Cash" },
+  { value: "qris", label: "QRIS" },
+  { value: "transfer", label: "Transfer" },
+];
 
 const rupiahExcelFormat = '"Rp" #,##0;[Red]-"Rp" #,##0;"Rp" 0';
 
@@ -477,8 +508,13 @@ const ProfitFlow = ({ revenue, cost, grossProfit, netProfit, isLoading }) => {
 };
 
 const Metrics = () => {
+  const queryClient = useQueryClient();
+  const currentUser = useSelector((state) => state.user);
+  const isAdmin = currentUser.role?.toLowerCase() === "admin";
   const [selectedPeriod, setSelectedPeriod] = useState("last-month");
   const [isPeriodOpen, setIsPeriodOpen] = useState(false);
+  const [isKasModalOpen, setIsKasModalOpen] = useState(false);
+  const [kasForm, setKasForm] = useState(createEmptyKasForm);
   const {
     data: categoriesRes,
     isLoading: isCategoriesLoading,
@@ -592,6 +628,32 @@ const Metrics = () => {
   const dailyRecaps = dailyRecapsRes?.data?.data || [];
   const weeklyRecaps = weeklyRecapsRes?.data?.data || [];
   const monthlyRecaps = monthlyRecapsRes?.data?.data || [];
+  const dailyRecapOptions = useMemo(
+    () =>
+      dailyRecaps.map((recap) => ({
+        value: String(recap.id || recap._id),
+        label: getDateKey(recap.recapDate),
+        description: `${
+          recap.shiftOfficer || recap.shiftOfficerName || "Petugas"
+        } - ${formatCurrency(recap.totalRevenue)}`,
+      })),
+    [dailyRecaps]
+  );
+  const addKasMutation = useMutation({
+    mutationFn: addDailyCash,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["recaps"] });
+      enqueueSnackbar("Kas berhasil ditambahkan", { variant: "success" });
+      setKasForm(createEmptyKasForm());
+      setIsKasModalOpen(false);
+    },
+    onError: (error) => {
+      enqueueSnackbar(
+        error?.response?.data?.message || "Gagal menambahkan kas",
+        { variant: "error" }
+      );
+    },
+  });
   const periodStartDate = useMemo(
     () => getPeriodStartDate(selectedPeriod),
     [selectedPeriod]
@@ -802,6 +864,55 @@ const Metrics = () => {
       tone: "net",
     },
   ];
+
+  const openKasModal = () => {
+    if (!dailyRecapOptions.length) {
+      enqueueSnackbar("Belum ada rekap harian untuk ditambahkan kas.", {
+        variant: "warning",
+      });
+      return;
+    }
+
+    setKasForm({
+      ...createEmptyKasForm(),
+      recapId: dailyRecapOptions[0].value,
+    });
+    setIsKasModalOpen(true);
+  };
+
+  const updateKasForm = (field, value) => {
+    setKasForm((current) => ({
+      ...current,
+      [field]: value,
+    }));
+  };
+
+  const submitKasForm = (event) => {
+    event.preventDefault();
+
+    const amount = Number(normalizeNominalInput(kasForm.amount));
+
+    if (!kasForm.recapId) {
+      enqueueSnackbar("Pilih rekap harian terlebih dahulu.", {
+        variant: "warning",
+      });
+      return;
+    }
+
+    if (amount <= 0) {
+      enqueueSnackbar("Nominal kas harus lebih dari 0.", {
+        variant: "warning",
+      });
+      return;
+    }
+
+    addKasMutation.mutate({
+      recapId: kasForm.recapId,
+      method: kasForm.method,
+      amount,
+      note: kasForm.note,
+    });
+  };
 
   const handleExportMetrics = () => {
     const todayKey = getDateKey();
@@ -1188,6 +1299,16 @@ const Metrics = () => {
           </p>
         </div>
         <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+          {isAdmin && (
+            <button
+              type="button"
+              onClick={openKasModal}
+              className="flex items-center justify-center gap-2 rounded-md border border-[#a79981]/70 px-4 py-2 text-sm font-bold text-[#a79981] transition hover:bg-[#a79981] hover:text-[#101010]"
+            >
+              <FiPlus className="text-base" />
+              Tambah Kas
+            </button>
+          )}
           <button
             type="button"
             onClick={handleExportMetrics}
@@ -1293,6 +1414,123 @@ const Metrics = () => {
 
         <MetricCardSlider items={operationalMetrics} />
       </div>
+
+      {isKasModalOpen && isAdmin && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 p-4">
+          <div className="w-full max-w-lg rounded-lg bg-[#262626] p-5 text-[#f5f5f5] shadow-2xl shadow-black/50">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h3 className="text-lg font-bold">Tambah Kas</h3>
+                <p className="mt-1 text-sm text-[#ababab]">
+                  Tambahkan uang masuk ke rekap harian yang sudah dibuat.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsKasModalOpen(false)}
+                className="rounded-md bg-[#333] px-4 py-2 text-sm font-bold text-[#f5f5f5] transition hover:bg-[#404040]"
+              >
+                Tutup
+              </button>
+            </div>
+
+            <form onSubmit={submitKasForm} className="mt-5 space-y-4">
+              <label className="block">
+                <span className="text-sm font-bold text-[#bcbcbc]">
+                  Tanggal rekap
+                </span>
+                <select
+                  value={kasForm.recapId}
+                  onChange={(event) =>
+                    updateKasForm("recapId", event.target.value)
+                  }
+                  className="mt-2 w-full rounded-md border border-[#333] bg-[#202020] px-4 py-3 text-sm font-bold text-[#f5f5f5] outline-none focus:border-[#a79981]"
+                >
+                  {dailyRecapOptions.map((recap) => (
+                    <option key={recap.value} value={recap.value}>
+                      {recap.label} - {recap.description}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <label className="block">
+                  <span className="text-sm font-bold text-[#bcbcbc]">
+                    Jenis kas
+                  </span>
+                  <select
+                    value={kasForm.method}
+                    onChange={(event) =>
+                      updateKasForm("method", event.target.value)
+                    }
+                    className="mt-2 w-full rounded-md border border-[#333] bg-[#202020] px-4 py-3 text-sm font-bold text-[#f5f5f5] outline-none focus:border-[#a79981]"
+                  >
+                    {kasMethodOptions.map((method) => (
+                      <option key={method.value} value={method.value}>
+                        {method.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="block">
+                  <span className="text-sm font-bold text-[#bcbcbc]">
+                    Nominal kas
+                  </span>
+                  <div className="mt-2 flex rounded-md border border-[#333] bg-[#202020] focus-within:border-[#a79981]">
+                    <span className="flex items-center px-4 text-sm font-bold text-[#a79981]">
+                      Rp
+                    </span>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      value={formatNominalInput(kasForm.amount)}
+                      onChange={(event) =>
+                        updateKasForm(
+                          "amount",
+                          normalizeNominalInput(event.target.value)
+                        )
+                      }
+                      className="min-w-0 flex-1 bg-transparent py-3 pr-4 text-sm font-bold text-[#f5f5f5] outline-none"
+                      placeholder="0"
+                    />
+                  </div>
+                </label>
+              </div>
+
+              <label className="block">
+                <span className="text-sm font-bold text-[#bcbcbc]">
+                  Catatan
+                </span>
+                <textarea
+                  value={kasForm.note}
+                  onChange={(event) => updateKasForm("note", event.target.value)}
+                  className="mt-2 h-24 w-full resize-none rounded-md border border-[#333] bg-[#202020] px-4 py-3 text-sm text-[#f5f5f5] outline-none focus:border-[#a79981]"
+                  placeholder="Contoh: tambah kas tunai dari admin"
+                />
+              </label>
+
+              <div className="flex justify-end gap-3 border-t border-[#333] pt-4">
+                <button
+                  type="button"
+                  onClick={() => setIsKasModalOpen(false)}
+                  className="rounded-md bg-[#333] px-4 py-2 text-sm font-bold text-[#f5f5f5] transition hover:bg-[#404040]"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  disabled={addKasMutation.isPending}
+                  className="rounded-md bg-[#a79981] px-5 py-2 text-sm font-bold text-[#101010] transition hover:bg-[#b7aa94] disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {addKasMutation.isPending ? "Menyimpan..." : "Simpan"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

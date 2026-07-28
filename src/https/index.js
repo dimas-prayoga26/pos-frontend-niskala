@@ -69,6 +69,8 @@ export const getRecapMeta = (params = {}) =>
 export const getRecaps = (periodType) => axiosWrapper.get(`/api/recap/${periodType}`);
 export const addRecap = ({ periodType, data }) =>
   axiosWrapper.post(`/api/recap/${periodType}`, data);
+export const addDailyCash = ({ recapId, ...data }) =>
+  axiosWrapper.patch(`/api/recap/daily/${recapId}/cash`, data);
 
 // Stock Item Endpoints
 export const addStockItem = (data) => axiosWrapper.post("/api/stock-item/", data);
