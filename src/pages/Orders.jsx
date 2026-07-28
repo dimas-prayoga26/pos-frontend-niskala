@@ -40,10 +40,14 @@ const Orders = () => {
         variant: "success",
       });
     },
-    onError: () => {
-      enqueueSnackbar("Gagal menambahkan pembayaran catering", {
-        variant: "error",
-      });
+    onError: (error) => {
+      enqueueSnackbar(
+        error?.response?.data?.message ||
+          "Gagal menambahkan pembayaran catering",
+        {
+          variant: "error",
+        }
+      );
     },
   });
 
@@ -51,14 +55,18 @@ const Orders = () => {
     mutationFn: deleteOrder,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["orders"] });
+      queryClient.invalidateQueries({ queryKey: ["stock-items"] });
       enqueueSnackbar("Pesanan berhasil dihapus", {
         variant: "success",
       });
     },
-    onError: () => {
-      enqueueSnackbar("Gagal menghapus pesanan", {
-        variant: "error",
-      });
+    onError: (error) => {
+      enqueueSnackbar(
+        error?.response?.data?.message || "Gagal menghapus pesanan",
+        {
+          variant: "error",
+        }
+      );
     },
   });
 

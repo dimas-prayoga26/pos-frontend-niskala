@@ -589,6 +589,7 @@ const RecapManagement = () => {
   const isAdmin = currentUser.role?.toLowerCase() === "admin";
   const [activeTab, setActiveTab] = useState("daily");
   const [isRecapModalOpen, setIsRecapModalOpen] = useState(false);
+  const [pendingDailyRecapPayload, setPendingDailyRecapPayload] = useState(null);
   const [recapForm, setRecapForm] = useState(createEmptyRecapForm);
   const [weeklyRecapForm, setWeeklyRecapForm] = useState(
     createEmptyWeeklyRecapForm
@@ -733,6 +734,18 @@ const RecapManagement = () => {
         periodMonth: monthlyRecapForm.periodMonth,
       }),
     [dailyRecapsSource, menuItems, monthlyRecapForm.periodMonth, orders]
+  );
+  const dailyRecapDateKeys = useMemo(
+    () =>
+      new Set(
+        dailyRecapsSource
+          .map((recap) => {
+            const recapDate = getLocalDate(recap.recapDate);
+            return recapDate ? getDateKey(recapDate) : "";
+          })
+          .filter(Boolean)
+      ),
+    [dailyRecapsSource]
   );
 
   const recapRows = useMemo(() => {
@@ -1109,6 +1122,7 @@ const RecapManagement = () => {
       queryClient.invalidateQueries({ queryKey: ["recaps"] });
       enqueueSnackbar("Rekap harian berhasil disimpan", { variant: "success" });
       setRecapForm(createRecapFormFromOrders(orders, menuItems));
+      setPendingDailyRecapPayload(null);
       setActiveTab("daily");
       setIsRecapModalOpen(false);
     },
@@ -1183,6 +1197,39 @@ const RecapManagement = () => {
     }
 
     setIsRecapModalOpen(true);
+  };
+
+  const closeDailyConfirmModal = () => {
+    if (saveDailyRecapMutation.isPending) return;
+
+    setPendingDailyRecapPayload(null);
+  };
+
+  const submitDailyRecap = () => {
+    if (!recapForm.date) {
+      enqueueSnackbar("Tanggal wajib diisi", { variant: "warning" });
+      return;
+    }
+
+    if (!recapForm.shiftOfficerId && !recapForm.shiftOfficer) {
+      enqueueSnackbar("Shift / petugas wajib dipilih", {
+        variant: "warning",
+      });
+      return;
+    }
+
+    const selectedDate = getLocalDate(recapForm.date);
+    const selectedDateKey = selectedDate ? getDateKey(selectedDate) : recapForm.date;
+
+    if (dailyRecapDateKeys.has(selectedDateKey)) {
+      enqueueSnackbar(
+        "Rekap harian tanggal ini sudah dibuat. Satu tanggal hanya bisa punya satu rekap harian.",
+        { variant: "warning" }
+      );
+      return;
+    }
+
+    setPendingDailyRecapPayload(buildDailyRecapPayload());
   };
 
   return (
@@ -1714,20 +1761,7 @@ const RecapManagement = () => {
               <form
               onSubmit={(event) => {
                 event.preventDefault();
-
-                if (!recapForm.date) {
-                  enqueueSnackbar("Tanggal wajib diisi", { variant: "warning" });
-                  return;
-                }
-
-                if (!recapForm.shiftOfficerId && !recapForm.shiftOfficer) {
-                  enqueueSnackbar("Shift / petugas wajib dipilih", {
-                    variant: "warning",
-                  });
-                  return;
-                }
-
-                saveDailyRecapMutation.mutate(buildDailyRecapPayload());
+                submitDailyRecap();
               }}
             >
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
@@ -1860,6 +1894,90 @@ const RecapManagement = () => {
               </div>
               </form>
             )}
+          </div>
+        </div>
+      )}
+      {pendingDailyRecapPayload && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/75 p-4">
+          <div className="w-full max-w-lg rounded-lg border border-[#3a3a3a] bg-[#262626] p-5 text-[#f5f5f5] shadow-2xl">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h3 className="text-xl font-bold">Simpan Rekap Harian?</h3>
+                <p className="mt-1 text-sm text-[#ababab]">
+                  Setelah disimpan, pesanan pada tanggal ini akan dikunci.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={closeDailyConfirmModal}
+                disabled={saveDailyRecapMutation.isPending}
+                className="rounded-lg bg-[#333] px-3 py-2 text-sm font-bold text-[#f5f5f5] hover:bg-[#3d3d3d] disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                Tutup
+              </button>
+            </div>
+
+            <div className="mt-4 grid grid-cols-2 gap-3">
+              <div className="rounded-lg border border-[#333] bg-[#1f1f1f] p-3">
+                <p className="text-xs font-semibold text-[#ababab]">Tanggal</p>
+                <p className="mt-1 text-sm font-bold">
+                  {formatRecapDateLabel(pendingDailyRecapPayload.date)}
+                </p>
+              </div>
+              <div className="rounded-lg border border-[#333] bg-[#1f1f1f] p-3">
+                <p className="text-xs font-semibold text-[#ababab]">Transaksi</p>
+                <p className="mt-1 text-sm font-bold">
+                  {pendingDailyRecapPayload.transactionTotal}
+                </p>
+              </div>
+              <div className="rounded-lg border border-[#333] bg-[#1f1f1f] p-3">
+                <p className="text-xs font-semibold text-[#ababab]">Omzet</p>
+                <p className="mt-1 text-sm font-bold">
+                  {formatCurrency(
+                    Number(pendingDailyRecapPayload.offlineRevenue) +
+                      Number(pendingDailyRecapPayload.onlineRevenue) +
+                      Number(pendingDailyRecapPayload.cateringRevenue)
+                  )}
+                </p>
+              </div>
+              <div className="rounded-lg border border-[#4a390b] bg-[#26210f] p-3">
+                <p className="text-xs font-semibold text-[#f6d365]">HPP</p>
+                <p className="mt-1 text-sm font-bold text-[#f6d365]">
+                  {formatCurrency(pendingDailyRecapPayload.hppTotal)}
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-4 rounded-lg border border-[#5d4b24] bg-[#2f2413] p-4">
+              <p className="text-sm font-semibold text-[#ffe0a3]">
+                Pesanan tanggal ini tidak bisa ditambah, diubah, atau dihapus
+                setelah rekap harian tersimpan.
+              </p>
+              <p className="mt-2 text-sm text-[#cfcfcf]">
+                Gunakan tombol ini hanya saat closing harian sudah final.
+              </p>
+            </div>
+
+            <div className="mt-5 flex justify-end gap-3 border-t border-[#333] pt-4">
+              <button
+                type="button"
+                onClick={closeDailyConfirmModal}
+                disabled={saveDailyRecapMutation.isPending}
+                className="rounded-lg bg-[#333] px-4 py-2 text-sm font-bold text-[#f5f5f5] hover:bg-[#3d3d3d] disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={() => saveDailyRecapMutation.mutate(pendingDailyRecapPayload)}
+                disabled={saveDailyRecapMutation.isPending}
+                className="rounded-lg bg-[#a79981] px-4 py-2 text-sm font-bold text-[#101010] hover:bg-[#b7aa94] disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {saveDailyRecapMutation.isPending
+                  ? "Menyimpan..."
+                  : "Simpan & Kunci Pesanan"}
+              </button>
+            </div>
           </div>
         </div>
       )}

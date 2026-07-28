@@ -39,6 +39,31 @@ const getTaxLabel = (cartData) => {
   return "Tax (Mixed)";
 };
 
+const formatStockAmount = (value, unit) =>
+  `${Number(value || 0).toLocaleString("id-ID")} ${unit || ""}`.trim();
+
+const getInsufficientStockItems = (error) =>
+  error?.response?.status === 409
+    ? error.response?.data?.details?.insufficientStock || []
+    : [];
+
+const buildInsufficientStockMessage = (items) => {
+  const itemLines = items
+    .map(
+      (item) =>
+        `- ${item.name}: stok ${formatStockAmount(
+          item.stock,
+          item.unit
+        )}, butuh ${formatStockAmount(
+          item.required,
+          item.unit
+        )}, kurang ${formatStockAmount(item.shortage, item.unit)}`
+    )
+    .join("\n");
+
+  return `Stok bahan tidak mencukupi:\n\n${itemLines}\n\nLanjutkan order dan biarkan stok menjadi minus?`;
+};
+
 const Bill = () => {
   const dispatch = useDispatch();
 
@@ -194,8 +219,33 @@ const Bill = () => {
       dispatch(removeCustomer());
       dispatch(removeAllItems());
     },
-    onError: (error) => {
+    onError: (error, variables) => {
+      const insufficientStockItems = getInsufficientStockItems(error);
+
+      if (insufficientStockItems.length && !variables?.allowNegativeStock) {
+        const shouldContinue = window.confirm(
+          buildInsufficientStockMessage(insufficientStockItems)
+        );
+
+        if (shouldContinue) {
+          orderMutation.mutate({
+            ...variables,
+            allowNegativeStock: true,
+          });
+          return;
+        }
+
+        enqueueSnackbar("Order dibatalkan. Stok tidak dikurangi.", {
+          variant: "warning",
+        });
+        return;
+      }
+
       console.log(error);
+      enqueueSnackbar(
+        error?.response?.data?.message || "Gagal membuat order.",
+        { variant: "error" }
+      );
     },
   });
 
