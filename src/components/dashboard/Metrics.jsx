@@ -21,7 +21,11 @@ import {
   getRecaps,
   getStockItems,
 } from "../../https";
-import { formatCurrency, getOrderReceivedAmount } from "../../utils";
+import {
+  formatCurrency,
+  getOrderReceivedAmount,
+  getOrdersHppTotal,
+} from "../../utils";
 
 const jakartaDateFormatter = new Intl.DateTimeFormat("en-CA", {
   timeZone: "Asia/Jakarta",
@@ -581,7 +585,8 @@ const Metrics = () => {
   };
 
   const totalCategories = categoriesRes?.data?.data?.length || 0;
-  const totalDishes = menuItemsRes?.data?.data?.length || 0;
+  const menuItems = menuItemsRes?.data?.data || [];
+  const totalDishes = menuItems.length;
   const orders = ordersRes?.data?.data || [];
   const stockItems = stockItemsRes?.data?.data || [];
   const dailyRecaps = dailyRecapsRes?.data?.data || [];
@@ -612,6 +617,17 @@ const Metrics = () => {
       return orderDate >= periodStartDate;
     });
   }, [orders, periodStartDate]);
+  const recappedDateKeys = useMemo(
+    () => new Set(filteredRecaps.map((recap) => getDateKey(recap.recapDate))),
+    [filteredRecaps]
+  );
+  const recappedOrders = useMemo(
+    () =>
+      filteredOrders.filter((order) =>
+        recappedDateKeys.has(getDateKey(order.orderDate))
+      ),
+    [filteredOrders, recappedDateKeys]
+  );
   const periodRevenue = filteredOrders.reduce(
     (total, order) => total + getOrderReceivedAmount(order),
     0
@@ -641,35 +657,33 @@ const Metrics = () => {
   const stockNeedsOrder = stockItems.filter(
     (item) => item.status === "HARUS ORDER"
   ).length;
-  const grossProfitTotal = filteredRecaps.reduce(
-    (total, recap) => total + (Number(recap.grossProfit) || 0),
+  const dailyExpenseTotal = filteredRecaps.reduce(
+    (total, recap) => total + (Number(recap.dailyExpense) || 0),
     0
   );
-  const cashBalanceTotal = filteredRecaps.reduce((total, recap) => {
+  const cashRecordedTotal = filteredRecaps.reduce((total, recap) => {
     const cashIn = Number(recap.cashIn) || 0;
     const qrisIn = Number(recap.qrisIn) || 0;
     const transferIn = Number(recap.transferIn) || 0;
-    const dailyExpense = Number(recap.dailyExpense) || 0;
 
-    return total + cashIn + qrisIn + transferIn - dailyExpense;
+    return total + cashIn + qrisIn + transferIn;
   }, 0);
-  const materialSpendTotal = filteredRecaps.reduce(
-    (total, recap) => total + (Number(recap.hppTotal) || 0),
+  const recappedRevenueTotal = recappedOrders.reduce(
+    (total, order) => total + getOrderReceivedAmount(order),
     0
   );
-  const netProfitTotal = filteredRecaps.reduce((total, recap) => {
-    const grossProfit = Number(recap.grossProfit) || 0;
-    const dailyExpense = Number(recap.dailyExpense) || 0;
-
-    return total + grossProfit - dailyExpense;
-  }, 0);
+  const materialSpendTotal = getOrdersHppTotal(filteredOrders, menuItems);
+  const recappedMaterialSpendTotal = getOrdersHppTotal(recappedOrders, menuItems);
+  const grossProfitTotal = recappedRevenueTotal - recappedMaterialSpendTotal;
+  const netProfitTotal = grossProfitTotal - dailyExpenseTotal;
 
   const isLoading =
     isOrdersLoading ||
     isCategoriesLoading ||
     isMenuItemsLoading ||
     isStockItemsLoading;
-  const isFinancialLoading = isDailyRecapsLoading;
+  const isFinancialLoading =
+    isDailyRecapsLoading || isOrdersLoading || isMenuItemsLoading;
   const isExportDisabled =
     isLoading ||
     isFinancialLoading ||
@@ -757,9 +771,9 @@ const Metrics = () => {
   const financialMetrics = [
     {
       title: "Uang Masuk Tercatat",
-      value: isFinancialLoading ? "..." : formatCurrency(cashBalanceTotal),
+      value: isFinancialLoading ? "..." : formatCurrency(cashRecordedTotal),
       badge: activePeriod.badge,
-      description: "Cash, QRIS, dan transfer setelah pengeluaran.",
+      description: "Cash, QRIS, dan transfer dari rekap harian.",
       icon: FiCreditCard,
       tone: "cash",
     },
@@ -814,6 +828,12 @@ const Metrics = () => {
 
     const currentMonthOrders = ordersInRange(monthStartKey, todayKey);
     const currentMonthRecaps = recapsInRange(monthStartKey, todayKey);
+    const currentMonthRecapDateKeys = new Set(
+      currentMonthRecaps.map((recap) => getDateKey(recap.recapDate))
+    );
+    const currentMonthRecappedOrders = currentMonthOrders.filter((order) =>
+      currentMonthRecapDateKeys.has(getDateKey(order.orderDate))
+    );
     const currentMonthOfflineOrders = currentMonthOrders.filter(
       (order) => order.orderType !== "Online" && !isCateringOrder(order)
     );
@@ -821,14 +841,17 @@ const Metrics = () => {
       (order) => order.orderType === "Online" && !isCateringOrder(order)
     );
     const currentMonthCateringOrders = currentMonthOrders.filter(isCateringOrder);
-    const currentMonthGrossProfit = currentMonthRecaps.reduce(
-      (total, recap) => total + toNumber(recap.grossProfit),
-      0
+    const currentMonthRevenue = sumOrderRevenue(currentMonthOrders);
+    const currentMonthRecappedRevenue = sumOrderRevenue(
+      currentMonthRecappedOrders
     );
-    const currentMonthHpp = currentMonthRecaps.reduce(
-      (total, recap) => total + toNumber(recap.hppTotal),
-      0
+    const currentMonthHpp = getOrdersHppTotal(currentMonthOrders, menuItems);
+    const currentMonthRecappedHpp = getOrdersHppTotal(
+      currentMonthRecappedOrders,
+      menuItems
     );
+    const currentMonthGrossProfit =
+      currentMonthRecappedRevenue - currentMonthRecappedHpp;
     const currentMonthCashBalance = currentMonthRecaps.reduce((total, recap) => {
       return (
         total +
@@ -857,7 +880,7 @@ const Metrics = () => {
           `Omzet minggu ini (${weekStartKey} s.d. ${weekEndKey})`,
           sumOrderRevenue(ordersInRange(weekStartKey, weekEndKey)),
         ],
-        ["Omzet bulan ini", sumOrderRevenue(currentMonthOrders)],
+        ["Omzet bulan ini", currentMonthRevenue],
         ["Laba kotor bulan ini", currentMonthGrossProfit],
         [" - Offline", sumOrderRevenue(currentMonthOfflineOrders)],
         [" - Online", sumOrderRevenue(currentMonthOnlineOrders)],
@@ -894,20 +917,27 @@ const Metrics = () => {
           "Menu laku",
           "Catatan",
         ],
-        ...dailyRecaps.map((recap) => [
-          getDateKey(recap.recapDate),
-          recap.shiftOfficer || "-",
-          toNumber(recap.transactionTotal),
-          toNumber(recap.offlineRevenue),
-          toNumber(recap.onlineRevenue),
-          toNumber(recap.cateringRevenue),
-          toNumber(recap.totalRevenue),
-          toNumber(recap.hppTotal),
-          toNumber(recap.grossProfit),
-          toNumber(recap.cashDifference),
-          recap.bestMenu || "-",
-          recap.note || "-",
-        ]),
+        ...dailyRecaps.map((recap) => {
+          const dateKey = getDateKey(recap.recapDate);
+          const dayOrders = ordersInRange(dateKey, dateKey);
+          const dayHpp = getOrdersHppTotal(dayOrders, menuItems);
+          const dayRevenue = sumOrderRevenue(dayOrders) || toNumber(recap.totalRevenue);
+
+          return [
+            dateKey,
+            recap.shiftOfficer || "-",
+            toNumber(recap.transactionTotal),
+            toNumber(recap.offlineRevenue),
+            toNumber(recap.onlineRevenue),
+            toNumber(recap.cateringRevenue),
+            dayRevenue,
+            dayHpp,
+            dayRevenue - dayHpp,
+            toNumber(recap.cashDifference),
+            recap.bestMenu || "-",
+            recap.note || "-",
+          ];
+        }),
       ],
       [14, 20, 10, 16, 16, 16, 16, 16, 16, 16, 24, 36]
     );
@@ -965,19 +995,36 @@ const Metrics = () => {
           "Evaluasi supplier",
           "Strategi bulan depan",
         ],
-        ...monthlyRecaps.map((recap) => [
-          getMonthLabel(recap.periodMonth),
-          toNumber(recap.omzet),
-          toNumber(recap.hppTotal),
-          toNumber(recap.grossProfit),
-          toNumber(recap.estimatedNetProfit),
-          toNumber(recap.cateringOrderCount),
-          recap.retainedMenu || "-",
-          recap.evaluatedMenu || "-",
-          recap.promotionEvaluation || "-",
-          recap.supplierEvaluation || "-",
-          recap.nextMonthStrategy || "-",
-        ]),
+        ...monthlyRecaps.map((recap) => {
+          const monthStart = `${recap.periodMonth}-01`;
+          const monthEndDate = new Date(monthStart);
+          monthEndDate.setMonth(monthEndDate.getMonth() + 1);
+          monthEndDate.setDate(0);
+          const monthEnd = getDateKey(monthEndDate);
+          const monthOrders = ordersInRange(monthStart, monthEnd);
+          const monthRevenue =
+            sumOrderRevenue(monthOrders) || toNumber(recap.omzet);
+          const monthHpp = getOrdersHppTotal(monthOrders, menuItems);
+          const monthGrossProfit = monthRevenue - monthHpp;
+          const monthExpense = recapsInRange(monthStart, monthEnd).reduce(
+            (total, dailyRecap) => total + toNumber(dailyRecap.dailyExpense),
+            0
+          );
+
+          return [
+            getMonthLabel(recap.periodMonth),
+            monthRevenue,
+            monthHpp,
+            monthGrossProfit,
+            monthGrossProfit - monthExpense,
+            toNumber(recap.cateringOrderCount),
+            recap.retainedMenu || "-",
+            recap.evaluatedMenu || "-",
+            recap.promotionEvaluation || "-",
+            recap.supplierEvaluation || "-",
+            recap.nextMonthStrategy || "-",
+          ];
+        }),
       ],
       [18, 16, 16, 16, 16, 12, 28, 28, 34, 34, 42]
     );
@@ -1106,11 +1153,11 @@ const Metrics = () => {
         ...stockItems.map((item) => [
           item.name,
           item.category || "-",
-          toNumber(item.stock),
-          toNumber(item.minimumStock),
+          item.isUnlimited ? "Bebas Stok" : toNumber(item.stock),
+          item.isUnlimited ? "-" : toNumber(item.minimumStock),
           item.unit || "-",
           item.supplier || "-",
-          item.status || "-",
+          item.isUnlimited ? "BEBAS STOK" : item.status || "-",
         ]),
       ],
       [28, 18, 12, 12, 12, 24, 18]
@@ -1207,13 +1254,13 @@ const Metrics = () => {
         <div>
           <h2 className="font-semibold text-[#f5f5f5] text-xl">Keuntungan</h2>
           <p className="text-sm text-[#ababab]">
-            Alur sederhana dari penjualan, modal bahan, sampai untung bersih.
+            Dihitung dari hari yang sudah masuk rekap harian.
           </p>
         </div>
 
         <ProfitFlow
-          revenue={periodRevenue}
-          cost={materialSpendTotal}
+          revenue={recappedRevenueTotal}
+          cost={recappedMaterialSpendTotal}
           grossProfit={grossProfitTotal}
           netProfit={netProfitTotal}
           isLoading={isLoading || isFinancialLoading}

@@ -24,9 +24,11 @@ const emptyStockForm = {
   stock: "0",
   minimumStock: "0",
   supplier: "",
+  isUnlimited: false,
 };
 
 const statusClassNames = {
+  "BEBAS STOK": "bg-[#314259] text-blue-200",
   "HARUS ORDER": "bg-[#4a2e2e] text-red-400",
   "HAMPIR HABIS": "bg-[#4a452e] text-yellow-400",
   AMAN: "bg-[#2e4a40] text-green-400",
@@ -61,8 +63,9 @@ const StockManagement = () => {
 
   const stockItems = stockItemsRes?.data?.data || [];
   const shoppingItems = useMemo(() => {
-    return stockItems.filter((item) =>
-      ["HAMPIR HABIS", "HARUS ORDER"].includes(item.status)
+    return stockItems.filter(
+      (item) =>
+        !item.isUnlimited && ["HAMPIR HABIS", "HARUS ORDER"].includes(item.status)
     );
   }, [stockItems]);
   const visibleItems = activeStockTab === "shopping" ? shoppingItems : stockItems;
@@ -210,6 +213,7 @@ const StockManagement = () => {
       stock: Math.max(Number(stockForm.stock) || 0, 0),
       minimumStock: Math.max(Number(stockForm.minimumStock) || 0, 0),
       supplier: stockForm.supplier.trim(),
+      isUnlimited: Boolean(stockForm.isUnlimited),
     };
 
     if (editingStockId) {
@@ -239,6 +243,7 @@ const StockManagement = () => {
       stock: String(item.stock),
       minimumStock: String(item.minimumStock),
       supplier: item.supplier || "",
+      isUnlimited: Boolean(item.isUnlimited),
     });
     setShowAddModal(true);
   };
@@ -354,10 +359,10 @@ const StockManagement = () => {
                   <td className="p-4 font-semibold">{item.name}</td>
                   <td className="p-4">{item.category || "-"}</td>
                   <td className="p-4 text-center">
-                    {item.stock} {item.unit || ""}
+                    {item.isUnlimited ? "Bebas Stok" : `${item.stock} ${item.unit || ""}`}
                   </td>
                   <td className="p-4 text-center">
-                    {item.minimumStock} {item.unit || ""}
+                    {item.isUnlimited ? "-" : `${item.minimumStock} ${item.unit || ""}`}
                   </td>
                   <td className="p-4 font-semibold text-[#d6c7ae]">
                     {getShoppingSuggestion(item)}
@@ -418,25 +423,27 @@ const StockManagement = () => {
                       <button
                         type="button"
                         onClick={() => adjustStock(item, -1)}
-                        disabled={stockQuantityMutation.isPending}
+                        disabled={stockQuantityMutation.isPending || item.isUnlimited}
                         className="h-7 w-7 rounded-md bg-[#1f1f1f] font-bold text-[#ababab] hover:bg-[#333] disabled:opacity-60"
                       >
                         -
                       </button>
                       <span className="min-w-8 text-center font-semibold">
-                        {item.stock}
+                        {item.isUnlimited ? "Bebas Stok" : item.stock}
                       </span>
                       <button
                         type="button"
                         onClick={() => adjustStock(item, 1)}
-                        disabled={stockQuantityMutation.isPending}
+                        disabled={stockQuantityMutation.isPending || item.isUnlimited}
                         className="h-7 w-7 rounded-md bg-[#1f1f1f] font-bold text-[#ababab] hover:bg-[#333] disabled:opacity-60"
                       >
                         +
                       </button>
                     </div>
                   </td>
-                  <td className="p-4 text-center">{item.minimumStock}</td>
+                  <td className="p-4 text-center">
+                    {item.isUnlimited ? "-" : item.minimumStock}
+                  </td>
                   <td className="p-4 text-center">
                     <span
                       className={`inline-flex min-w-[110px] items-center justify-center rounded-lg px-2 py-1 text-sm font-semibold ${
@@ -607,6 +614,17 @@ const StockManagement = () => {
                   placeholder="Toko bahan"
                   className="mt-2 w-full rounded-lg bg-[#262626] px-4 py-3 text-sm text-[#f5f5f5] outline-none"
                 />
+              </label>
+              <label className="flex items-center gap-3 rounded-lg bg-[#262626] px-4 py-3 text-sm font-semibold text-[#ababab] sm:col-span-2">
+                <input
+                  checked={stockForm.isUnlimited}
+                  onChange={(event) =>
+                    updateStockForm("isUnlimited", event.target.checked)
+                  }
+                  type="checkbox"
+                  className="h-4 w-4 accent-[#a79981]"
+                />
+                Bebas Stok, tidak berkurang otomatis saat ada pesanan
               </label>
             </div>
             <div className="sticky bottom-0 -mx-4 mt-5 flex gap-2 border-t border-[#333] bg-[#1f1f1f] px-4 py-4">

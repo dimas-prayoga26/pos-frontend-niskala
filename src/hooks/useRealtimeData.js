@@ -4,22 +4,33 @@ import { io } from "socket.io-client";
 
 const socketUrl = import.meta.env.VITE_BACKEND_URL;
 const realtimeTransports = (
-  import.meta.env.VITE_REALTIME_TRANSPORTS || "polling"
+  import.meta.env.VITE_REALTIME_TRANSPORTS || "websocket,polling"
 )
   .split(",")
   .map((transport) => transport.trim())
   .filter(Boolean);
 
+let realtimeSocket;
+
+const getRealtimeSocket = () => {
+  if (!socketUrl) return null;
+
+  if (!realtimeSocket) {
+    realtimeSocket = io(socketUrl, {
+      withCredentials: true,
+      transports: realtimeTransports,
+    });
+  }
+
+  return realtimeSocket;
+};
+
 const useRealtimeData = () => {
   const queryClient = useQueryClient();
 
   useEffect(() => {
-    if (!socketUrl) return undefined;
-
-    const socket = io(socketUrl, {
-      withCredentials: true,
-      transports: realtimeTransports,
-    });
+    const socket = getRealtimeSocket();
+    if (!socket) return undefined;
 
     const refreshOrders = () => {
       queryClient.invalidateQueries({ queryKey: ["orders"] });
@@ -28,7 +39,6 @@ const useRealtimeData = () => {
     const refreshMenuData = () => {
       queryClient.invalidateQueries({ queryKey: ["categories"] });
       queryClient.invalidateQueries({ queryKey: ["menu-items"] });
-      queryClient.invalidateQueries({ queryKey: ["add-ons"] });
       queryClient.invalidateQueries({ queryKey: ["orders"] });
     };
     const refreshStockData = () => {
@@ -54,7 +64,6 @@ const useRealtimeData = () => {
       socket.off("stock:changed", refreshStockData);
       socket.off("platforms:changed", refreshPlatformData);
       socket.off("recaps:changed", refreshRecapData);
-      socket.disconnect();
     };
   }, [queryClient]);
 };
