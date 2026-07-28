@@ -4,7 +4,7 @@ import { io } from "socket.io-client";
 
 const socketUrl = import.meta.env.VITE_BACKEND_URL;
 const realtimeTransports = (
-  import.meta.env.VITE_REALTIME_TRANSPORTS || "websocket,polling"
+  import.meta.env.VITE_REALTIME_TRANSPORTS || "polling"
 )
   .split(",")
   .map((transport) => transport.trim())
