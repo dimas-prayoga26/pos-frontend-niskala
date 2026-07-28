@@ -10,7 +10,7 @@ import {
 import { setCustomer } from "../../redux/slices/customerSlice";
 import { formatCurrency } from "../../utils";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { getAddOns, getCategories, getMenuItems } from "../../https";
+import { getCategories, getMenuItems } from "../../https";
 import butterChicken from "../../assets/images/butter-chicken-4.jpg";
 import palakPaneer from "../../assets/images/Saag-Paneer-1.jpg";
 import biryani from "../../assets/images/hyderabadibiryani.jpg";
@@ -107,21 +107,11 @@ const MenuContainer = () => {
     placeholderData: keepPreviousData,
   });
 
-  const { data: addOnsRes } = useQuery({
-    queryKey: ["add-ons"],
-    queryFn: () => getAddOns(),
-    placeholderData: keepPreviousData,
-  });
-
   const menuData = useMemo(() => {
     const categories = categoriesRes?.data?.data || [];
     const menuItems = menuItemsRes?.data?.data || [];
-    const addOns = addOnsRes?.data?.data || [];
-    const addOnsCategory = categories.find(
-      (category) => category.name === "Add Ons"
-    );
 
-    const regularMenus =
+    return (
       categories.length && menuItems.length
         ? categories
             .map((category) => ({
@@ -153,26 +143,9 @@ const MenuContainer = () => {
                 })),
             }))
             .filter((menu) => menu.items.length > 0)
-        : [];
-
-    const addOnMenu = addOns.length
-      ? [
-          {
-            id: "add-ons",
-            name: "Add Ons",
-            icon: addOnsCategory?.icon || "",
-            items: addOns.map((addOn) => ({
-              id: addOn.id || addOn._id || addOn.code,
-              name: addOn.name,
-              price: addOn.price,
-              imagePath: addOn.imagePath || null,
-            })),
-          },
-        ]
-      : [];
-
-    return [...regularMenus, ...addOnMenu];
-  }, [addOnsRes, categoriesRes, menuItemsRes]);
+        : []
+    );
+  }, [categoriesRes, menuItemsRes]);
 
   useEffect(() => {
     if (!menuData.length) return;
@@ -254,6 +227,7 @@ const MenuContainer = () => {
       addItems({
         id: cartItemId,
         menuItemId: cartItemId,
+        sourceMenuItemId: item.id,
         name: item.name,
         categoryName: selected.name,
         taxRate: item.taxRate ?? selected.taxRate ?? null,
@@ -281,6 +255,7 @@ const MenuContainer = () => {
     return {
       id: cartItemId,
       menuItemId: cartItemId,
+      sourceMenuItemId: item.id,
       name: item.name,
       categoryName: selected.name,
       taxRate: item.taxRate ?? selected.taxRate ?? null,

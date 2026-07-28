@@ -37,14 +37,6 @@ export const updateMenuItem = ({ menuItemId, ...menuItemData }) =>
 export const deleteMenuItem = (menuItemId) =>
   axiosWrapper.delete(`/api/menu-item/${menuItemId}`);
 
-// Add-on Endpoints
-export const addAddOn = (data) => axiosWrapper.post("/api/add-on/", data);
-export const getAddOns = (categoryId) =>
-  axiosWrapper.get("/api/add-on", { params: { categoryId } });
-export const updateAddOn = ({ addOnId, ...addOnData }) =>
-  axiosWrapper.put(`/api/add-on/${addOnId}`, addOnData);
-export const deleteAddOn = (addOnId) => axiosWrapper.delete(`/api/add-on/${addOnId}`);
-
 // Payment Endpoints
 export const createMidtransTransaction = (data) =>
   axiosWrapper.post("/api/payment/create-order", data);
