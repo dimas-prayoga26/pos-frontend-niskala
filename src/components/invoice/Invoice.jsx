@@ -15,131 +15,7 @@ import {
 } from "../../utils/printReceipt";
 import receiptMark from "../../../../assets/Vector.svg";
 
-const BLUETOOTH_PRINT_ALIGN = {
-  left: 0,
-  center: 1,
-  right: 2,
-};
-
-const BLUETOOTH_PRINT_FORMAT = {
-  normal: 0,
-  doubleHeight: 1,
-  doubleHeightWidth: 2,
-  doubleWidth: 3,
-  small: 4,
-};
-
-const buildBluetoothPrintText = (
-  content,
-  { align = "left", bold = false, format = "normal" } = {}
-) => ({
-  type: 0,
-  content: String(content ?? ""),
-  bold: bold ? 1 : 0,
-  align: BLUETOOTH_PRINT_ALIGN[align] ?? BLUETOOTH_PRINT_ALIGN.left,
-  format: BLUETOOTH_PRINT_FORMAT[format] ?? BLUETOOTH_PRINT_FORMAT.normal,
-});
-
-const buildBluetoothPrintPayload = (orderInfo) => {
-  const orderCode = orderInfo.orderId || orderInfo.orderCode || orderInfo.id;
-  const onlineOrderCharge = Number(orderInfo.bills.onlineOrderCharge) || 0;
-  const cateringDetails = orderInfo.cateringDetails;
-  const lines = [
-    buildBluetoothPrintText("NISKALA", {
-      align: "center",
-      bold: true,
-      format: "doubleWidth",
-    }),
-    buildBluetoothPrintText("COFFEE", {
-      align: "center",
-      bold: true,
-      format: "small",
-    }),
-    buildBluetoothPrintText("Order Receipt", {
-      align: "center",
-      bold: true,
-    }),
-    buildBluetoothPrintText("--------------------------------", { align: "center" }),
-    buildBluetoothPrintText(`Order ID : ${orderCode}`),
-    buildBluetoothPrintText(`Customer : ${orderInfo.customerDetails.name}`),
-    buildBluetoothPrintText(
-      `Date     : ${formatJakartaReceiptDateTime(orderInfo.orderDate)}`
-    ),
-    buildBluetoothPrintText(`Payment  : ${orderInfo.paymentMethod || "-"}`),
-  ];
-
-  if (orderInfo.orderType === "Online") {
-    lines.push(buildBluetoothPrintText(`Platform : ${orderInfo.orderPlatform || "-"}`));
-  }
-
-  if (cateringDetails) {
-    lines.push(
-      buildBluetoothPrintText(`Instansi : ${cateringDetails.institution || "-"}`),
-      buildBluetoothPrintText(`WhatsApp : ${cateringDetails.whatsapp || "-"}`),
-      buildBluetoothPrintText(
-        `Tgl Acara: ${formatJakartaReceiptDate(cateringDetails.eventDate)}`
-      ),
-      buildBluetoothPrintText(`Jam Kirim: ${cateringDetails.deliveryTime || "-"}`),
-      buildBluetoothPrintText(
-        `Status   : ${cateringDetails.isPaid ? "Lunas" : "Belum Lunas"}`
-      )
-    );
-  }
-
-  lines.push(buildBluetoothPrintText("--------------------------------", { align: "center" }));
-
-  orderInfo.items.forEach((item) => {
-    lines.push(
-      buildBluetoothPrintText(item.name, { bold: true }),
-      buildBluetoothPrintText(`Qty: ${item.quantity}  ${formatReceiptCurrency(item.price)}`)
-    );
-
-    if (item.variant) {
-      lines.push(buildBluetoothPrintText(`Pilihan: ${item.variant}`, { format: "small" }));
-    }
-
-    if (item.addOns?.length) {
-      lines.push(
-        buildBluetoothPrintText(
-          `Add-ons: ${item.addOns.map((addOn) => addOn.name).join(", ")}`,
-          { format: "small" }
-        )
-      );
-    }
-  });
-
-  lines.push(
-    buildBluetoothPrintText("--------------------------------", { align: "center" }),
-    buildBluetoothPrintText(`Subtotal : ${formatReceiptCurrency(orderInfo.bills.total)}`)
-  );
-
-  if (onlineOrderCharge > 0) {
-    lines.push(
-      buildBluetoothPrintText(`Online   : ${formatReceiptCurrency(onlineOrderCharge)}`)
-    );
-  }
-
-  lines.push(
-    buildBluetoothPrintText(`Tax      : ${formatReceiptCurrency(orderInfo.bills.tax)}`),
-    buildBluetoothPrintText(`Total    : ${formatReceiptCurrency(orderInfo.bills.totalWithTax)}`, {
-      bold: true,
-      format: "doubleWidth",
-    }),
-    buildBluetoothPrintText("--------------------------------", { align: "center" }),
-    buildBluetoothPrintText(
-      cateringDetails?.note
-        ? `Catatan: ${cateringDetails.note}`
-        : "Thank you for your order",
-      { align: "center", format: "small" }
-    ),
-    buildBluetoothPrintText(" "),
-    buildBluetoothPrintText(" ")
-  );
-
-  return lines;
-};
-
-const buildReceiptHtml = (orderInfo) => {
+const buildReceiptHtml = (orderInfo, { logoSrc = receiptMark } = {}) => {
   const escapeHtml = (value) =>
     String(value ?? "")
       .replace(/&/g, "&amp;")
@@ -182,7 +58,7 @@ const buildReceiptHtml = (orderInfo) => {
   return `
     <div class="receipt">
       <div class="brand">
-        <img class="logo-mark" src="${receiptMark}" alt="Niskala Coffee mark" />
+        <img class="logo-mark" src="${logoSrc}" alt="Niskala Coffee mark" />
         <div class="brand-name">NISKALA</div>
         <div class="brand-subtitle">COFFEE</div>
       </div>
@@ -397,6 +273,20 @@ const receiptPrintStyle = `
     font-size: 5px;
   }
 `;
+
+const getAbsoluteAssetUrl = (assetUrl) => new URL(assetUrl, window.location.origin).href;
+
+const buildBluetoothPrintPayload = (orderInfo) => [
+  {
+    type: 4,
+    content: `
+      <style>${receiptPrintStyle}</style>
+      ${buildReceiptHtml(orderInfo, {
+        logoSrc: getAbsoluteAssetUrl(receiptMark),
+      })}
+    `,
+  },
+];
 
 const Invoice = ({ orderInfo, setShowInvoice }) => {
   const orderCode = orderInfo.orderId || orderInfo.orderCode || orderInfo.id;
