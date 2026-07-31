@@ -1,12 +1,143 @@
-import React from "react";
+/* eslint-disable react/prop-types */
+import { useRef } from "react";
+import { enqueueSnackbar } from "notistack";
+import { createThermalPrintUrl } from "../../https";
 import {
   formatCurrency,
   formatJakartaReceiptDate,
   formatJakartaReceiptDateTime,
   formatReceiptCurrency,
 } from "../../utils";
-import { printReceiptDocument } from "../../utils/printReceipt";
+import {
+  isAndroidDevice,
+  openBluetoothPrintApp,
+  printReceiptDocument,
+} from "../../utils/printReceipt";
 import receiptMark from "../../../../assets/Vector.svg";
+
+const BLUETOOTH_PRINT_ALIGN = {
+  left: 0,
+  center: 1,
+  right: 2,
+};
+
+const BLUETOOTH_PRINT_FORMAT = {
+  normal: 0,
+  doubleHeight: 1,
+  doubleHeightWidth: 2,
+  doubleWidth: 3,
+  small: 4,
+};
+
+const buildBluetoothPrintText = (
+  content,
+  { align = "left", bold = false, format = "normal" } = {}
+) => ({
+  type: 0,
+  content: String(content ?? ""),
+  bold: bold ? 1 : 0,
+  align: BLUETOOTH_PRINT_ALIGN[align] ?? BLUETOOTH_PRINT_ALIGN.left,
+  format: BLUETOOTH_PRINT_FORMAT[format] ?? BLUETOOTH_PRINT_FORMAT.normal,
+});
+
+const buildBluetoothPrintPayload = (orderInfo) => {
+  const orderCode = orderInfo.orderId || orderInfo.orderCode || orderInfo.id;
+  const onlineOrderCharge = Number(orderInfo.bills.onlineOrderCharge) || 0;
+  const cateringDetails = orderInfo.cateringDetails;
+  const lines = [
+    buildBluetoothPrintText("NISKALA", {
+      align: "center",
+      bold: true,
+      format: "doubleWidth",
+    }),
+    buildBluetoothPrintText("COFFEE", {
+      align: "center",
+      bold: true,
+      format: "small",
+    }),
+    buildBluetoothPrintText("Order Receipt", {
+      align: "center",
+      bold: true,
+    }),
+    buildBluetoothPrintText("--------------------------------", { align: "center" }),
+    buildBluetoothPrintText(`Order ID : ${orderCode}`),
+    buildBluetoothPrintText(`Customer : ${orderInfo.customerDetails.name}`),
+    buildBluetoothPrintText(
+      `Date     : ${formatJakartaReceiptDateTime(orderInfo.orderDate)}`
+    ),
+    buildBluetoothPrintText(`Payment  : ${orderInfo.paymentMethod || "-"}`),
+  ];
+
+  if (orderInfo.orderType === "Online") {
+    lines.push(buildBluetoothPrintText(`Platform : ${orderInfo.orderPlatform || "-"}`));
+  }
+
+  if (cateringDetails) {
+    lines.push(
+      buildBluetoothPrintText(`Instansi : ${cateringDetails.institution || "-"}`),
+      buildBluetoothPrintText(`WhatsApp : ${cateringDetails.whatsapp || "-"}`),
+      buildBluetoothPrintText(
+        `Tgl Acara: ${formatJakartaReceiptDate(cateringDetails.eventDate)}`
+      ),
+      buildBluetoothPrintText(`Jam Kirim: ${cateringDetails.deliveryTime || "-"}`),
+      buildBluetoothPrintText(
+        `Status   : ${cateringDetails.isPaid ? "Lunas" : "Belum Lunas"}`
+      )
+    );
+  }
+
+  lines.push(buildBluetoothPrintText("--------------------------------", { align: "center" }));
+
+  orderInfo.items.forEach((item) => {
+    lines.push(
+      buildBluetoothPrintText(item.name, { bold: true }),
+      buildBluetoothPrintText(`Qty: ${item.quantity}  ${formatReceiptCurrency(item.price)}`)
+    );
+
+    if (item.variant) {
+      lines.push(buildBluetoothPrintText(`Pilihan: ${item.variant}`, { format: "small" }));
+    }
+
+    if (item.addOns?.length) {
+      lines.push(
+        buildBluetoothPrintText(
+          `Add-ons: ${item.addOns.map((addOn) => addOn.name).join(", ")}`,
+          { format: "small" }
+        )
+      );
+    }
+  });
+
+  lines.push(
+    buildBluetoothPrintText("--------------------------------", { align: "center" }),
+    buildBluetoothPrintText(`Subtotal : ${formatReceiptCurrency(orderInfo.bills.total)}`)
+  );
+
+  if (onlineOrderCharge > 0) {
+    lines.push(
+      buildBluetoothPrintText(`Online   : ${formatReceiptCurrency(onlineOrderCharge)}`)
+    );
+  }
+
+  lines.push(
+    buildBluetoothPrintText(`Tax      : ${formatReceiptCurrency(orderInfo.bills.tax)}`),
+    buildBluetoothPrintText(`Total    : ${formatReceiptCurrency(orderInfo.bills.totalWithTax)}`, {
+      bold: true,
+      format: "doubleWidth",
+    }),
+    buildBluetoothPrintText("--------------------------------", { align: "center" }),
+    buildBluetoothPrintText(
+      cateringDetails?.note
+        ? `Catatan: ${cateringDetails.note}`
+        : "Thank you for your order",
+      { align: "center", format: "small" }
+    ),
+    buildBluetoothPrintText(" "),
+    buildBluetoothPrintText(" ")
+  );
+
+  return lines;
+};
 
 const buildReceiptHtml = (orderInfo) => {
   const escapeHtml = (value) =>
@@ -269,9 +400,10 @@ const receiptPrintStyle = `
 
 const Invoice = ({ orderInfo, setShowInvoice }) => {
   const orderCode = orderInfo.orderId || orderInfo.orderCode || orderInfo.id;
+  const isPrintingRef = useRef(false);
 
-  const handlePrint = () => {
-    printReceiptDocument({
+  const printWithExistingBehavior = () => {
+    return printReceiptDocument({
       documentHtml: `
         <html>
           <head>
@@ -282,6 +414,59 @@ const Invoice = ({ orderInfo, setShowInvoice }) => {
         </html>
       `,
     });
+  };
+
+  const handlePrint = async () => {
+    if (isPrintingRef.current) return;
+
+    if (!isAndroidDevice()) {
+      printWithExistingBehavior();
+      return;
+    }
+
+    isPrintingRef.current = true;
+
+    try {
+      const numericOrderId = orderInfo.id || orderInfo._id;
+
+      if (!numericOrderId) {
+        throw new Error("Order ID tidak ditemukan untuk struk ini.");
+      }
+
+      const response = await createThermalPrintUrl({
+        orderId: numericOrderId,
+        payload: buildBluetoothPrintPayload(orderInfo),
+      });
+      const responseUrl = response.data?.data?.url;
+
+      if (!responseUrl) {
+        throw new Error("URL thermal print gagal dibuat.");
+      }
+
+      const cleanupFallback = openBluetoothPrintApp({
+        responseUrl,
+        onFallback: () => {
+          enqueueSnackbar(
+            "Bluetooth Print app tidak terbuka. Membuka struk dengan cara lama.",
+            { variant: "warning" }
+          );
+          printWithExistingBehavior();
+        },
+      });
+
+      window.setTimeout(() => {
+        cleanupFallback();
+        isPrintingRef.current = false;
+      }, 3200);
+    } catch (error) {
+      enqueueSnackbar(
+        error?.message ||
+          "Gagal menyiapkan thermal print. Membuka struk dengan cara lama.",
+        { variant: "error" }
+      );
+      printWithExistingBehavior();
+      isPrintingRef.current = false;
+    }
   };
 
   return (

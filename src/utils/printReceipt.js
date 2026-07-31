@@ -1,6 +1,42 @@
 const isMobilePrintBrowser = () =>
   /Android|iPhone|iPad|iPod/i.test(window.navigator.userAgent);
 
+export const isAndroidDevice = () => {
+  const userAgentDataPlatform = window.navigator.userAgentData?.platform;
+
+  if (userAgentDataPlatform) {
+    return /Android/i.test(userAgentDataPlatform);
+  }
+
+  return /Android/i.test(window.navigator.userAgent);
+};
+
+export const openBluetoothPrintApp = ({ onFallback, responseUrl }) => {
+  let didLeavePage = false;
+
+  const handleVisibilityChange = () => {
+    if (document.visibilityState === "hidden") {
+      didLeavePage = true;
+    }
+  };
+
+  document.addEventListener("visibilitychange", handleVisibilityChange);
+  window.location.href = `my.bluetoothprint.scheme://${responseUrl}`;
+
+  const fallbackTimer = window.setTimeout(() => {
+    document.removeEventListener("visibilitychange", handleVisibilityChange);
+
+    if (!didLeavePage && typeof onFallback === "function") {
+      onFallback();
+    }
+  }, 2500);
+
+  return () => {
+    window.clearTimeout(fallbackTimer);
+    document.removeEventListener("visibilitychange", handleVisibilityChange);
+  };
+};
+
 const waitForPrintAssets = (printWindow) => {
   const images = Array.from(printWindow.document.images || []);
 
