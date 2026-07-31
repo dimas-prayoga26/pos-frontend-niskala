@@ -274,6 +274,35 @@ const receiptPrintStyle = `
   }
 `;
 
+const bluetoothReceiptPrintStyle = `
+  ${receiptPrintStyle}
+  html,
+  body {
+    width: 58mm !important;
+    min-width: 58mm !important;
+    max-width: 58mm !important;
+    margin: 0 auto !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+    background: #fff !important;
+  }
+  .bluetooth-print-page {
+    width: 58mm !important;
+    min-width: 58mm !important;
+    max-width: 58mm !important;
+    margin: 0 auto !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+    background: #fff !important;
+  }
+  .bluetooth-print-page .receipt {
+    width: 44mm !important;
+    max-width: 44mm !important;
+    margin: 0 auto !important;
+    padding: 5px 2mm 8px 0 !important;
+  }
+`;
+
 const getAbsoluteAssetUrl = (assetUrl) => new URL(assetUrl, window.location.origin).href;
 
 let receiptLogoDataUrlPromise;
@@ -331,10 +360,13 @@ const buildBluetoothPrintPayload = async (orderInfo) => [
   {
     type: 4,
     content: `
-      <style>${receiptPrintStyle}</style>
-      ${buildReceiptHtml(orderInfo, {
-        logoSrc: await getReceiptLogoDataUrl(),
-      })}
+      <meta name="viewport" content="width=219, initial-scale=1, maximum-scale=1">
+      <style>${bluetoothReceiptPrintStyle}</style>
+      <div class="bluetooth-print-page">
+        ${buildReceiptHtml(orderInfo, {
+          logoSrc: await getReceiptLogoDataUrl(),
+        })}
+      </div>
     `,
   },
 ];
