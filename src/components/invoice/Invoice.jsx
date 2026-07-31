@@ -1,18 +1,11 @@
-/* eslint-disable react/prop-types */
-import { useRef, useState } from "react";
-import { enqueueSnackbar } from "notistack";
-import { createReceiptPrintUrl } from "../../https";
+import React from "react";
 import {
   formatCurrency,
   formatJakartaReceiptDate,
   formatJakartaReceiptDateTime,
   formatReceiptCurrency,
 } from "../../utils";
-import {
-  isAndroidDevice,
-  openEscPosPrintService,
-  printReceiptDocument,
-} from "../../utils/printReceipt";
+import { printReceiptDocument } from "../../utils/printReceipt";
 import receiptMark from "../../../../assets/Vector.svg";
 
 const buildReceiptHtml = (orderInfo) => {
@@ -274,97 +267,21 @@ const receiptPrintStyle = `
   }
 `;
 
-const buildReceiptDocumentHtml = (orderInfo) => `
-  <html>
-    <head>
-      <base href="${window.location.origin}/">
-      <title>Order Receipt</title>
-      <style>${receiptPrintStyle}</style>
-    </head>
-    <body>${buildReceiptHtml(orderInfo)}</body>
-  </html>
-`;
-
-const assertEscPosReceiptUrl = (receiptUrl) => {
-  const parsedUrl = new URL(receiptUrl);
-
-  if (parsedUrl.protocol !== "https:") {
-    throw new Error("URL struk harus HTTPS agar bisa diakses ESC POS Print Service.");
-  }
-};
-
 const Invoice = ({ orderInfo, setShowInvoice }) => {
   const orderCode = orderInfo.orderId || orderInfo.orderCode || orderInfo.id;
-  const [isPreparingPrint, setIsPreparingPrint] = useState(false);
-  const isPrintingRef = useRef(false);
 
-  const handlePrint = async () => {
-    if (isPrintingRef.current) return;
-
-    const documentHtml = buildReceiptDocumentHtml(orderInfo);
-    const printWithExistingBehavior = () => {
-      printReceiptDocument({ documentHtml });
-    };
-
-    isPrintingRef.current = true;
-
-    if (!isAndroidDevice()) {
-      printWithExistingBehavior();
-      window.setTimeout(() => {
-        isPrintingRef.current = false;
-      }, 1200);
-      return;
-    }
-
-    setIsPreparingPrint(true);
-
-    try {
-      const numericOrderId = orderInfo.id || orderInfo._id;
-
-      if (!numericOrderId) {
-        throw new Error("Order ID tidak ditemukan untuk struk ini.");
-      }
-
-      const response = await createReceiptPrintUrl({
-        orderId: numericOrderId,
-        documentHtml,
-      });
-      const receiptUrl = response.data?.data?.url;
-
-      if (!receiptUrl) {
-        throw new Error("URL struk gagal dibuat.");
-      }
-
-      assertEscPosReceiptUrl(receiptUrl);
-
-      const cleanupIntentFallback = openEscPosPrintService({
-        dataType: "HTML_URL",
-        fallbackUrl: receiptUrl,
-        printUrl: receiptUrl,
-        onFallback: () => {
-          enqueueSnackbar(
-            "ESC POS Print Service tidak terbuka. Membuka struk dengan cara lama.",
-            { variant: "warning" }
-          );
-          printWithExistingBehavior();
-        },
-      });
-
-      window.setTimeout(() => {
-        cleanupIntentFallback();
-        isPrintingRef.current = false;
-        setIsPreparingPrint(false);
-      }, 3200);
-    } catch (error) {
-      enqueueSnackbar(
-        error?.message ||
-          "Gagal menyiapkan struk untuk ESC POS Print Service. Membuka struk dengan cara lama.",
-        { variant: "error" }
-      );
-      printWithExistingBehavior();
-      isPrintingRef.current = false;
-      setIsPreparingPrint(false);
-    }
+  const handlePrint = () => {
+    printReceiptDocument({
+      documentHtml: `
+        <html>
+          <head>
+            <title>Order Receipt</title>
+            <style>${receiptPrintStyle}</style>
+          </head>
+          <body>${buildReceiptHtml(orderInfo)}</body>
+        </html>
+      `,
+    });
   };
 
   return (
@@ -444,7 +361,6 @@ const Invoice = ({ orderInfo, setShowInvoice }) => {
         <div className="mt-4 flex gap-3" style={{ marginTop: 14, gap: 10 }}>
           <button
             onClick={handlePrint}
-            aria-busy={isPreparingPrint}
             className="w-full rounded-lg bg-[#a79981] px-4 py-2 text-sm font-semibold text-[#101010]"
           >
             Print Receipt
