@@ -276,13 +276,64 @@ const receiptPrintStyle = `
 
 const getAbsoluteAssetUrl = (assetUrl) => new URL(assetUrl, window.location.origin).href;
 
-const buildBluetoothPrintPayload = (orderInfo) => [
+let receiptLogoDataUrlPromise;
+
+const getReceiptLogoDataUrl = async () => {
+  if (!receiptLogoDataUrlPromise) {
+    receiptLogoDataUrlPromise = fetch(getAbsoluteAssetUrl(receiptMark))
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error("Logo receipt gagal dimuat.");
+        }
+
+        return response.text();
+      })
+      .then(
+        (svgText) =>
+          new Promise((resolve, reject) => {
+            const blackSvgText = svgText.replace(
+              /fill="(?!none")[^"]*"/g,
+              'fill="#000000"'
+            );
+            const svgBlob = new Blob([blackSvgText], {
+              type: "image/svg+xml;charset=utf-8",
+            });
+            const svgUrl = URL.createObjectURL(svgBlob);
+            const image = new Image();
+
+            image.onload = () => {
+              const canvas = document.createElement("canvas");
+              const size = 96;
+              canvas.width = size;
+              canvas.height = size;
+
+              const context = canvas.getContext("2d");
+              context.clearRect(0, 0, size, size);
+              context.drawImage(image, 0, 0, size, size);
+              URL.revokeObjectURL(svgUrl);
+              resolve(canvas.toDataURL("image/png"));
+            };
+
+            image.onerror = () => {
+              URL.revokeObjectURL(svgUrl);
+              reject(new Error("Logo receipt gagal dikonversi."));
+            };
+
+            image.src = svgUrl;
+          })
+      );
+  }
+
+  return receiptLogoDataUrlPromise;
+};
+
+const buildBluetoothPrintPayload = async (orderInfo) => [
   {
     type: 4,
     content: `
       <style>${receiptPrintStyle}</style>
       ${buildReceiptHtml(orderInfo, {
-        logoSrc: getAbsoluteAssetUrl(receiptMark),
+        logoSrc: await getReceiptLogoDataUrl(),
       })}
     `,
   },
@@ -325,7 +376,7 @@ const Invoice = ({ orderInfo, setShowInvoice }) => {
 
       const response = await createThermalPrintUrl({
         orderId: numericOrderId,
-        payload: buildBluetoothPrintPayload(orderInfo),
+        payload: await buildBluetoothPrintPayload(orderInfo),
       });
       const responseUrl = response.data?.data?.url;
 
