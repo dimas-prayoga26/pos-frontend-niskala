@@ -45,6 +45,8 @@ export const verifyMidtransPayment = (data) =>
 
 // Order Endpoints
 export const addOrder = (data) => axiosWrapper.post("/api/order/", data);
+export const createThermalPrintUrl = ({ orderId, payload }) =>
+  axiosWrapper.post(`/api/order/${orderId}/thermal-print-url`, { payload });
 export const getOrders = () => axiosWrapper.get("/api/order");
 export const deleteOrder = (orderId) =>
   axiosWrapper.delete(`/api/order/${orderId}`);
