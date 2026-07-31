@@ -1,6 +1,72 @@
 const isMobilePrintBrowser = () =>
   /Android|iPhone|iPad|iPod/i.test(window.navigator.userAgent);
 
+export const isAndroidDevice = () => {
+  const userAgentDataPlatform = window.navigator.userAgentData?.platform;
+
+  if (userAgentDataPlatform) {
+    return /Android/i.test(userAgentDataPlatform);
+  }
+
+  return /Android/i.test(window.navigator.userAgent);
+};
+
+const buildEscPosPrintServiceIntentUrl = ({
+  dataType = "PDF_URL",
+  fallbackUrl,
+  printUrl,
+}) => {
+  const fallbackExtra = fallbackUrl
+    ? `S.browser_fallback_url=${encodeURIComponent(fallbackUrl)};`
+    : "";
+
+  return (
+    "intent:#Intent;" +
+    "action=org.escpos.intent.action.PRINT;" +
+    "package=com.loopedlabs.escposprintservice;" +
+    `S.DATA_TYPE=${encodeURIComponent(dataType)};` +
+    `S.android.intent.extra.TEXT=${encodeURIComponent(printUrl)};` +
+    fallbackExtra +
+    "end"
+  );
+};
+
+export const openEscPosPrintService = ({
+  dataType = "PDF_URL",
+  fallbackUrl,
+  onFallback,
+  printUrl,
+}) => {
+  let didLeavePage = false;
+
+  const handleVisibilityChange = () => {
+    if (document.visibilityState === "hidden") {
+      didLeavePage = true;
+    }
+  };
+
+  document.addEventListener("visibilitychange", handleVisibilityChange);
+
+  window.location.href = buildEscPosPrintServiceIntentUrl({
+    dataType,
+    fallbackUrl,
+    printUrl,
+  });
+
+  const fallbackTimer = window.setTimeout(() => {
+    document.removeEventListener("visibilitychange", handleVisibilityChange);
+
+    if (!didLeavePage && typeof onFallback === "function") {
+      onFallback();
+    }
+  }, 2500);
+
+  return () => {
+    window.clearTimeout(fallbackTimer);
+    document.removeEventListener("visibilitychange", handleVisibilityChange);
+  };
+};
+
 const waitForPrintAssets = (printWindow) => {
   const images = Array.from(printWindow.document.images || []);
 

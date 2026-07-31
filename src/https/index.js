@@ -45,6 +45,10 @@ export const verifyMidtransPayment = (data) =>
 
 // Order Endpoints
 export const addOrder = (data) => axiosWrapper.post("/api/order/", data);
+export const createReceiptPrintUrl = ({ orderId, documentHtml }) =>
+  axiosWrapper.post(`/api/order/${orderId}/receipt-print-url`, {
+    documentHtml,
+  });
 export const getOrders = () => axiosWrapper.get("/api/order");
 export const deleteOrder = (orderId) =>
   axiosWrapper.delete(`/api/order/${orderId}`);
