@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { getTotalPrice } from "../../redux/slices/cartSlice";
 import { addOrder } from "../../https/index";
@@ -8,6 +8,7 @@ import { removeAllItems } from "../../redux/slices/cartSlice";
 import { removeCustomer, setCustomer } from "../../redux/slices/customerSlice";
 import Invoice from "../invoice/Invoice";
 import NonCashPaymentModal from "./NonCashPaymentModal";
+import { MdWarningAmber } from "react-icons/md";
 import {
   formatCurrency,
   formatJakartaReceiptDate,
@@ -47,23 +48,6 @@ const getInsufficientStockItems = (error) =>
     ? error.response?.data?.details?.insufficientStock || []
     : [];
 
-const buildInsufficientStockMessage = (items) => {
-  const itemLines = items
-    .map(
-      (item) =>
-        `- ${item.name}: stok ${formatStockAmount(
-          item.stock,
-          item.unit
-        )}, butuh ${formatStockAmount(
-          item.required,
-          item.unit
-        )}, kurang ${formatStockAmount(item.shortage, item.unit)}`
-    )
-    .join("\n");
-
-  return `Stok bahan tidak mencukupi:\n\n${itemLines}\n\nLanjutkan order dan biarkan stok menjadi minus?`;
-};
-
 const Bill = () => {
   const dispatch = useDispatch();
 
@@ -98,6 +82,8 @@ const Bill = () => {
   const [showNonCashPayment, setShowNonCashPayment] = useState(false);
   const [showInvoice, setShowInvoice] = useState(false);
   const [orderInfo, setOrderInfo] = useState();
+  const [stockWarningItems, setStockWarningItems] = useState([]);
+  const [pendingOrderData, setPendingOrderData] = useState(null);
 
   const getCustomerName = () => customerData.customerName?.trim() || "Guest";
   const updateCateringDp = (value) => {
@@ -203,6 +189,27 @@ const Bill = () => {
     );
   };
 
+  const handleCancelStockWarning = () => {
+    setStockWarningItems([]);
+    setPendingOrderData(null);
+    enqueueSnackbar("Order dibatalkan. Stok tidak dikurangi.", {
+      variant: "warning",
+    });
+  };
+
+  const handleContinueWithNegativeStock = () => {
+    if (!pendingOrderData) return;
+
+    const nextOrderData = {
+      ...pendingOrderData,
+      allowNegativeStock: true,
+    };
+
+    setStockWarningItems([]);
+    setPendingOrderData(null);
+    orderMutation.mutate(nextOrderData);
+  };
+
   const orderMutation = useMutation({
     mutationFn: (reqData) => addOrder(reqData),
     onSuccess: (resData) => {
@@ -223,21 +230,9 @@ const Bill = () => {
       const insufficientStockItems = getInsufficientStockItems(error);
 
       if (insufficientStockItems.length && !variables?.allowNegativeStock) {
-        const shouldContinue = window.confirm(
-          buildInsufficientStockMessage(insufficientStockItems)
-        );
-
-        if (shouldContinue) {
-          orderMutation.mutate({
-            ...variables,
-            allowNegativeStock: true,
-          });
-          return;
-        }
-
-        enqueueSnackbar("Order dibatalkan. Stok tidak dikurangi.", {
-          variant: "warning",
-        });
+        setShowNonCashPayment(false);
+        setPendingOrderData(variables);
+        setStockWarningItems(insufficientStockItems);
         return;
       }
 
@@ -652,6 +647,85 @@ const Bill = () => {
           onClose={() => setShowNonCashPayment(false)}
           onConfirm={handleConfirmNonCashPayment}
         />
+      )}
+      {stockWarningItems.length > 0 && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/75 p-4">
+          <div className="w-full max-w-lg overflow-hidden rounded-lg border border-[#3f372c] bg-[#1f1f1f] text-[#f5f5f5] shadow-2xl shadow-black/70">
+            <div className="flex items-start gap-3 border-b border-[#333] p-5">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-[#a79981] text-[#101010]">
+                <MdWarningAmber size={26} />
+              </div>
+              <div>
+                <h2 className="text-lg font-bold">Stok Bahan Kurang</h2>
+                <p className="mt-1 text-sm leading-6 text-[#ababab]">
+                  Beberapa bahan tidak mencukupi untuk pesanan ini. Periksa
+                  detailnya sebelum melanjutkan.
+                </p>
+              </div>
+            </div>
+
+            <div className="max-h-[45vh] space-y-3 overflow-y-auto p-5">
+              {stockWarningItems.map((item) => (
+                <div
+                  key={`${item.name}-${item.unit}`}
+                  className="rounded-lg border border-[#333] bg-[#171717] p-4"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <h3 className="min-w-0 flex-1 [overflow-wrap:anywhere] text-base font-bold">
+                      {item.name}
+                    </h3>
+                    <span className="rounded-md bg-[#3f251f] px-2 py-1 text-xs font-bold text-[#ffb19f]">
+                      Kurang {formatStockAmount(item.shortage, item.unit)}
+                    </span>
+                  </div>
+                  <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
+                    <div className="rounded-md bg-[#202020] p-3">
+                      <p className="text-xs font-semibold uppercase text-[#8d8d8d]">
+                        Stok Saat Ini
+                      </p>
+                      <p className="mt-1 font-bold">
+                        {formatStockAmount(item.stock, item.unit)}
+                      </p>
+                    </div>
+                    <div className="rounded-md bg-[#202020] p-3">
+                      <p className="text-xs font-semibold uppercase text-[#8d8d8d]">
+                        Dibutuhkan
+                      </p>
+                      <p className="mt-1 font-bold">
+                        {formatStockAmount(item.required, item.unit)}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="border-t border-[#333] p-5">
+              <p className="mb-4 text-sm leading-6 text-[#ababab]">
+                Jika dilanjutkan, stok bahan akan menjadi minus sesuai
+                kekurangan di atas.
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={handleCancelStockWarning}
+                  disabled={orderMutation.isPending}
+                  className="rounded-lg bg-[#2a2a2a] px-4 py-3 text-sm font-bold text-[#ababab] transition hover:bg-[#333] hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  Batalkan
+                </button>
+                <button
+                  type="button"
+                  onClick={handleContinueWithNegativeStock}
+                  disabled={orderMutation.isPending}
+                  className="rounded-lg bg-[#a79981] px-4 py-3 text-sm font-bold text-[#101010] transition hover:bg-[#b9aa91] disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  Lanjutkan Order
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </>
   );
