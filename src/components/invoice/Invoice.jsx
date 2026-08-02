@@ -27,6 +27,24 @@ const buildReceiptHtml = (orderInfo, { logoSrc = receiptMark } = {}) => {
   const orderCode = orderInfo.orderId || orderInfo.orderCode || orderInfo.id;
   const onlineOrderCharge = Number(orderInfo.bills.onlineOrderCharge) || 0;
   const cateringDetails = orderInfo.cateringDetails;
+  const receiptLine = (className = "") =>
+    `<div class="receipt-separator${className ? ` ${className}` : ""}"><div class="receipt-line"></div></div>`;
+  const getVariantParts = (variant) => {
+    const parts = String(variant ?? "")
+      .split("/")
+      .map((part) => part.trim())
+      .filter(Boolean);
+    const temperatureIndex = parts.findIndex((part) =>
+      /^(cold|hot|ice|iced|dingin|panas)$/i.test(part)
+    );
+
+    return {
+      temperature: temperatureIndex >= 0 ? parts[temperatureIndex] : "",
+      size: parts
+        .filter((_, index) => index !== temperatureIndex)
+        .join(" / "),
+    };
+  };
 
   const itemRows = orderInfo.items
     .map((item) => {
@@ -35,22 +53,28 @@ const buildReceiptHtml = (orderInfo, { logoSrc = receiptMark } = {}) => {
             .map((addOn) => escapeHtml(addOn.name))
             .join(", ")}</div>`
         : "";
-      const variant = item.variant
-        ? `<div class="line-note">Pilihan: ${escapeHtml(item.variant)}</div>`
+      const variantParts = getVariantParts(item.variant);
+      const temperature = variantParts.temperature
+        ? `<strong class="item-option">${escapeHtml(variantParts.temperature)}</strong>`
+        : "";
+      const size = variantParts.size
+        ? `<div class="line-note item-size">Size: ${escapeHtml(variantParts.size)}</div>`
         : "";
 
       return `
         <div class="item">
           <div class="item-main">
             <span>${escapeHtml(item.name)}</span>
+            ${temperature}
           </div>
           <div class="item-detail">
             <span class="line-note">Qty: ${item.quantity}</span>
             <strong>${formatReceiptCurrency(item.price)}</strong>
           </div>
-          ${variant}
+          ${size}
           ${addOns}
         </div>
+        ${receiptLine("item-separator")}
       `;
     })
     .join("");
@@ -64,6 +88,7 @@ const buildReceiptHtml = (orderInfo, { logoSrc = receiptMark } = {}) => {
       </div>
       <p class="receipt-title">Order Receipt</p>
 
+      ${receiptLine("title-separator")}
       <div class="meta">
         <div class="meta-row"><span>Order ID</span><strong>${escapeHtml(orderCode)}</strong></div>
         <div class="meta-row"><span>Customer</span><strong>${escapeHtml(orderInfo.customerDetails.name)}</strong></div>
@@ -84,6 +109,7 @@ const buildReceiptHtml = (orderInfo, { logoSrc = receiptMark } = {}) => {
             : ""
         }
       </div>
+      ${receiptLine("meta-separator")}
 
       <div>${itemRows}</div>
 
@@ -95,8 +121,12 @@ const buildReceiptHtml = (orderInfo, { logoSrc = receiptMark } = {}) => {
             : ""
         }
         <div class="total-block"><span>Tax</span><strong>${formatReceiptCurrency(orderInfo.bills.tax)}</strong></div>
+      </div>
+      ${receiptLine("tax-separator")}
+      <div class="receipt-grand-total">
         <div class="total-block grand"><span>Total</span><strong>${formatReceiptCurrency(orderInfo.bills.totalWithTax)}</strong></div>
       </div>
+      ${receiptLine("total-separator")}
 
       <div class="footer">${
         cateringDetails?.note
@@ -132,6 +162,12 @@ const receiptPrintStyle = `
     width: 44mm;
     margin: 0 auto;
     padding: 5px 2mm 8px 0;
+  }
+  .receipt-separator {
+    display: none;
+  }
+  .receipt-line {
+    display: none;
   }
   .brand {
     text-align: center;
@@ -211,6 +247,12 @@ const receiptPrintStyle = `
     max-width: 100%;
     overflow-wrap: anywhere;
   }
+  .item-option {
+    flex: 0 0 auto;
+    margin-left: -120px;
+    font-size: 6px;
+    white-space: nowrap;
+  }
   .item-detail strong,
   .total-block strong {
     display: block;
@@ -243,9 +285,16 @@ const receiptPrintStyle = `
     font-weight: 900;
     margin-top: 2px;
   }
+  .item-size {
+    margin-top: 1px;
+  }
   .totals {
     border-bottom: 1px dashed #000;
     padding: 6px 6mm;
+  }
+  .receipt-grand-total {
+    border-bottom: 0;
+    padding: 0 6mm 6px;
   }
   .total-block {
     display: flex;
@@ -279,27 +328,253 @@ const bluetoothReceiptPrintStyle = `
   html,
   body {
     width: 58mm !important;
+    width: 219px !important;
     min-width: 58mm !important;
+    min-width: 219px !important;
     max-width: 58mm !important;
+    max-width: 219px !important;
+    height: auto !important;
+    min-height: 0 !important;
     margin: 0 auto !important;
     padding: 0 !important;
     overflow: hidden !important;
     background: #fff !important;
+    font-size: 6px !important;
   }
   .bluetooth-print-page {
     width: 58mm !important;
+    width: 219px !important;
     min-width: 58mm !important;
+    min-width: 219px !important;
     max-width: 58mm !important;
+    max-width: 219px !important;
+    height: auto !important;
+    min-height: 0 !important;
     margin: 0 auto !important;
     padding: 0 !important;
     overflow: hidden !important;
     background: #fff !important;
+    font-size: 6px !important;
+    line-height: 1.28 !important;
   }
   .bluetooth-print-page .receipt {
     width: 44mm !important;
+    width: 166px !important;
     max-width: 44mm !important;
-    margin: 0 auto !important;
-    padding: 5px 2mm 8px 0 !important;
+    max-width: 166px !important;
+    margin: 0 auto 0 0 !important;
+    padding: 3px 4px 0 8px !important;
+    overflow: visible !important;
+    font-size: 6px !important;
+    line-height: 1.28 !important;
+  }
+  .bluetooth-print-page .brand-name {
+    font-size: 10px !important;
+  }
+  .bluetooth-print-page .brand-subtitle {
+    font-size: 4px !important;
+  }
+  .bluetooth-print-page .receipt-title {
+    font-size: 6px !important;
+  }
+  .bluetooth-print-page .line-note {
+    font-size: 5px !important;
+  }
+  .bluetooth-print-page .item-option {
+    margin-left: -120px !important;
+    font-size: 5px !important;
+    white-space: nowrap !important;
+  }
+  .bluetooth-print-page .brand,
+  .bluetooth-print-page .receipt-title,
+  .bluetooth-print-page .footer {
+    width: 100% !important;
+    text-align: center !important;
+  }
+  .bluetooth-print-page .logo-mark {
+    margin-left: auto !important;
+    margin-right: auto !important;
+  }
+  .bluetooth-print-page .brand {
+    width: 110px !important;
+    margin-left: 1px !important;
+    margin-right: 0 !important;
+    transform: none !important;
+  }
+  .bluetooth-print-page .brand {
+    margin-bottom: 3px !important;
+  }
+  .bluetooth-print-page .receipt-title {
+    width: 110px !important;
+    margin: 0 0 4px 3px !important;
+    transform: none !important;
+  }
+  .bluetooth-print-page .meta,
+  .bluetooth-print-page .item {
+    width: 160px !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+    border-top: 0 !important;
+    border-bottom: 0 !important;
+  }
+  .bluetooth-print-page .meta {
+    padding: 3px 0 !important;
+  }
+  .bluetooth-print-page .item {
+    padding: 2px 0 !important;
+  }
+  .bluetooth-print-page .receipt-separator {
+    display: flex !important;
+    justify-content: flex-start !important;
+    width: 160px !important;
+    height: auto !important;
+    margin: 2px auto !important;
+    padding: 0 !important;
+    border: 0 !important;
+  }
+  .bluetooth-print-page .receipt-line {
+    display: block !important;
+    width: 100px !important;
+    height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border-bottom: 1px dashed #000 !important;
+  }
+  .bluetooth-print-page .item-separator {
+    margin-top: 2px !important;
+    margin-bottom: 2px !important;
+  }
+  .bluetooth-print-page .title-separator .receipt-line {
+    width: 110px !important;
+  }
+  .bluetooth-print-page .meta-separator .receipt-line {
+    width: 110px !important;
+  }
+  .bluetooth-print-page .item-separator .receipt-line {
+    width: 110px !important;
+  }
+  .bluetooth-print-page .tax-separator {
+    justify-content: flex-start !important;
+    overflow: visible !important;
+  }
+  .bluetooth-print-page .tax-separator .receipt-line {
+    width: 110px !important;
+    margin-left: 1px !important;
+    transform: none !important;
+  }
+  .bluetooth-print-page .total-separator {
+    justify-content: flex-start !important;
+    width: 160px !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+    overflow: visible !important;
+  }
+  .bluetooth-print-page .total-separator .receipt-line {
+    width: 110px !important;
+    margin-left: 1px !important;
+    transform: none !important;
+  }
+  .bluetooth-print-page .item-separator .receipt-line {
+    border-bottom-style: dotted !important;
+  }
+  .bluetooth-print-page .meta-row span {
+    flex: 0 0 58px !important;
+    padding-right: 6px !important;
+  }
+  .bluetooth-print-page .meta-row + .meta-row {
+    margin-top: 2px !important;
+  }
+  .bluetooth-print-page .meta-row strong {
+    max-width: none !important;
+    min-width: 0 !important;
+  }
+  .bluetooth-print-page .item-detail {
+    align-items: baseline !important;
+    display: grid !important;
+    grid-template-columns: 56px 62px !important;
+    justify-content: start !important;
+    gap: 8px !important;
+    width: 100% !important;
+  }
+  .bluetooth-print-page .item-detail strong {
+    margin-left: 0 !important;
+    margin-right: 18px !important;
+    max-width: 78px !important;
+    min-width: 0 !important;
+    overflow: visible !important;
+    text-align: left !important;
+    white-space: nowrap !important;
+    font-size: 6px !important;
+  }
+  .bluetooth-print-page .totals {
+    display: grid !important;
+    grid-template-columns: 48px 62px !important;
+    column-gap: 8px !important;
+    row-gap: 3px !important;
+    width: 140px !important;
+    margin-top: 2px !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+    margin-bottom: 2px !important;
+    padding: 2px 0 2px !important;
+    border-bottom: 0 !important;
+  }
+  .bluetooth-print-page .totals .total-block {
+    display: contents !important;
+  }
+  .bluetooth-print-page .totals .total-block span,
+  .bluetooth-print-page .totals .total-block strong {
+    margin-top: 0 !important;
+    text-align: left !important;
+  }
+  .bluetooth-print-page .receipt-grand-total {
+    width: 140px !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+    padding: 0 0 2px !important;
+    border-bottom: 0 !important;
+  }
+  .bluetooth-print-page .total-block {
+    display: grid !important;
+    grid-template-columns: 48px 63px !important;
+    justify-content: start !important;
+    gap: 8px !important;
+    width: 100% !important;
+    margin-left: 0 !important;
+    margin-top: 3px !important;
+  }
+  .bluetooth-print-page .total-block strong {
+    min-width: 0 !important;
+    max-width: 62px !important;
+    overflow: visible !important;
+    text-align: left !important;
+    white-space: nowrap !important;
+    font-size: 6px !important;
+  }
+  .bluetooth-print-page .receipt-grand-total .total-block span {
+    text-align: left !important;
+  }
+  .bluetooth-print-page .grand {
+    position: relative !important;
+    border-top: 0 !important;
+    border-bottom: 0 !important;
+    margin-top: 4px !important;
+    margin-bottom: 4px !important;
+    padding-top: 4px !important;
+    padding-bottom: 0 !important;
+    font-size: 7.5px !important;
+  }
+  .bluetooth-print-page .footer {
+    display: block !important;
+    width: 110px !important;
+    margin-top: 5px !important;
+    margin-left: 1px !important;
+    margin-right: 0 !important;
+    margin-bottom: 0 !important;
+    padding-bottom: 0 !important;
+    text-align: center !important;
+    line-height: 1 !important;
+    font-size: 4px !important;
   }
 `;
 
@@ -359,15 +634,15 @@ const getReceiptLogoDataUrl = async () => {
 const buildBluetoothPrintPayload = async (orderInfo) => [
   {
     type: 4,
-    content: `
-      <meta name="viewport" content="width=219, initial-scale=1, maximum-scale=1">
-      <style>${bluetoothReceiptPrintStyle}</style>
-      <div class="bluetooth-print-page">
-        ${buildReceiptHtml(orderInfo, {
-          logoSrc: await getReceiptLogoDataUrl(),
-        })}
-      </div>
-    `,
+    content: [
+      '<meta name="viewport" content="width=219, initial-scale=1, maximum-scale=1">',
+      `<style>${bluetoothReceiptPrintStyle}</style>`,
+      '<div class="bluetooth-print-page">',
+      buildReceiptHtml(orderInfo, {
+        logoSrc: await getReceiptLogoDataUrl(),
+      }),
+      "</div>",
+    ].join(""),
   },
 ];
 
