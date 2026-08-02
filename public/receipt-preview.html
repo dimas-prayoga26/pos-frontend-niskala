@@ -1,0 +1,353 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Receipt HTML Preview</title>
+    <style>
+      * { box-sizing: border-box; }
+      html,
+      body {
+        margin: 0;
+        min-height: 100%;
+        background: #e5e5e5;
+      }
+      .preview-shell {
+        min-height: 100vh;
+        padding: 24px;
+        display: flex;
+        justify-content: center;
+        align-items: flex-start;
+      }
+      .paper {
+        width: 58mm;
+        min-height: 72mm;
+        background: #fff;
+        box-shadow: 0 12px 30px rgba(0, 0, 0, 0.18);
+      }
+      body {
+        color: #000;
+        font-family: "Arial Narrow", Arial, Helvetica, sans-serif;
+        font-size: 6px;
+        font-weight: 900;
+        line-height: 1.28;
+        letter-spacing: 0;
+        text-rendering: geometricPrecision;
+        -webkit-text-stroke: 0.06px #000;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
+      .receipt {
+        width: 44mm;
+        margin: 0 auto 0 0;
+        padding: 3px 4px 0 8px;
+      }
+      .receipt-separator {
+        display: flex;
+        justify-content: flex-start;
+        width: 160px;
+        height: auto;
+        margin: 2px auto;
+        padding: 0;
+        border: 0;
+      }
+      .receipt-line {
+        display: block;
+        width: 100px;
+        height: 0;
+        margin: 0;
+        padding: 0;
+        border-bottom: 1px dashed #000;
+      }
+      .item-separator {
+        margin-top: 2px;
+        margin-bottom: 2px;
+      }
+      .title-separator .receipt-line {
+        width: 110px;
+      }
+      .meta-separator .receipt-line {
+        width: 110px;
+      }
+      .item-separator .receipt-line {
+        width: 110px;
+      }
+      .tax-separator {
+        justify-content: flex-start;
+        overflow: visible;
+      }
+      .tax-separator .receipt-line {
+        width: 110px;
+        margin-left: 1px;
+        transform: none;
+      }
+      .total-separator {
+        justify-content: flex-start;
+        width: 160px;
+        margin-left: auto;
+        margin-right: auto;
+        overflow: visible;
+      }
+      .total-separator .receipt-line {
+        width: 110px;
+        margin-left: 1px;
+        transform: none;
+      }
+      .item-separator .receipt-line {
+        border-bottom-style: dotted;
+      }
+      .brand {
+        width: 110px;
+        margin-left: 1px;
+        margin-right: 0;
+        transform: none;
+        text-align: center;
+        margin-bottom: 3px;
+      }
+      .logo-mark {
+        display: block;
+        width: 24px;
+        height: auto;
+        margin: 0 auto 3px;
+        filter: grayscale(1) contrast(400%) brightness(0);
+        opacity: 1;
+      }
+      .brand-name {
+        color: #000;
+        font-family: Georgia, "Times New Roman", serif;
+        font-size: 10px;
+        font-weight: 900;
+        line-height: 1;
+        text-transform: uppercase;
+        -webkit-text-stroke: 0.06px #000;
+      }
+      .brand-subtitle {
+        color: #000;
+        font-size: 4px;
+        font-weight: 900;
+        line-height: 1.1;
+        text-transform: uppercase;
+      }
+      .receipt-title {
+        width: 110px;
+        margin: 0 0 4px 3px;
+        transform: none;
+        color: #000;
+        font-size: 6px;
+        font-weight: 900;
+        text-align: center;
+        text-transform: uppercase;
+      }
+      .meta {
+        border-top: 0;
+        border-bottom: 0;
+        width: 160px;
+        margin: 0;
+        margin-left: auto;
+        margin-right: auto;
+        padding: 3px 0;
+      }
+      .meta-row,
+      .item-main,
+      .item-detail {
+        display: flex;
+        justify-content: flex-start;
+        gap: 2px;
+      }
+      .meta-row span {
+        display: inline-flex;
+        flex: 0 0 16mm;
+        justify-content: space-between;
+        padding-right: 2mm;
+      }
+      .meta-row span::after {
+        content: " :";
+      }
+      .meta-row + .meta-row {
+        margin-top: 2px;
+      }
+      strong {
+        color: #000;
+        font-weight: 900;
+        -webkit-text-stroke: 0.08px #000;
+      }
+      .item {
+        border-bottom: 0;
+        width: 160px;
+        margin-left: auto;
+        margin-right: auto;
+        padding: 2px 0;
+      }
+      .item-main span {
+        flex: 1 1 auto;
+        max-width: 100%;
+        overflow-wrap: anywhere;
+      }
+      .item-option {
+        flex: 0 0 auto;
+        margin-left: -120px;
+        font-size: 5px;
+        white-space: nowrap;
+      }
+      .item-detail strong,
+      .total-block strong {
+        display: block;
+        color: #000;
+        font-weight: 900;
+        white-space: nowrap;
+        overflow: visible;
+        -webkit-text-stroke: 0.08px #000;
+      }
+      .item-detail {
+        display: grid;
+        grid-template-columns: 56px 62px;
+        justify-content: start;
+        gap: 8px;
+        margin-top: 2px;
+      }
+      .item-detail strong {
+        flex: 0 0 auto;
+        margin-left: 0;
+        margin-right: 18px;
+        max-width: 78px;
+        min-width: 0;
+        text-align: left;
+        font-size: 6px;
+      }
+      .meta-row strong {
+        flex: 1 1 auto;
+        max-width: 29mm;
+        text-align: left;
+        overflow-wrap: anywhere;
+      }
+      .line-note {
+        color: #000;
+        font-size: 5px;
+        font-weight: 900;
+        margin-top: 2px;
+      }
+      .item-size {
+        margin-top: 1px;
+      }
+      .totals {
+        border-bottom: 0;
+        display: grid;
+        grid-template-columns: 43px 62px;
+        column-gap: 8px;
+        row-gap: 3px;
+        width: 140px;
+        margin-top: 2px;
+        margin-left: auto;
+        margin-right: auto;
+        margin-bottom: 2px;
+        padding: 2px 0 2px;
+      }
+      .totals .total-block {
+        display: contents;
+      }
+      .totals .total-block span,
+      .totals .total-block strong {
+        margin-top: 0;
+        text-align: left;
+      }
+      .receipt-grand-total {
+        width: 140px;
+        margin-left: auto;
+        margin-right: auto;
+        padding: 0 0 2px;
+        border-bottom: 0;
+      }
+      .total-block {
+        display: grid;
+        grid-template-columns: 48px 63px;
+        justify-content: start;
+        gap: 8px;
+        width: 100%;
+        margin-left: 0;
+        margin-top: 3px;
+        text-align: left;
+      }
+      .total-block strong {
+        min-width: 0;
+        max-width: 62px;
+        text-align: left;
+        white-space: nowrap;
+      }
+      .receipt-grand-total .total-block span {
+        text-align: left;
+      }
+      .grand {
+        position: relative;
+        border-top: 0;
+        border-bottom: 0;
+        font-size: 7.5px;
+        font-weight: 900;
+        margin-top: 4px;
+        margin-bottom: 4px;
+        padding-top: 4px;
+        padding-bottom: 0;
+      }
+      .footer {
+        width: 110px;
+        margin-top: 5px;
+        margin-left: 1px;
+        margin-right: 0;
+        margin-bottom: 0;
+        padding-bottom: 0;
+        text-align: center;
+        font-size: 4px;
+        line-height: 1;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="preview-shell">
+      <div class="paper">
+        <div class="receipt">
+          <div class="brand">
+            <img class="logo-mark" src="/assets/Vector.svg" alt="Niskala Coffee mark" />
+            <div class="brand-name">NISKALA</div>
+            <div class="brand-subtitle">COFFEE</div>
+          </div>
+          <p class="receipt-title">Order Receipt</p>
+
+          <div class="receipt-separator title-separator"><div class="receipt-line"></div></div>
+          <div class="meta">
+            <div class="meta-row"><span>Order ID</span><strong>ORD-000061</strong></div>
+            <div class="meta-row"><span>Customer</span><strong>Testing</strong></div>
+            <div class="meta-row"><span>Date</span><strong>31/07/26 15:00</strong></div>
+            <div class="meta-row"><span>Payment</span><strong>Tunai</strong></div>
+          </div>
+          <div class="receipt-separator meta-separator"><div class="receipt-line"></div></div>
+
+          <div>
+            <div class="item">
+              <div class="item-main">
+                <span>Vanilla Latte</span>
+                <strong class="item-option">Cold</strong>
+              </div>
+              <div class="item-detail">
+                <span class="line-note">Qty: 5</span>
+                <strong>Rp 100.000</strong>
+              </div>
+              <div class="line-note item-size">Size: Reguler</div>
+            </div>
+            <div class="receipt-separator item-separator"><div class="receipt-line"></div></div>
+          </div>
+
+          <div class="totals">
+            <div class="total-block"><span>Subtotal</span><strong>Rp 100.000</strong></div>
+            <div class="total-block"><span>Tax</span><strong>Rp 0</strong></div>
+          </div>
+          <div class="receipt-separator tax-separator"><div class="receipt-line"></div></div>
+          <div class="receipt-grand-total">
+            <div class="total-block grand"><span>Total</span><strong>Rp 100.000</strong></div>
+          </div>
+          <div class="receipt-separator total-separator"><div class="receipt-line"></div></div>
+
+          <div class="footer">Thank you for your order</div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>
