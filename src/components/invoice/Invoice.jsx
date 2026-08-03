@@ -327,12 +327,12 @@ const bluetoothReceiptPrintStyle = `
   ${receiptPrintStyle}
   html,
   body {
-    width: 58mm !important;
     width: 219px !important;
-    min-width: 58mm !important;
+    width: 58mm !important;
     min-width: 219px !important;
-    max-width: 58mm !important;
+    min-width: 58mm !important;
     max-width: 219px !important;
+    max-width: 58mm !important;
     height: auto !important;
     min-height: 0 !important;
     margin: 0 auto !important;
@@ -340,14 +340,16 @@ const bluetoothReceiptPrintStyle = `
     overflow: hidden !important;
     background: #fff !important;
     font-size: 6px !important;
+    -webkit-text-size-adjust: 100% !important;
+    text-size-adjust: 100% !important;
   }
   .bluetooth-print-page {
-    width: 58mm !important;
     width: 219px !important;
-    min-width: 58mm !important;
+    width: 58mm !important;
     min-width: 219px !important;
-    max-width: 58mm !important;
+    min-width: 58mm !important;
     max-width: 219px !important;
+    max-width: 58mm !important;
     height: auto !important;
     min-height: 0 !important;
     margin: 0 auto !important;
@@ -356,12 +358,18 @@ const bluetoothReceiptPrintStyle = `
     background: #fff !important;
     font-size: 6px !important;
     line-height: 1.28 !important;
+    -webkit-text-size-adjust: 100% !important;
+    text-size-adjust: 100% !important;
+  }
+  .bluetooth-print-page * {
+    -webkit-text-size-adjust: 100% !important;
+    text-size-adjust: 100% !important;
   }
   .bluetooth-print-page .receipt {
-    width: 44mm !important;
     width: 166px !important;
-    max-width: 44mm !important;
+    width: 44mm !important;
     max-width: 166px !important;
+    max-width: 44mm !important;
     margin: 0 auto 0 0 !important;
     padding: 3px 4px 0 8px !important;
     overflow: visible !important;
@@ -635,7 +643,7 @@ const buildBluetoothPrintPayload = async (orderInfo) => [
   {
     type: 4,
     content: [
-      '<meta name="viewport" content="width=219, initial-scale=1, maximum-scale=1">',
+      '<meta name="viewport" content="width=219, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no">',
       `<style>${bluetoothReceiptPrintStyle}</style>`,
       '<div class="bluetooth-print-page">',
       buildReceiptHtml(orderInfo, {
