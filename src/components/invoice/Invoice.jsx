@@ -25,6 +25,34 @@ const clampBluetoothReceiptScale = (value) => {
   return Math.min(1.35, Math.max(0.85, scale));
 };
 
+const getAutoBluetoothReceiptScale = () => {
+  try {
+    const userAgent = window.navigator.userAgent || "";
+    const isAndroid = /Android/i.test(userAgent);
+
+    if (!isAndroid) return 1;
+
+    const minViewportSide = Math.min(
+      window.innerWidth || 0,
+      window.innerHeight || 0
+    );
+    const minScreenSide = Math.min(
+      window.screen?.width || 0,
+      window.screen?.height || 0
+    );
+    const isSamsungTablet = /\bSM-[PX]\d|Galaxy Tab/i.test(userAgent);
+    const isTabletViewport = Math.max(minViewportSide, minScreenSide) >= 600;
+
+    if (isSamsungTablet || isTabletViewport) {
+      return 1.18;
+    }
+  } catch {
+    return 1;
+  }
+
+  return 1;
+};
+
 const getBluetoothReceiptScale = () => {
   try {
     const queryScale = new URLSearchParams(window.location.search).get(
@@ -52,7 +80,7 @@ const getBluetoothReceiptScale = () => {
     return 1;
   }
 
-  return 1;
+  return getAutoBluetoothReceiptScale();
 };
 
 const buildReceiptHtml = (orderInfo, { logoSrc = receiptMark } = {}) => {
