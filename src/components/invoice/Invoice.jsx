@@ -15,6 +15,46 @@ import {
 } from "../../utils/printReceipt";
 import receiptMark from "../../../../assets/Vector.svg";
 
+const BLUETOOTH_RECEIPT_SCALE_STORAGE_KEY = "niskalaBluetoothReceiptScale";
+
+const clampBluetoothReceiptScale = (value) => {
+  const scale = Number(value);
+
+  if (!Number.isFinite(scale)) return 1;
+
+  return Math.min(1.35, Math.max(0.85, scale));
+};
+
+const getBluetoothReceiptScale = () => {
+  try {
+    const queryScale = new URLSearchParams(window.location.search).get(
+      "receiptScale"
+    );
+
+    if (queryScale) {
+      const clampedQueryScale = clampBluetoothReceiptScale(queryScale);
+      window.localStorage.setItem(
+        BLUETOOTH_RECEIPT_SCALE_STORAGE_KEY,
+        String(clampedQueryScale)
+      );
+
+      return clampedQueryScale;
+    }
+
+    const storedScale = window.localStorage.getItem(
+      BLUETOOTH_RECEIPT_SCALE_STORAGE_KEY
+    );
+
+    if (storedScale) {
+      return clampBluetoothReceiptScale(storedScale);
+    }
+  } catch {
+    return 1;
+  }
+
+  return 1;
+};
+
 const buildReceiptHtml = (orderInfo, { logoSrc = receiptMark } = {}) => {
   const escapeHtml = (value) =>
     String(value ?? "")
@@ -375,6 +415,7 @@ const bluetoothReceiptPrintStyle = `
     overflow: visible !important;
     font-size: 6px !important;
     line-height: 1.28 !important;
+    zoom: var(--receipt-device-scale, 1) !important;
   }
   .bluetooth-print-page .brand-name {
     font-size: 10px !important;
@@ -639,20 +680,24 @@ const getReceiptLogoDataUrl = async () => {
   return receiptLogoDataUrlPromise;
 };
 
-const buildBluetoothPrintPayload = async (orderInfo) => [
-  {
-    type: 4,
-    content: [
-      '<meta name="viewport" content="width=219, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no">',
-      `<style>${bluetoothReceiptPrintStyle}</style>`,
-      '<div class="bluetooth-print-page">',
-      buildReceiptHtml(orderInfo, {
-        logoSrc: await getReceiptLogoDataUrl(),
-      }),
-      "</div>",
-    ].join(""),
-  },
-];
+const buildBluetoothPrintPayload = async (orderInfo) => {
+  const receiptScale = getBluetoothReceiptScale();
+
+  return [
+    {
+      type: 4,
+      content: [
+        '<meta name="viewport" content="width=219, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no">',
+        `<style>:root{--receipt-device-scale:${receiptScale};}${bluetoothReceiptPrintStyle}</style>`,
+        '<div class="bluetooth-print-page">',
+        buildReceiptHtml(orderInfo, {
+          logoSrc: await getReceiptLogoDataUrl(),
+        }),
+        "</div>",
+      ].join(""),
+    },
+  ];
+};
 
 const Invoice = ({ orderInfo, setShowInvoice }) => {
   const orderCode = orderInfo.orderId || orderInfo.orderCode || orderInfo.id;
