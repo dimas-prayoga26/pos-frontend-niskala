@@ -658,8 +658,11 @@ const bluetoothReceiptPrintStyle = `
 const cssPx = (value, scale) => `${Number((value * scale).toFixed(2))}px`;
 
 const buildBluetoothReceiptScaleStyle = (scale) => {
-  const px = (value) => cssPx(value, scale);
-  const fontScale = scale > 1 ? Math.min(1.42, scale * 1.06) : scale;
+  const layoutScale = scale > 1 ? 1 : scale;
+  const feedScale = Math.max(1, scale);
+  const px = (value) => cssPx(value, layoutScale);
+  const feedPx = (value) => cssPx(value, feedScale);
+  const fontScale = scale > 1 ? Math.min(1.55, scale * 1.16) : scale;
   const fontPx = (value) => cssPx(value, fontScale);
 
   return `
@@ -674,14 +677,14 @@ const buildBluetoothReceiptScaleStyle = (scale) => {
     .bluetooth-print-page .receipt {
       width: ${px(166)} !important;
       max-width: ${px(166)} !important;
-      padding: ${px(3)} ${px(4)} 0 ${px(8)} !important;
+      padding: ${px(3)} ${px(4)} ${feedPx(78)} ${px(8)} !important;
       font-size: ${fontPx(6)} !important;
       zoom: 1 !important;
     }
     .bluetooth-print-page .receipt::after {
       content: "";
       display: block !important;
-      height: ${px(48)} !important;
+      height: ${feedPx(28)} !important;
     }
     .bluetooth-print-page .logo-mark {
       width: ${px(24)} !important;
