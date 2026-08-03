@@ -1,0 +1,333 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Tablet Receipt Size Preview</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+
+      :root {
+        --paper-width: 219px;
+        --receipt-width: 192.56px;
+        --header-width: 127.6px;
+        --content-width: 185.6px;
+        --totals-width: 162.4px;
+        --separator-width: 200px;
+        --default-line-width: 147.5px;
+        --section-line-width: 160px;
+        --line-weight: 2px;
+        --header-shift: -6.96px;
+        --content-shift: -6.96px;
+      }
+
+      html,
+      body {
+        margin: 0;
+        min-height: 100%;
+        background: #e5e5e5;
+        color: #111;
+        font-family: Arial, Helvetica, sans-serif;
+      }
+
+      .page {
+        min-height: 100vh;
+        display: flex;
+        gap: 28px;
+        align-items: flex-start;
+        justify-content: center;
+        padding: 24px;
+      }
+
+      .paper {
+        width: var(--paper-width);
+        min-height: 462px;
+        background: #fff;
+        box-shadow: 0 14px 36px rgba(0, 0, 0, 0.2);
+        padding-top: 18px;
+      }
+
+      .receipt {
+        width: var(--receipt-width);
+        margin: 0 auto;
+        padding: 3.48px 4.64px 156px 9.28px;
+        color: #000;
+        font-family: "Arial Narrow", Arial, Helvetica, sans-serif;
+        font-size: 12px;
+        font-weight: 900;
+        line-height: 1.28;
+        -webkit-text-stroke: 0.06px #000;
+      }
+
+      .brand {
+        width: var(--header-width);
+        margin-left: var(--header-shift);
+        margin-right: auto;
+        margin-bottom: 3.48px;
+        text-align: center;
+      }
+
+      .logo-mark {
+        display: block;
+        width: 27.84px;
+        height: auto;
+        margin: 0 auto 3.48px;
+        filter: grayscale(1) contrast(400%) brightness(0);
+      }
+
+      .brand-name {
+        font-family: Georgia, "Times New Roman", serif;
+        font-size: 20px;
+        line-height: 1;
+      }
+
+      .brand-subtitle {
+        font-size: 8px;
+        line-height: 1.1;
+      }
+
+      .receipt-title {
+        width: var(--header-width);
+        margin: 0 auto 4.64px var(--header-shift);
+        text-align: center;
+        text-transform: uppercase;
+        font-size: 12px;
+      }
+
+      .meta,
+      .item {
+        width: var(--content-width);
+        margin-left: var(--content-shift);
+        margin-right: auto;
+      }
+
+      .meta {
+        padding: 3.48px 0;
+      }
+
+      .row,
+      .item-main,
+      .item-detail,
+      .total-block {
+        display: grid;
+        align-items: baseline;
+      }
+
+      .row {
+        grid-template-columns: 67.28px auto;
+        gap: 6.96px;
+      }
+
+      .row + .row {
+        margin-top: 2.32px;
+      }
+
+      .item-main {
+        grid-template-columns: max-content auto;
+        column-gap: 8.12px;
+      }
+
+      .item-main span {
+        max-width: 106.72px;
+      }
+
+      .item-option,
+      .note,
+      .footer {
+        font-size: 10px;
+      }
+
+      .item-detail {
+        grid-template-columns: 64.96px 71.92px;
+        gap: 9.28px;
+      }
+
+      .totals,
+      .grand-total {
+        width: var(--totals-width);
+        margin-left: var(--content-shift);
+        margin-right: auto;
+      }
+
+      .totals {
+        display: grid;
+        grid-template-columns: 64.96px 71.92px;
+        column-gap: 9.28px;
+        row-gap: 3.48px;
+        padding: 2.32px 0;
+      }
+
+      .grand-total .total-block {
+        grid-template-columns: 64.96px 73.08px;
+        gap: 9.28px;
+        margin-top: 3.48px;
+        font-size: 15px;
+      }
+
+      .separator {
+        width: var(--separator-width);
+        margin: 2.32px auto 2.32px var(--content-shift);
+      }
+
+      .line {
+        height: 0;
+        width: var(--section-line-width);
+        border-bottom: var(--line-weight) dashed #000;
+      }
+
+      .item-separator .line {
+        border-bottom-style: dotted;
+      }
+
+      .footer {
+        width: var(--header-width);
+        margin: 5.8px auto 9.28px var(--content-shift);
+        text-align: center;
+      }
+
+      .panel {
+        width: min(420px, calc(100vw - 48px));
+        background: #fff;
+        border: 1px solid #d2d2d2;
+        padding: 18px;
+      }
+
+      .panel h1 {
+        margin: 0 0 14px;
+        font-size: 18px;
+      }
+
+      .panel p {
+        margin: 8px 0;
+        font-size: 13px;
+        line-height: 1.4;
+      }
+
+      .sample {
+        margin: 14px 0;
+      }
+
+      .sample-label {
+        margin-bottom: 5px;
+        font-size: 12px;
+        color: #444;
+      }
+
+      .sample-box {
+        width: var(--separator-width);
+        background: #f5f5f5;
+        padding: 8px 0;
+      }
+
+      .sample-line-default,
+      .sample-line-section {
+        height: 0;
+        border-bottom: var(--line-weight) dashed #000;
+      }
+
+      .sample-line-default {
+        width: var(--default-line-width);
+      }
+
+      .sample-line-section {
+        width: var(--section-line-width);
+      }
+
+      code {
+        background: #f3f3f3;
+        padding: 2px 5px;
+        border-radius: 3px;
+      }
+
+      @media (max-width: 720px) {
+        .page {
+          flex-direction: column;
+          align-items: center;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="page">
+      <section class="paper" aria-label="Receipt preview">
+        <div class="receipt">
+          <div class="brand">
+            <img class="logo-mark" src="/assets/Vector.svg" alt="Niskala Coffee mark" />
+            <div class="brand-name">NISKALA</div>
+            <div class="brand-subtitle">COFFEE</div>
+          </div>
+          <p class="receipt-title">Order Receipt</p>
+
+          <div class="separator"><div class="line"></div></div>
+
+          <div class="meta">
+            <div class="row"><span>Order ID :</span><strong>ORD-000101</strong></div>
+            <div class="row"><span>Customer :</span><strong>Guest-5</strong></div>
+            <div class="row"><span>Date :</span><strong>03/08/26 15:40</strong></div>
+            <div class="row"><span>Payment :</span><strong>Tunai</strong></div>
+          </div>
+
+          <div class="separator"><div class="line"></div></div>
+
+          <div class="item">
+            <div class="item-main">
+              <span>Cappuccino</span>
+              <strong class="item-option">Cold</strong>
+            </div>
+            <div class="item-detail">
+              <span class="note">Qty: 10</span>
+              <strong>Rp 180.000</strong>
+            </div>
+            <div class="note">Size: Reguler</div>
+          </div>
+
+          <div class="separator item-separator"><div class="line"></div></div>
+
+          <div class="totals">
+            <span>Subtotal</span><strong>Rp 180.000</strong>
+            <span>Tax</span><strong>Rp 0</strong>
+          </div>
+
+          <div class="separator"><div class="line"></div></div>
+
+          <div class="grand-total">
+            <div class="total-block">
+              <span>Total</span><strong>Rp 180.000</strong>
+            </div>
+          </div>
+
+          <div class="separator"><div class="line"></div></div>
+          <div class="footer">Thank you for your order</div>
+        </div>
+      </section>
+
+      <aside class="panel" aria-label="Current dimensions">
+        <h1>Ukuran Tablet Sekarang</h1>
+        <p><strong>receiptScale:</strong> <code>2</code></p>
+        <p><strong>Font:</strong> <code>2x</code></p>
+        <p><strong>Layout konten:</strong> <code>1.16x</code></p>
+        <p><strong>Garis:</strong> <code>1.25x</code></p>
+        <p><strong>Tebal garis:</strong> <code>2px</code></p>
+        <p><strong>Header shift:</strong> <code>-6.96px</code></p>
+        <p><strong>Konten/garis/footer shift:</strong> <code>-6.96px</code></p>
+
+        <div class="sample">
+          <div class="sample-label">Garis default: 147.5px</div>
+          <div class="sample-box"><div class="sample-line-default"></div></div>
+        </div>
+
+        <div class="sample">
+          <div class="sample-label">Garis section: 160px</div>
+          <div class="sample-box"><div class="sample-line-section"></div></div>
+        </div>
+
+        <p>
+          Garis section dipakai di bawah Order Receipt, bawah Payment, bawah item,
+          bawah Tax, dan bawah Total.
+        </p>
+      </aside>
+    </main>
+  </body>
+</html>

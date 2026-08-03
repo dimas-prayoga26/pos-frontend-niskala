@@ -22,7 +22,7 @@ const clampBluetoothReceiptScale = (value) => {
 
   if (!Number.isFinite(scale)) return 1;
 
-  return Math.min(1.4, Math.max(0.85, scale));
+  return Math.min(2.2, Math.max(0.85, scale));
 };
 
 const getAutoBluetoothReceiptScale = () => {
@@ -44,7 +44,7 @@ const getAutoBluetoothReceiptScale = () => {
     const isTabletViewport = Math.max(minViewportSide, minScreenSide) >= 600;
 
     if (isSamsungTablet || isTabletViewport) {
-      return 1.335;
+      return 2;
     }
   } catch {
     return 1;
@@ -658,12 +658,17 @@ const bluetoothReceiptPrintStyle = `
 const cssPx = (value, scale) => `${Number((value * scale).toFixed(2))}px`;
 
 const buildBluetoothReceiptScaleStyle = (scale) => {
-  const layoutScale = scale > 1 ? 1 : scale;
+  const layoutScale = scale > 1 ? Math.min(1.16, scale) : scale;
+  const lineScale = scale > 1 ? Math.min(1.25, scale) : scale;
   const feedScale = Math.max(1, scale);
   const px = (value) => cssPx(value, layoutScale);
+  const linePx = (value) => cssPx(value, lineScale);
   const feedPx = (value) => cssPx(value, feedScale);
-  const fontScale = scale > 1 ? Math.min(1.55, scale * 1.16) : scale;
+  const fontScale = scale;
   const fontPx = (value) => cssPx(value, fontScale);
+  const lineWeight = scale > 1 ? "2px" : "1px";
+  const headerShift = scale > 1 ? px(-6) : "0";
+  const contentShift = scale > 1 ? px(-20) : "0";
 
   return `
     html,
@@ -677,14 +682,15 @@ const buildBluetoothReceiptScaleStyle = (scale) => {
     .bluetooth-print-page .receipt {
       width: ${px(166)} !important;
       max-width: ${px(166)} !important;
-      padding: ${px(3)} ${px(4)} ${feedPx(78)} ${px(8)} !important;
+      margin: 0 auto !important;
+      padding: ${px(3)} ${px(4)} ${feedPx(18)} ${px(8)} !important;
       font-size: ${fontPx(6)} !important;
       zoom: 1 !important;
     }
     .bluetooth-print-page .receipt::after {
       content: "";
       display: block !important;
-      height: ${feedPx(28)} !important;
+      height: ${feedPx(6)} !important;
     }
     .bluetooth-print-page .logo-mark {
       width: ${px(24)} !important;
@@ -692,7 +698,8 @@ const buildBluetoothReceiptScaleStyle = (scale) => {
     }
     .bluetooth-print-page .brand {
       width: ${px(110)} !important;
-      margin-left: ${px(1)} !important;
+      margin-left: ${headerShift} !important;
+      margin-right: auto !important;
       margin-bottom: ${px(3)} !important;
     }
     .bluetooth-print-page .brand-name {
@@ -703,12 +710,14 @@ const buildBluetoothReceiptScaleStyle = (scale) => {
     }
     .bluetooth-print-page .receipt-title {
       width: ${px(110)} !important;
-      margin: 0 0 ${px(4)} ${px(3)} !important;
+      margin: 0 auto ${px(4)} ${headerShift} !important;
       font-size: ${fontPx(6)} !important;
     }
     .bluetooth-print-page .meta,
     .bluetooth-print-page .item {
       width: ${px(160)} !important;
+      margin-left: ${contentShift} !important;
+      margin-right: auto !important;
     }
     .bluetooth-print-page .meta {
       padding: ${px(3)} 0 !important;
@@ -717,18 +726,19 @@ const buildBluetoothReceiptScaleStyle = (scale) => {
       padding: ${px(2)} 0 !important;
     }
     .bluetooth-print-page .receipt-separator {
-      width: ${px(160)} !important;
-      margin: ${px(2)} auto !important;
+      width: ${linePx(160)} !important;
+      margin: ${px(2)} auto ${px(2)} ${contentShift} !important;
     }
     .bluetooth-print-page .receipt-line {
-      width: ${px(100)} !important;
+      width: ${linePx(118)} !important;
+      border-bottom-width: ${lineWeight} !important;
     }
     .bluetooth-print-page .title-separator .receipt-line,
     .bluetooth-print-page .meta-separator .receipt-line,
     .bluetooth-print-page .item-separator .receipt-line,
     .bluetooth-print-page .tax-separator .receipt-line,
     .bluetooth-print-page .total-separator .receipt-line {
-      width: ${px(110)} !important;
+      width: ${linePx(128)} !important;
     }
     .bluetooth-print-page .meta-row span {
       flex-basis: ${px(58)} !important;
@@ -765,20 +775,24 @@ const buildBluetoothReceiptScaleStyle = (scale) => {
       font-size: ${fontPx(6)} !important;
     }
     .bluetooth-print-page .totals {
-      grid-template-columns: ${px(48)} ${px(62)} !important;
+      grid-template-columns: ${px(56)} ${px(62)} !important;
       column-gap: ${px(8)} !important;
       row-gap: ${px(3)} !important;
       width: ${px(140)} !important;
       margin-top: ${px(2)} !important;
+      margin-left: ${contentShift} !important;
+      margin-right: auto !important;
       margin-bottom: ${px(2)} !important;
       padding: ${px(2)} 0 ${px(2)} !important;
     }
     .bluetooth-print-page .receipt-grand-total {
       width: ${px(140)} !important;
+      margin-left: ${contentShift} !important;
+      margin-right: auto !important;
       padding-bottom: ${px(2)} !important;
     }
     .bluetooth-print-page .total-block {
-      grid-template-columns: ${px(48)} ${px(63)} !important;
+      grid-template-columns: ${px(56)} ${px(63)} !important;
       gap: ${px(8)} !important;
       margin-top: ${px(3)} !important;
     }
@@ -795,7 +809,8 @@ const buildBluetoothReceiptScaleStyle = (scale) => {
     .bluetooth-print-page .footer {
       width: ${px(110)} !important;
       margin-top: ${px(5)} !important;
-      margin-left: ${px(1)} !important;
+      margin-left: ${contentShift} !important;
+      margin-right: auto !important;
       margin-bottom: ${px(8)} !important;
       font-size: ${fontPx(4)} !important;
     }
