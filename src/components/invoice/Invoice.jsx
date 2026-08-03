@@ -22,7 +22,7 @@ const clampBluetoothReceiptScale = (value) => {
 
   if (!Number.isFinite(scale)) return 1;
 
-  return Math.min(1.28, Math.max(0.85, scale));
+  return Math.min(1.4, Math.max(0.85, scale));
 };
 
 const getAutoBluetoothReceiptScale = () => {
@@ -44,7 +44,7 @@ const getAutoBluetoothReceiptScale = () => {
     const isTabletViewport = Math.max(minViewportSide, minScreenSide) >= 600;
 
     if (isSamsungTablet || isTabletViewport) {
-      return 1.24;
+      return 1.335;
     }
   } catch {
     return 1;
