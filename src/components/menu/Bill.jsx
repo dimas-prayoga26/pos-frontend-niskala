@@ -441,6 +441,7 @@ const Bill = () => {
               .total-block strong {
                 flex: 1 1 auto;
                 text-align: right;
+                white-space: nowrap;
               }
               .grand {
                 border-top: 1px dashed #000;

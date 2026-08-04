@@ -1,0 +1,565 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Receipt Device Preview</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+
+      :root {
+        --paper-width: 219px;
+        --paper-visual-width: 219px;
+        --paper-min-height: 462px;
+        --receipt-width: 166px;
+        --header-width: 110px;
+        --content-width: 160px;
+        --totals-width: 140px;
+        --price-label-column: 56px;
+        --price-value-column: 62px;
+        --total-value-column: 63px;
+        --separator-width: 160px;
+        --line-width: 118px;
+        --section-line-width: 128px;
+        --line-weight: 1px;
+        --header-shift: 0px;
+        --content-shift: 0px;
+        --paper-shift: -20px;
+        --font-main: 6px;
+        --font-note: 5px;
+        --font-brand: 10px;
+        --font-subtitle: 4px;
+        --font-grand: 7.5px;
+        --brand-name-shift: 0px;
+        --footer-shift: 0px;
+        --footer-feed: 18px;
+      }
+
+      html,
+      body {
+        margin: 0;
+        min-height: 100%;
+        background: #e5e5e5;
+        color: #000;
+        font-family: Arial, Helvetica, sans-serif;
+      }
+
+      .page {
+        min-height: 100vh;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 24px;
+        align-items: flex-start;
+        justify-content: center;
+        padding: 24px;
+      }
+
+      .paper {
+        width: var(--paper-width);
+        min-height: var(--paper-min-height);
+        position: relative;
+        padding-top: 18px;
+      }
+
+      .paper::before {
+        content: "";
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        left: 0;
+        width: var(--paper-visual-width);
+        z-index: 0;
+        background: #fff;
+        box-shadow: 0 14px 36px rgba(0, 0, 0, 0.18);
+        transform: translateX(var(--paper-shift));
+      }
+
+      .receipt {
+        position: relative;
+        z-index: 1;
+        width: var(--receipt-width);
+        margin: 0 auto;
+        padding: 3px 4px var(--footer-feed) 8px;
+        color: #000;
+        font-family: "Arial Narrow", Arial, Helvetica, sans-serif;
+        font-size: var(--font-main);
+        font-weight: 900;
+        line-height: 1.28;
+        letter-spacing: 0;
+        text-rendering: geometricPrecision;
+        -webkit-text-stroke: 0.06px #000;
+        print-color-adjust: exact;
+      }
+
+      .brand {
+        width: var(--header-width);
+        margin-left: var(--header-shift);
+        margin-right: auto;
+        margin-bottom: 3px;
+        text-align: center;
+      }
+
+      .logo-mark {
+        display: block;
+        width: calc(24px * var(--layout-scale));
+        height: auto;
+        margin: 0 auto 3px;
+        filter: grayscale(1) contrast(400%) brightness(0);
+      }
+
+      .brand-name {
+        font-family: Georgia, "Times New Roman", serif;
+        font-size: var(--font-brand);
+        line-height: 1;
+        transform: translateX(var(--brand-name-shift));
+      }
+
+      .brand-subtitle {
+        font-size: var(--font-subtitle);
+        line-height: 1.1;
+      }
+
+      .receipt-title {
+        width: var(--header-width);
+        margin: 0 auto 4px var(--header-shift);
+        text-align: center;
+        text-transform: uppercase;
+        font-size: var(--font-main);
+      }
+
+      .meta,
+      .item,
+      .totals,
+      .receipt-grand-total,
+      .footer {
+        margin-left: var(--content-shift);
+        margin-right: auto;
+      }
+
+      .meta,
+      .item {
+        width: var(--content-width);
+      }
+
+      .meta {
+        padding: 3px 0;
+      }
+
+      .item {
+        padding: 2px 0;
+      }
+
+      .row,
+      .item-main,
+      .item-detail,
+      .totals,
+      .total-block {
+        display: grid;
+        align-items: baseline;
+      }
+
+      .row {
+        grid-template-columns: calc(58px * var(--layout-scale)) auto;
+        column-gap: calc(6px * var(--layout-scale));
+      }
+
+      .row + .row {
+        margin-top: calc(2px * var(--layout-scale));
+      }
+
+      .item-main {
+        grid-template-columns: max-content auto;
+        column-gap: calc(7px * var(--layout-scale));
+      }
+
+      .item-main span {
+        max-width: calc(92px * var(--layout-scale));
+        overflow-wrap: anywhere;
+      }
+
+      .item-option,
+      .note,
+      .footer {
+        font-size: var(--font-note);
+      }
+
+      .item-detail {
+        grid-template-columns: var(--price-label-column)
+          var(--price-value-column);
+        gap: calc(8px * var(--layout-scale));
+      }
+
+      .item-detail strong {
+        max-width: calc(78px * var(--layout-scale));
+        margin-right: calc(18px * var(--layout-scale));
+        font-size: var(--font-main);
+      }
+
+      .totals {
+        width: var(--totals-width);
+        grid-template-columns: var(--price-label-column)
+          var(--price-value-column);
+        column-gap: calc(8px * var(--layout-scale));
+        row-gap: calc(3px * var(--layout-scale));
+        margin-top: calc(2px * var(--layout-scale));
+        margin-bottom: calc(2px * var(--layout-scale));
+        padding: calc(2px * var(--layout-scale)) 0;
+      }
+
+      .receipt-grand-total {
+        width: var(--totals-width);
+        padding-bottom: calc(2px * var(--layout-scale));
+      }
+
+      .total-block {
+        grid-template-columns: var(--price-label-column)
+          var(--total-value-column);
+        gap: calc(8px * var(--layout-scale));
+        margin-top: calc(3px * var(--layout-scale));
+      }
+
+      .total-block strong {
+        min-width: 0;
+        max-width: none;
+        font-size: var(--font-main);
+        white-space: nowrap;
+      }
+
+      .grand {
+        margin-top: calc(4px * var(--layout-scale));
+        margin-bottom: calc(4px * var(--layout-scale));
+        padding-top: calc(4px * var(--layout-scale));
+        font-size: var(--font-grand);
+      }
+
+      .receipt-separator {
+        display: flex;
+        justify-content: flex-start;
+        width: var(--separator-width);
+        margin: calc(2px * var(--layout-scale)) auto
+          calc(2px * var(--layout-scale)) var(--content-shift);
+      }
+
+      .receipt-line {
+        display: block;
+        width: var(--line-width);
+        height: 0;
+        border-bottom: var(--line-weight) dashed #000;
+      }
+
+      .title-separator .receipt-line,
+      .meta-separator .receipt-line,
+      .item-separator .receipt-line,
+      .tax-separator .receipt-line,
+      .total-separator .receipt-line {
+        width: var(--section-line-width);
+      }
+
+      .item-separator .receipt-line {
+        border-bottom-style: dotted;
+      }
+
+      .footer {
+        width: var(--header-width);
+        transform: translateX(var(--footer-shift));
+        margin-top: calc(5px * var(--layout-scale));
+        margin-bottom: calc(8px * var(--layout-scale));
+        text-align: center;
+      }
+
+      .panel {
+        width: min(430px, calc(100vw - 48px));
+        background: #fff;
+        border: 1px solid #d0d0d0;
+        padding: 16px;
+      }
+
+      .panel h1 {
+        margin: 0 0 12px;
+        font-size: 18px;
+      }
+
+      .profile-links {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin: 12px 0;
+      }
+
+      .profile-links a {
+        color: #0b5bd3;
+        font-size: 13px;
+        font-weight: 700;
+        text-decoration: none;
+      }
+
+      .profile-links a.active {
+        color: #000;
+        text-decoration: underline;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 12px;
+        font-size: 12px;
+      }
+
+      td {
+        border-top: 1px solid #e3e3e3;
+        padding: 6px 0;
+        vertical-align: top;
+      }
+
+      td:first-child {
+        color: #555;
+        width: 45%;
+      }
+
+      code {
+        background: #f2f2f2;
+        padding: 2px 4px;
+        font-size: 12px;
+      }
+
+      @media print {
+        body {
+          background: #fff;
+        }
+
+        .page {
+          display: block;
+          padding: 0;
+        }
+
+        .panel {
+          display: none;
+        }
+
+        .paper {
+          box-shadow: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="page">
+      <section class="paper">
+        <div class="receipt">
+          <div class="brand">
+            <img class="logo-mark" src="/assets/Vector.svg" alt="" />
+            <div class="brand-name">NISKALA</div>
+            <div class="brand-subtitle">COFFEE</div>
+          </div>
+          <p class="receipt-title">Order Receipt</p>
+          <div class="receipt-separator title-separator">
+            <div class="receipt-line"></div>
+          </div>
+          <div class="meta">
+            <div class="row"><span>Order ID</span><strong>: &nbsp; ORD-000061</strong></div>
+            <div class="row"><span>Customer</span><strong>: &nbsp; Testing</strong></div>
+            <div class="row"><span>Date</span><strong>: &nbsp; 31/07/26 15:00</strong></div>
+            <div class="row"><span>Payment</span><strong>: &nbsp; Tunai</strong></div>
+          </div>
+          <div class="receipt-separator meta-separator">
+            <div class="receipt-line"></div>
+          </div>
+          <div class="item">
+            <div class="item-main">
+              <strong>Vanilla Latte</strong>
+              <span class="item-option">Cold</span>
+            </div>
+            <div class="item-detail">
+              <span>Qty: 5</span>
+              <strong>Rp 100.000</strong>
+            </div>
+            <div class="note">Size: Reguler</div>
+          </div>
+          <div class="receipt-separator item-separator">
+            <div class="receipt-line"></div>
+          </div>
+          <div class="totals">
+            <div>Subtotal</div>
+            <strong>Rp 100.000</strong>
+            <div>Tax</div>
+            <strong>Rp 0</strong>
+          </div>
+          <div class="receipt-separator tax-separator">
+            <div class="receipt-line"></div>
+          </div>
+          <div class="receipt-grand-total">
+            <div class="total-block grand">
+              <div>Total</div>
+              <strong>Rp 100.000</strong>
+            </div>
+          </div>
+          <div class="receipt-separator total-separator">
+            <div class="receipt-line"></div>
+          </div>
+          <div class="footer">Thank you for your order</div>
+        </div>
+      </section>
+
+      <aside class="panel">
+        <h1 id="profileTitle">Receipt Device Preview</h1>
+        <div class="profile-links">
+          <a href="?profile=solana" data-profile="solana">Solana</a>
+          <a href="?profile=samsung" data-profile="samsung">Samsung</a>
+          <a href="?profile=advan" data-profile="advan">Advan HD</a>
+        </div>
+        <p>
+          URL print aplikasi:
+          <code id="printUrl">/menu?receiptProfile=solana</code>
+        </p>
+        <table>
+          <tbody id="profileValues"></tbody>
+        </table>
+      </aside>
+    </main>
+
+    <script>
+      const profiles = {
+        solana: {
+          label: "Solana Seeker",
+          resolution: "2670 x 1200",
+          scale: 1,
+        },
+        samsung: {
+          label: "Samsung Galaxy S6 Lite",
+          resolution: "2000 x 1200",
+          scale: 2,
+        },
+        advan: {
+          label: "Advan Tab A10 HD",
+          resolution: "1280 x 800",
+          scale: 3,
+        },
+      };
+
+      const cssPx = (value, scale) =>
+        `${Number((value * scale).toFixed(2))}px`;
+
+      const params = new URLSearchParams(window.location.search);
+      const selectedProfile = profiles[params.get("profile")]
+        ? params.get("profile")
+        : "solana";
+      const profile = profiles[selectedProfile];
+      const scale = profile.scale;
+      const isAdvanProfile = selectedProfile === "advan";
+      const layoutScale = isAdvanProfile
+        ? 1.45
+        : scale > 1
+          ? Math.min(1.16, scale)
+          : scale;
+      const lineScale = isAdvanProfile
+        ? 1.5
+        : scale > 1
+          ? Math.min(1.25, scale)
+          : scale;
+      const feedScale = Math.max(1, scale);
+      const headerShift = scale > 1
+        ? cssPx(isAdvanProfile ? -12 : -6, layoutScale)
+        : "0px";
+      const contentShift = scale > 1
+        ? cssPx(isAdvanProfile ? -40 : -20, layoutScale)
+        : "0px";
+      const lineWeight = scale > 1 ? "2px" : "1px";
+
+      const root = document.documentElement;
+      root.style.setProperty("--layout-scale", layoutScale);
+      root.style.setProperty("--receipt-width", cssPx(166, layoutScale));
+      root.style.setProperty(
+        "--header-width",
+        isAdvanProfile ? "120.5px" : cssPx(110, layoutScale)
+      );
+      root.style.setProperty(
+        "--content-width",
+        isAdvanProfile ? "260px" : cssPx(160, layoutScale)
+      );
+      root.style.setProperty("--totals-width", cssPx(140, layoutScale));
+      root.style.setProperty(
+        "--price-label-column",
+        cssPx(isAdvanProfile ? 68 : 56, layoutScale)
+      );
+      root.style.setProperty(
+        "--price-value-column",
+        cssPx(isAdvanProfile ? 95 : 62, layoutScale)
+      );
+      root.style.setProperty(
+        "--total-value-column",
+        cssPx(isAdvanProfile ? 95 : 63, layoutScale)
+      );
+      root.style.setProperty("--separator-width", cssPx(160, lineScale));
+      root.style.setProperty("--line-width", cssPx(118, lineScale));
+      root.style.setProperty("--section-line-width", cssPx(128, lineScale));
+      root.style.setProperty("--line-weight", lineWeight);
+      root.style.setProperty("--header-shift", headerShift);
+      root.style.setProperty("--content-shift", contentShift);
+      root.style.setProperty(
+        "--paper-shift",
+        selectedProfile === "advan" ? "-100px" : "-20px"
+      );
+      root.style.setProperty(
+        "--paper-visual-width",
+        selectedProfile === "advan" ? "349px" : "219px"
+      );
+      root.style.setProperty("--font-main", cssPx(6, scale));
+      root.style.setProperty("--font-note", cssPx(5, scale));
+      root.style.setProperty("--font-brand", cssPx(10, scale));
+      root.style.setProperty("--font-subtitle", cssPx(4, scale));
+      root.style.setProperty("--font-grand", cssPx(7.5, scale));
+      root.style.setProperty(
+        "--brand-name-shift",
+        isAdvanProfile ? "-6px" : "0px"
+      );
+      root.style.setProperty(
+        "--footer-shift",
+        isAdvanProfile ? "34px" : "0px"
+      );
+      root.style.setProperty("--footer-feed", cssPx(18, feedScale));
+
+      document.querySelectorAll("[data-profile]").forEach((link) => {
+        link.classList.toggle(
+          "active",
+          link.dataset.profile === selectedProfile
+        );
+      });
+
+      document.getElementById(
+        "profileTitle"
+      ).textContent = `${profile.label} (${profile.resolution})`;
+      document.getElementById(
+        "printUrl"
+      ).textContent = `/menu?receiptProfile=${selectedProfile}`;
+
+      const values = [
+        ["profile", selectedProfile],
+        ["scale", scale],
+        ["layoutScale", layoutScale],
+        ["lineScale", lineScale],
+        ["receipt width", cssPx(166, layoutScale)],
+        ["content width", isAdvanProfile ? "260px" : cssPx(160, layoutScale)],
+        ["price label column", cssPx(isAdvanProfile ? 68 : 56, layoutScale)],
+        ["price value column", cssPx(isAdvanProfile ? 95 : 62, layoutScale)],
+        ["brand name shift", isAdvanProfile ? "-6px" : "0px"],
+        ["footer shift", isAdvanProfile ? "34px" : "0px"],
+        ["header shift", headerShift],
+        ["content shift", contentShift],
+        [
+          "paper visual",
+          selectedProfile === "advan" ? "349px / -100px" : "219px / -20px",
+        ],
+        ["separator width", cssPx(160, lineScale)],
+        ["line width", cssPx(128, lineScale)],
+        ["font utama", cssPx(6, scale)],
+        ["font brand", cssPx(10, scale)],
+      ];
+
+      document.getElementById("profileValues").innerHTML = values
+        .map(([label, value]) => `<tr><td>${label}</td><td><code>${value}</code></td></tr>`)
+        .join("");
+    </script>
+  </body>
+</html>

@@ -16,13 +16,26 @@ import {
 import receiptMark from "../../../../assets/Vector.svg";
 
 const BLUETOOTH_RECEIPT_SCALE_STORAGE_KEY = "niskalaBluetoothReceiptScale";
+const BLUETOOTH_RECEIPT_PROFILE_STORAGE_KEY = "niskalaBluetoothReceiptProfile";
+
+const BLUETOOTH_RECEIPT_PROFILES = {
+  solana: 1,
+  samsung: 2,
+  advan: 3,
+};
 
 const clampBluetoothReceiptScale = (value) => {
   const scale = Number(value);
 
   if (!Number.isFinite(scale)) return 1;
 
-  return Math.min(2.2, Math.max(0.85, scale));
+  return Math.min(3, Math.max(0.85, scale));
+};
+
+const getBluetoothReceiptProfileScale = (profileName) => {
+  const normalizedProfileName = String(profileName ?? "").trim().toLowerCase();
+
+  return BLUETOOTH_RECEIPT_PROFILES[normalizedProfileName] || null;
 };
 
 const getAutoBluetoothReceiptScale = () => {
@@ -40,11 +53,23 @@ const getAutoBluetoothReceiptScale = () => {
       window.screen?.width || 0,
       window.screen?.height || 0
     );
+    const maxScreenSide = Math.max(
+      window.screen?.width || 0,
+      window.screen?.height || 0
+    );
     const isSamsungTablet = /\bSM-[PX]\d|Galaxy Tab/i.test(userAgent);
     const isTabletViewport = Math.max(minViewportSide, minScreenSide) >= 600;
 
-    if (isSamsungTablet || isTabletViewport) {
-      return 2;
+    if (isSamsungTablet) {
+      return BLUETOOTH_RECEIPT_PROFILES.samsung;
+    }
+
+    if (isTabletViewport && maxScreenSide > 0 && maxScreenSide <= 1400) {
+      return BLUETOOTH_RECEIPT_PROFILES.advan;
+    }
+
+    if (isTabletViewport) {
+      return BLUETOOTH_RECEIPT_PROFILES.samsung;
     }
   } catch {
     return 1;
@@ -58,6 +83,9 @@ const getBluetoothReceiptScale = () => {
     const queryScale = new URLSearchParams(window.location.search).get(
       "receiptScale"
     );
+    const queryProfile = new URLSearchParams(window.location.search).get(
+      "receiptProfile"
+    );
 
     if (queryScale) {
       const clampedQueryScale = clampBluetoothReceiptScale(queryScale);
@@ -69,12 +97,35 @@ const getBluetoothReceiptScale = () => {
       return clampedQueryScale;
     }
 
+    if (queryProfile) {
+      const profileScale = getBluetoothReceiptProfileScale(queryProfile);
+
+      if (profileScale) {
+        window.localStorage.setItem(
+          BLUETOOTH_RECEIPT_PROFILE_STORAGE_KEY,
+          queryProfile.trim().toLowerCase()
+        );
+        window.localStorage.removeItem(BLUETOOTH_RECEIPT_SCALE_STORAGE_KEY);
+
+        return profileScale;
+      }
+    }
+
     const storedScale = window.localStorage.getItem(
       BLUETOOTH_RECEIPT_SCALE_STORAGE_KEY
     );
 
     if (storedScale) {
       return clampBluetoothReceiptScale(storedScale);
+    }
+
+    const storedProfile = window.localStorage.getItem(
+      BLUETOOTH_RECEIPT_PROFILE_STORAGE_KEY
+    );
+    const storedProfileScale = getBluetoothReceiptProfileScale(storedProfile);
+
+    if (storedProfileScale) {
+      return storedProfileScale;
     }
   } catch {
     return 1;
@@ -376,6 +427,7 @@ const receiptPrintStyle = `
   .total-block strong {
     flex: 1 1 auto;
     text-align: right;
+    white-space: nowrap;
   }
   .grand {
     border-top: 1px dashed #000;
@@ -620,13 +672,13 @@ const bluetoothReceiptPrintStyle = `
     margin-left: 0 !important;
     margin-top: 3px !important;
   }
-  .bluetooth-print-page .total-block strong {
-    min-width: 0 !important;
-    max-width: 62px !important;
-    overflow: visible !important;
-    text-align: left !important;
-    white-space: nowrap !important;
-    font-size: 6px !important;
+    .bluetooth-print-page .total-block strong {
+      min-width: 0 !important;
+      max-width: none !important;
+      overflow: visible !important;
+      text-align: left !important;
+      white-space: nowrap !important;
+      font-size: 6px !important;
   }
   .bluetooth-print-page .receipt-grand-total .total-block span {
     text-align: left !important;
@@ -658,8 +710,17 @@ const bluetoothReceiptPrintStyle = `
 const cssPx = (value, scale) => `${Number((value * scale).toFixed(2))}px`;
 
 const buildBluetoothReceiptScaleStyle = (scale) => {
-  const layoutScale = scale > 1 ? Math.min(1.16, scale) : scale;
-  const lineScale = scale > 1 ? Math.min(1.25, scale) : scale;
+  const isAdvanScale = scale >= BLUETOOTH_RECEIPT_PROFILES.advan;
+  const layoutScale = isAdvanScale
+    ? 1.45
+    : scale > 1
+      ? Math.min(1.16, scale)
+      : scale;
+  const lineScale = isAdvanScale
+    ? 1.5
+    : scale > 1
+      ? Math.min(1.25, scale)
+      : scale;
   const feedScale = Math.max(1, scale);
   const px = (value) => cssPx(value, layoutScale);
   const linePx = (value) => cssPx(value, lineScale);
@@ -667,8 +728,15 @@ const buildBluetoothReceiptScaleStyle = (scale) => {
   const fontScale = scale;
   const fontPx = (value) => cssPx(value, fontScale);
   const lineWeight = scale > 1 ? "2px" : "1px";
-  const headerShift = scale > 1 ? px(-6) : "0";
-  const contentShift = scale > 1 ? px(-20) : "0";
+  const headerShift = scale > 1 ? px(isAdvanScale ? -12 : -6) : "0";
+  const contentShift = scale > 1 ? px(isAdvanScale ? -40 : -20) : "0";
+  const headerWidth = isAdvanScale ? "120.5px" : px(110);
+  const brandNameShift = isAdvanScale ? "-6px" : "0";
+  const footerShift = isAdvanScale ? "34px" : "0";
+  const contentWidth = isAdvanScale ? "260px" : px(160);
+  const priceLabelColumn = px(isAdvanScale ? 68 : 56);
+  const priceValueColumn = px(isAdvanScale ? 95 : 62);
+  const totalValueColumn = px(isAdvanScale ? 95 : 63);
 
   return `
     html,
@@ -697,25 +765,26 @@ const buildBluetoothReceiptScaleStyle = (scale) => {
       margin-bottom: ${px(3)} !important;
     }
     .bluetooth-print-page .brand {
-      width: ${px(110)} !important;
+      width: ${headerWidth} !important;
       margin-left: ${headerShift} !important;
       margin-right: auto !important;
       margin-bottom: ${px(3)} !important;
     }
     .bluetooth-print-page .brand-name {
       font-size: ${fontPx(10)} !important;
+      transform: translateX(${brandNameShift}) !important;
     }
     .bluetooth-print-page .brand-subtitle {
       font-size: ${fontPx(4)} !important;
     }
     .bluetooth-print-page .receipt-title {
-      width: ${px(110)} !important;
+      width: ${headerWidth} !important;
       margin: 0 auto ${px(4)} ${headerShift} !important;
       font-size: ${fontPx(6)} !important;
     }
     .bluetooth-print-page .meta,
     .bluetooth-print-page .item {
-      width: ${px(160)} !important;
+      width: ${contentWidth} !important;
       margin-left: ${contentShift} !important;
       margin-right: auto !important;
     }
@@ -766,7 +835,7 @@ const buildBluetoothReceiptScaleStyle = (scale) => {
       font-size: ${fontPx(5)} !important;
     }
     .bluetooth-print-page .item-detail {
-      grid-template-columns: ${px(56)} ${px(62)} !important;
+      grid-template-columns: ${priceLabelColumn} ${priceValueColumn} !important;
       gap: ${px(8)} !important;
     }
     .bluetooth-print-page .item-detail strong {
@@ -775,7 +844,7 @@ const buildBluetoothReceiptScaleStyle = (scale) => {
       font-size: ${fontPx(6)} !important;
     }
     .bluetooth-print-page .totals {
-      grid-template-columns: ${px(56)} ${px(62)} !important;
+      grid-template-columns: ${priceLabelColumn} ${priceValueColumn} !important;
       column-gap: ${px(8)} !important;
       row-gap: ${px(3)} !important;
       width: ${px(140)} !important;
@@ -792,13 +861,14 @@ const buildBluetoothReceiptScaleStyle = (scale) => {
       padding-bottom: ${px(2)} !important;
     }
     .bluetooth-print-page .total-block {
-      grid-template-columns: ${px(56)} ${px(63)} !important;
+      grid-template-columns: ${priceLabelColumn} ${totalValueColumn} !important;
       gap: ${px(8)} !important;
       margin-top: ${px(3)} !important;
     }
     .bluetooth-print-page .total-block strong {
-      max-width: ${px(62)} !important;
+      max-width: none !important;
       font-size: ${fontPx(6)} !important;
+      white-space: nowrap !important;
     }
     .bluetooth-print-page .grand {
       margin-top: ${px(4)} !important;
@@ -813,6 +883,7 @@ const buildBluetoothReceiptScaleStyle = (scale) => {
       margin-right: auto !important;
       margin-bottom: ${px(8)} !important;
       font-size: ${fontPx(4)} !important;
+      transform: translateX(${footerShift}) !important;
     }
   `;
 };
