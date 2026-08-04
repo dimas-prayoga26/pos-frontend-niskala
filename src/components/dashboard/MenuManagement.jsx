@@ -97,6 +97,15 @@ const emptyMenuForm = {
 };
 
 const ITEMS_PER_PAGE = 10;
+const backendBaseUrl = import.meta.env.VITE_BACKEND_URL || "";
+
+const resolveMenuImageUrl = (imagePath) => {
+  if (!imagePath) return "";
+  if (/^(https?:|data:|blob:)/.test(imagePath)) return imagePath;
+  if (imagePath.startsWith("/uploads/")) return `${backendBaseUrl}${imagePath}`;
+
+  return imagePath;
+};
 
 const MenuManagement = () => {
   const queryClient = useQueryClient();
@@ -113,6 +122,8 @@ const MenuManagement = () => {
   const [menuCategoryFilter, setMenuCategoryFilter] = useState("");
   const [categoryPage, setCategoryPage] = useState(1);
   const [menuPage, setMenuPage] = useState(1);
+  const [imagePreviewUrl, setImagePreviewUrl] = useState("");
+  const [isImagePreviewOpen, setIsImagePreviewOpen] = useState(false);
 
   const { data: categoriesRes } = useQuery({
     queryKey: ["categories", "management"],
@@ -154,6 +165,24 @@ const MenuManagement = () => {
       document.body.style.overflow = previousOverflow;
     };
   }, [isCategoryFormOpen, isMenuFormOpen]);
+
+  useEffect(() => {
+    if (menuForm.imageFile) {
+      const nextPreviewUrl = URL.createObjectURL(menuForm.imageFile);
+      setImagePreviewUrl(nextPreviewUrl);
+
+      return () => URL.revokeObjectURL(nextPreviewUrl);
+    }
+
+    setImagePreviewUrl(resolveMenuImageUrl(menuForm.imagePath));
+    return undefined;
+  }, [menuForm.imageFile, menuForm.imagePath]);
+
+  useEffect(() => {
+    if (!isMenuFormOpen || !imagePreviewUrl) {
+      setIsImagePreviewOpen(false);
+    }
+  }, [isMenuFormOpen, imagePreviewUrl]);
 
   const refreshMenuData = () => {
     queryClient.invalidateQueries({ queryKey: ["categories"] });
@@ -507,13 +536,12 @@ const MenuManagement = () => {
         (menuForm.price === "" ||
           menuForm.hppCost === "" ||
           menuForm.grossProfit === "")) ||
-      !ingredients.length ||
       !hasMenuImage
     ) {
       enqueueSnackbar(
         hasMenuSizes
-          ? "Field wajib: category, nama menu, komposisi bahan, upload image, dan status."
-          : "Field wajib: category, nama menu, harga dasar, HPP, gross profit, komposisi bahan, upload image, dan status.",
+          ? "Field wajib: category, nama menu, upload image, dan status."
+          : "Field wajib: category, nama menu, harga dasar, HPP, gross profit, upload image, dan status.",
         {
           variant: "warning",
         }
@@ -1144,7 +1172,7 @@ const MenuManagement = () => {
             <div className="mt-4">
               <div className="mb-2 flex items-center justify-between">
                 <span className="text-sm font-semibold text-[#ababab]">
-                  Komposisi Bahan
+                  Komposisi Bahan <span className="text-xs text-[#777]">(Opsional)</span>
                 </span>
                 <button
                   type="button"
@@ -1241,30 +1269,36 @@ const MenuManagement = () => {
                 ))}
               </div>
               <p className="mt-2 text-xs text-[#777]">
-                Dipakai sebagai catatan resep.
+                Boleh kosong. Dipakai sebagai catatan resep dan pengurangan stok otomatis.
               </p>
             </div>
-            <label className="mt-4 block text-sm font-semibold text-[#ababab]">
-              Upload Image
-              <input
-                type="file"
-                accept=".jpg,.jpeg,.png,image/jpeg,image/png"
-                onChange={(event) =>
-                  updateMenuForm("imageFile", event.target.files?.[0] || null)
-                }
-                className="mt-2 w-full rounded-lg bg-[#262626] px-4 py-3 text-sm text-[#f5f5f5] outline-none file:mr-3 file:rounded-md file:border-0 file:bg-[#a79981] file:px-3 file:py-2 file:text-sm file:font-bold file:text-[#101010]"
-              />
-              {menuForm.imagePath && !menuForm.imageFile ? (
-                <span className="mt-2 block truncate text-xs text-[#ababab]">
-                  Gambar saat ini: {menuForm.imagePath}
-                </span>
+            <div className="mt-4">
+              <label className="block text-sm font-semibold text-[#ababab]">
+                Upload Image
+                <input
+                  type="file"
+                  accept=".jpg,.jpeg,.png,image/jpeg,image/png"
+                  onChange={(event) =>
+                    updateMenuForm("imageFile", event.target.files?.[0] || null)
+                  }
+                  className="mt-2 w-full rounded-lg bg-[#262626] px-4 py-3 text-sm text-[#f5f5f5] outline-none file:mr-3 file:rounded-md file:border-0 file:bg-[#a79981] file:px-3 file:py-2 file:text-sm file:font-bold file:text-[#101010]"
+                />
+              </label>
+              {imagePreviewUrl ? (
+                <button
+                  type="button"
+                  onClick={() => setIsImagePreviewOpen(true)}
+                  className="mt-3 rounded-lg bg-[#333] px-4 py-2 text-sm font-bold text-[#f5f5f5] hover:bg-[#3d3d3d]"
+                >
+                  Lihat
+                </button>
               ) : null}
               {menuForm.imageFile ? (
                 <span className="mt-2 block truncate text-xs text-[#ababab]">
                   File baru: {menuForm.imageFile.name}
                 </span>
               ) : null}
-            </label>
+            </div>
             <label className="mt-4 block text-sm font-semibold text-[#ababab]">
               Status
               <select
@@ -1535,6 +1569,32 @@ const MenuManagement = () => {
               >
                 {categoryDeleteMutation.isPending ? "Menghapus..." : "Hapus"}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isImagePreviewOpen && imagePreviewUrl && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 p-4">
+          <div className="w-full max-w-2xl rounded-lg bg-[#262626] p-4 shadow-2xl">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <h3 className="truncate text-base font-bold text-[#f5f5f5]">
+                {menuForm.name || "Preview Image"}
+              </h3>
+              <button
+                type="button"
+                onClick={() => setIsImagePreviewOpen(false)}
+                className="rounded-lg bg-[#333] px-3 py-2 text-sm font-bold text-[#f5f5f5] hover:bg-[#3d3d3d]"
+              >
+                Tutup
+              </button>
+            </div>
+            <div className="overflow-hidden rounded-lg border border-[#333] bg-[#202020]">
+              <img
+                src={imagePreviewUrl}
+                alt={menuForm.name ? `Preview ${menuForm.name}` : "Preview menu"}
+                className="max-h-[70vh] w-full object-contain"
+              />
             </div>
           </div>
         </div>
