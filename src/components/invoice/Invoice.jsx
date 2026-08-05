@@ -174,7 +174,7 @@ const buildReceiptHtml = (orderInfo, { logoSrc = receiptMark } = {}) => {
         : "";
       const variantParts = getVariantParts(item.variant);
       const temperature = variantParts.temperature
-        ? `<strong class="item-option">${escapeHtml(variantParts.temperature)}</strong>`
+        ? `<div class="line-note item-option">Varian: ${escapeHtml(variantParts.temperature)}</div>`
         : "";
       const size = variantParts.size
         ? `<div class="line-note item-size">Size: ${escapeHtml(variantParts.size)}</div>`
@@ -184,8 +184,8 @@ const buildReceiptHtml = (orderInfo, { logoSrc = receiptMark } = {}) => {
         <div class="item">
           <div class="item-main">
             <span>${escapeHtml(item.name)}</span>
-            ${temperature}
           </div>
+          ${temperature}
           <div class="item-detail">
             <span class="line-note">Qty: ${item.quantity}</span>
             <strong>${formatReceiptCurrency(item.price)}</strong>
@@ -368,7 +368,7 @@ const receiptPrintStyle = `
   }
   .item-option {
     flex: 0 0 auto;
-    margin-left: -120px;
+    margin-left: 0;
     font-size: 6px;
     white-space: nowrap;
   }
@@ -510,7 +510,9 @@ const bluetoothReceiptPrintStyle = `
     font-size: 5px !important;
   }
   .bluetooth-print-page .item-option {
-    margin-left: -120px !important;
+    display: block !important;
+    margin-left: 0 !important;
+    margin-top: 1px !important;
     font-size: 5px !important;
     white-space: nowrap !important;
   }
@@ -725,15 +727,17 @@ const buildBluetoothReceiptScaleStyle = (scale) => {
   const px = (value) => cssPx(value, layoutScale);
   const linePx = (value) => cssPx(value, lineScale);
   const feedPx = (value) => cssPx(value, feedScale);
-  const fontScale = scale;
+  const fontScale = isAdvanScale ? 2.55 : scale;
   const fontPx = (value) => cssPx(value, fontScale);
   const lineWeight = scale > 1 ? "2px" : "1px";
-  const headerShift = scale > 1 ? px(isAdvanScale ? -12 : -6) : "0";
-  const contentShift = scale > 1 ? px(isAdvanScale ? -40 : -20) : "0";
+  const headerShift = scale > 1 ? (isAdvanScale ? "32px" : px(-6)) : "0";
+  const contentShift = scale > 1 ? (isAdvanScale ? "-12px" : px(-20)) : "0";
   const headerWidth = isAdvanScale ? "120.5px" : px(110);
   const brandNameShift = isAdvanScale ? "-6px" : "0";
-  const footerShift = isAdvanScale ? "34px" : "0";
+  const footerShift = isAdvanScale ? "32px" : "0";
   const contentWidth = isAdvanScale ? "260px" : px(160);
+  const sectionLineWidth = linePx(isAdvanScale ? 148 : 128);
+  const metaLabelColumn = px(isAdvanScale ? 64 : 58);
   const priceLabelColumn = px(isAdvanScale ? 68 : 56);
   const priceValueColumn = px(isAdvanScale ? 95 : 62);
   const totalValueColumn = px(isAdvanScale ? 95 : 63);
@@ -807,29 +811,30 @@ const buildBluetoothReceiptScaleStyle = (scale) => {
     .bluetooth-print-page .item-separator .receipt-line,
     .bluetooth-print-page .tax-separator .receipt-line,
     .bluetooth-print-page .total-separator .receipt-line {
-      width: ${linePx(128)} !important;
+      width: ${sectionLineWidth} !important;
     }
     .bluetooth-print-page .meta-row span {
-      flex-basis: ${px(58)} !important;
+      flex-basis: ${metaLabelColumn} !important;
       padding-right: ${px(6)} !important;
     }
     .bluetooth-print-page .meta-row + .meta-row {
       margin-top: ${px(2)} !important;
     }
     .bluetooth-print-page .item-main {
-      display: grid !important;
-      grid-template-columns: max-content auto !important;
-      align-items: baseline !important;
-      column-gap: ${px(7)} !important;
+      display: block !important;
       width: 100% !important;
     }
     .bluetooth-print-page .item-main span {
-      max-width: ${px(92)} !important;
+      display: block !important;
+      max-width: 100% !important;
       overflow-wrap: anywhere !important;
     }
     .bluetooth-print-page .item-option {
+      display: block !important;
       margin-left: 0 !important;
+      margin-top: ${px(1)} !important;
       font-size: ${fontPx(5)} !important;
+      white-space: nowrap !important;
     }
     .bluetooth-print-page .line-note {
       font-size: ${fontPx(5)} !important;
