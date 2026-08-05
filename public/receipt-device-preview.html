@@ -16,6 +16,7 @@
         --receipt-width: 166px;
         --header-width: 110px;
         --content-width: 160px;
+        --meta-label-column: 58px;
         --totals-width: 140px;
         --price-label-column: 56px;
         --price-value-column: 62px;
@@ -161,7 +162,7 @@
       }
 
       .row {
-        grid-template-columns: calc(58px * var(--layout-scale)) auto;
+        grid-template-columns: var(--meta-label-column) auto;
         column-gap: calc(6px * var(--layout-scale));
       }
 
@@ -170,12 +171,12 @@
       }
 
       .item-main {
-        grid-template-columns: max-content auto;
-        column-gap: calc(7px * var(--layout-scale));
+        display: block;
       }
 
-      .item-main span {
-        max-width: calc(92px * var(--layout-scale));
+      .item-main strong {
+        display: block;
+        max-width: 100%;
         overflow-wrap: anywhere;
       }
 
@@ -183,6 +184,12 @@
       .note,
       .footer {
         font-size: var(--font-note);
+      }
+
+      .item-option {
+        display: block;
+        margin-top: calc(1px * var(--layout-scale));
+        white-space: nowrap;
       }
 
       .item-detail {
@@ -368,9 +375,9 @@
           </div>
           <div class="item">
             <div class="item-main">
-              <strong>Vanilla Latte</strong>
-              <span class="item-option">Cold</span>
+              <strong>Tropical Americano</strong>
             </div>
+            <div class="item-option note">Varian: Cold</div>
             <div class="item-detail">
               <span>Qty: 5</span>
               <strong>Rp 100.000</strong>
@@ -459,11 +466,16 @@
           ? Math.min(1.25, scale)
           : scale;
       const feedScale = Math.max(1, scale);
+      const fontScale = isAdvanProfile ? 2.55 : scale;
       const headerShift = scale > 1
-        ? cssPx(isAdvanProfile ? -12 : -6, layoutScale)
+        ? isAdvanProfile
+          ? "32px"
+          : cssPx(-6, layoutScale)
         : "0px";
       const contentShift = scale > 1
-        ? cssPx(isAdvanProfile ? -40 : -20, layoutScale)
+        ? isAdvanProfile
+          ? "-12px"
+          : cssPx(-20, layoutScale)
         : "0px";
       const lineWeight = scale > 1 ? "2px" : "1px";
 
@@ -477,6 +489,10 @@
       root.style.setProperty(
         "--content-width",
         isAdvanProfile ? "260px" : cssPx(160, layoutScale)
+      );
+      root.style.setProperty(
+        "--meta-label-column",
+        cssPx(isAdvanProfile ? 64 : 58, layoutScale)
       );
       root.style.setProperty("--totals-width", cssPx(140, layoutScale));
       root.style.setProperty(
@@ -493,7 +509,10 @@
       );
       root.style.setProperty("--separator-width", cssPx(160, lineScale));
       root.style.setProperty("--line-width", cssPx(118, lineScale));
-      root.style.setProperty("--section-line-width", cssPx(128, lineScale));
+      root.style.setProperty(
+        "--section-line-width",
+        cssPx(isAdvanProfile ? 148 : 128, lineScale)
+      );
       root.style.setProperty("--line-weight", lineWeight);
       root.style.setProperty("--header-shift", headerShift);
       root.style.setProperty("--content-shift", contentShift);
@@ -505,18 +524,18 @@
         "--paper-visual-width",
         selectedProfile === "advan" ? "349px" : "219px"
       );
-      root.style.setProperty("--font-main", cssPx(6, scale));
-      root.style.setProperty("--font-note", cssPx(5, scale));
-      root.style.setProperty("--font-brand", cssPx(10, scale));
-      root.style.setProperty("--font-subtitle", cssPx(4, scale));
-      root.style.setProperty("--font-grand", cssPx(7.5, scale));
+      root.style.setProperty("--font-main", cssPx(6, fontScale));
+      root.style.setProperty("--font-note", cssPx(5, fontScale));
+      root.style.setProperty("--font-brand", cssPx(10, fontScale));
+      root.style.setProperty("--font-subtitle", cssPx(4, fontScale));
+      root.style.setProperty("--font-grand", cssPx(7.5, fontScale));
       root.style.setProperty(
         "--brand-name-shift",
         isAdvanProfile ? "-6px" : "0px"
       );
       root.style.setProperty(
         "--footer-shift",
-        isAdvanProfile ? "34px" : "0px"
+        isAdvanProfile ? "32px" : "0px"
       );
       root.style.setProperty("--footer-feed", cssPx(18, feedScale));
 
@@ -552,9 +571,10 @@
           selectedProfile === "advan" ? "349px / -100px" : "219px / -20px",
         ],
         ["separator width", cssPx(160, lineScale)],
-        ["line width", cssPx(128, lineScale)],
-        ["font utama", cssPx(6, scale)],
-        ["font brand", cssPx(10, scale)],
+        ["line width", cssPx(isAdvanProfile ? 148 : 128, lineScale)],
+        ["font scale", fontScale],
+        ["font utama", cssPx(6, fontScale)],
+        ["font brand", cssPx(10, fontScale)],
       ];
 
       document.getElementById("profileValues").innerHTML = values
