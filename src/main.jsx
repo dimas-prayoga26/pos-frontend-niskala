@@ -16,9 +16,16 @@ const queryRefetchInterval =
       ? parsedQueryRefetchInterval
       : 15000;
 
+const shouldRetryQuery = (failureCount, error) => {
+  if (error?.response?.status === 401) return false;
+
+  return failureCount < 3;
+};
+
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
+      retry: shouldRetryQuery,
       staleTime: 5000,
       refetchInterval: queryRefetchInterval > 0 ? queryRefetchInterval : false,
       refetchOnWindowFocus: "always",

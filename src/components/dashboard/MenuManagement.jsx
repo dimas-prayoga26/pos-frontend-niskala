@@ -16,6 +16,7 @@ import {
   getStockItems,
   uploadMenuImage,
   updateCategory,
+  updateCategoryPositions,
   updateMenuItem,
 } from "../../https";
 import { formatCurrency } from "../../utils";
@@ -72,6 +73,8 @@ const iconOptions = [
   "🥭",
   "🥡",
   "🧾",
+  "🏷️",
+  "🎟️",
   "➕",
 ];
 
@@ -107,6 +110,8 @@ const resolveMenuImageUrl = (imagePath) => {
   return imagePath;
 };
 
+const getCategoryId = (category) => String(category?.id || category?._id || "");
+
 const MenuManagement = () => {
   const queryClient = useQueryClient();
   const [activeSection, setActiveSection] = useState("categories");
@@ -124,6 +129,7 @@ const MenuManagement = () => {
   const [menuPage, setMenuPage] = useState(1);
   const [imagePreviewUrl, setImagePreviewUrl] = useState("");
   const [isImagePreviewOpen, setIsImagePreviewOpen] = useState(false);
+  const [draggedCategoryId, setDraggedCategoryId] = useState("");
 
   const { data: categoriesRes } = useQuery({
     queryKey: ["categories", "management"],
@@ -146,6 +152,10 @@ const MenuManagement = () => {
   const categories = categoriesRes?.data?.data || [];
   const menuItems = menuItemsRes?.data?.data || [];
   const stockItems = stockItemsRes?.data?.data || [];
+  const positionCategories = useMemo(
+    () => categories.filter((category) => category.isActive !== false),
+    [categories]
+  );
   const ingredientSizeOptions = useMemo(
     () =>
       menuForm.sizes
@@ -206,6 +216,56 @@ const MenuManagement = () => {
     },
     onError: () => {
       enqueueSnackbar("Gagal menyimpan category.", { variant: "error" });
+    },
+  });
+
+  const categoryPositionMutation = useMutation({
+    mutationFn: updateCategoryPositions,
+    onMutate: async (categoryIds) => {
+      await queryClient.cancelQueries({ queryKey: ["categories", "management"] });
+      const previousCategories = queryClient.getQueryData([
+        "categories",
+        "management",
+      ]);
+
+      queryClient.setQueryData(["categories", "management"], (current) => {
+        const currentCategories = current?.data?.data || [];
+        const orderById = new Map(
+          categoryIds.map((categoryId, index) => [String(categoryId), index])
+        );
+        const nextCategories = [...currentCategories]
+          .sort(
+            (firstCategory, secondCategory) =>
+              (orderById.get(getCategoryId(firstCategory)) ?? 9999) -
+              (orderById.get(getCategoryId(secondCategory)) ?? 9999)
+          )
+          .map((category, index) => ({
+            ...category,
+            sortOrder: (index + 1) * 10,
+            position: index + 1,
+          }));
+
+        return current
+          ? { ...current, data: { ...current.data, data: nextCategories } }
+          : current;
+      });
+
+      return { previousCategories };
+    },
+    onSuccess: () => {
+      refreshMenuData();
+      enqueueSnackbar("Position category berhasil disimpan.", {
+        variant: "success",
+      });
+    },
+    onError: (_error, _categoryIds, context) => {
+      if (context?.previousCategories) {
+        queryClient.setQueryData(
+          ["categories", "management"],
+          context.previousCategories
+        );
+      }
+      enqueueSnackbar("Gagal menyimpan position category.", { variant: "error" });
     },
   });
 
@@ -492,16 +552,15 @@ const MenuManagement = () => {
     const hasIncompleteSize = menuForm.sizes.some(
       (size) =>
         !size.name.trim() ||
-        size.price === "" ||
-        size.hppCost === "" ||
-        size.grossProfit === ""
+        size.price === ""
     );
     const sizes = menuForm.sizes
       .map((size) => ({
         name: size.name.trim(),
         price: Number(size.price) || 0,
-        hppCost: Number(size.hppCost) || 0,
-        grossProfit: Number(size.grossProfit) || 0,
+        hppCost: size.hppCost === "" ? 0 : Number(size.hppCost) || 0,
+        grossProfit:
+          size.grossProfit === "" ? 0 : Number(size.grossProfit) || 0,
       }))
       .filter((size) => size.name && size.price >= 0);
     const variants = menuForm.variants
@@ -523,8 +582,9 @@ const MenuManagement = () => {
           ingredient.unit
       );
     const basePrice = Number(menuForm.price) || 0;
-    const hppCost = Number(menuForm.hppCost) || 0;
-    const grossProfit = Number(menuForm.grossProfit) || 0;
+    const hppCost = menuForm.hppCost === "" ? 0 : Number(menuForm.hppCost) || 0;
+    const grossProfit =
+      menuForm.grossProfit === "" ? 0 : Number(menuForm.grossProfit) || 0;
 
     const hasMenuImage =
       Boolean(menuForm.imageFile) || Boolean(menuForm.imagePath.trim());
@@ -532,16 +592,13 @@ const MenuManagement = () => {
     if (
       !menuForm.categoryId ||
       !menuForm.name.trim() ||
-      (!hasMenuSizes &&
-        (menuForm.price === "" ||
-          menuForm.hppCost === "" ||
-          menuForm.grossProfit === "")) ||
+      (!hasMenuSizes && menuForm.price === "") ||
       !hasMenuImage
     ) {
       enqueueSnackbar(
         hasMenuSizes
           ? "Field wajib: category, nama menu, upload image, dan status."
-          : "Field wajib: category, nama menu, harga dasar, HPP, gross profit, upload image, dan status.",
+          : "Field wajib: category, nama menu, harga reguler, upload image, dan status.",
         {
           variant: "warning",
         }
@@ -551,7 +608,7 @@ const MenuManagement = () => {
 
     if (hasMenuSizes && hasIncompleteSize) {
       enqueueSnackbar(
-        "Setiap ukuran wajib isi nama ukuran, harga jual, HPP, dan gross profit.",
+        "Setiap ukuran wajib isi nama ukuran dan harga reguler.",
         { variant: "warning" }
       );
       return;
@@ -656,6 +713,42 @@ const MenuManagement = () => {
     setEditingMenuItem(null);
     setMenuForm(emptyMenuForm);
     setIsMenuFormOpen(false);
+  };
+
+  const handleCategoryDragStart = (category) => {
+    setDraggedCategoryId(getCategoryId(category));
+  };
+
+  const handleCategoryDrop = (targetCategory) => {
+    const targetCategoryId = getCategoryId(targetCategory);
+
+    if (!draggedCategoryId || draggedCategoryId === targetCategoryId) {
+      setDraggedCategoryId("");
+      return;
+    }
+
+    const draggedIndex = positionCategories.findIndex(
+      (category) => getCategoryId(category) === draggedCategoryId
+    );
+    const targetIndex = positionCategories.findIndex(
+      (category) => getCategoryId(category) === targetCategoryId
+    );
+
+    if (draggedIndex < 0 || targetIndex < 0) {
+      setDraggedCategoryId("");
+      return;
+    }
+
+    const nextPositionCategories = [...positionCategories];
+    const inactiveCategories = categories.filter(
+      (category) => category.isActive === false
+    );
+    const [draggedCategory] = nextPositionCategories.splice(draggedIndex, 1);
+    nextPositionCategories.splice(targetIndex, 0, draggedCategory);
+    setDraggedCategoryId("");
+    categoryPositionMutation.mutate(
+      [...nextPositionCategories, ...inactiveCategories].map(getCategoryId)
+    );
   };
 
   const getCategoryMenuCount = (category) => {
@@ -827,6 +920,73 @@ const MenuManagement = () => {
             <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <h3 className="text-lg font-bold text-[#f5f5f5]">
+                  Position Categories
+                </h3>
+                <p className="mt-1 text-sm text-[#ababab]">
+                  Atur posisi card category yang tampil di POS.
+                </p>
+              </div>
+              <span
+                className={`w-fit rounded-md px-3 py-1 text-xs font-bold ${
+                  categoryPositionMutation.isPending
+                    ? "bg-amber-900/50 text-amber-200"
+                    : "bg-[#262626] text-[#ababab]"
+                }`}
+              >
+                {categoryPositionMutation.isPending ? "Menyimpan..." : "Auto save"}
+              </span>
+            </div>
+            <div className="rounded-lg border border-[#333] bg-[#262626] p-3">
+              <div className="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-3">
+                {positionCategories.map((category, index) => {
+                  const categoryId = getCategoryId(category);
+                  const isDragging = draggedCategoryId === categoryId;
+
+                  return (
+                    <div
+                      key={categoryId}
+                      draggable
+                      onDragStart={() => handleCategoryDragStart(category)}
+                      onDragOver={(event) => event.preventDefault()}
+                      onDrop={(event) => {
+                        event.preventDefault();
+                        handleCategoryDrop(category);
+                      }}
+                      onDragEnd={() => setDraggedCategoryId("")}
+                      className={`flex min-h-[52px] cursor-move items-center gap-3 rounded-lg border px-3 py-2 transition ${
+                        isDragging
+                          ? "border-[#a79981] bg-[#3a342b] opacity-70"
+                          : "border-[#3a3a3a] bg-[#1f1f1f] hover:border-[#a79981]"
+                      }`}
+                    >
+                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-[#333] text-lg">
+                        {category.icon || "-"}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-bold text-[#f5f5f5]">
+                          {category.name}
+                        </p>
+                        <p className="text-xs font-semibold text-[#777]">
+                          Position {index + 1}
+                        </p>
+                      </div>
+                      <span className="text-lg leading-none text-[#777]">⋮⋮</span>
+                    </div>
+                  );
+                })}
+              </div>
+              {positionCategories.length === 0 && (
+                <div className="rounded-lg bg-[#1f1f1f] p-4 text-center text-sm text-[#ababab]">
+                  No active categories found
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="rounded-lg bg-[#1f1f1f] p-4">
+            <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h3 className="text-lg font-bold text-[#f5f5f5]">
                   Categories
                 </h3>
                 <p className="mt-1 text-sm text-[#ababab]">
@@ -854,6 +1014,7 @@ const MenuManagement = () => {
               <table className="w-full text-left text-[#f5f5f5]">
                 <thead className="bg-[#333] text-[#ababab]">
                   <tr>
+                    <th className="p-3 text-center">Position</th>
                     <th className="p-3">Icon</th>
                     <th className="p-3">Category</th>
                     <th className="p-3 text-center">Tax</th>
@@ -862,11 +1023,14 @@ const MenuManagement = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {paginatedCategories.map((category) => (
+                  {paginatedCategories.map((category, index) => (
                     <tr
                       key={category.id || category._id}
                       className="border-b border-gray-600 hover:bg-[#333]"
                     >
+                      <td className="p-4 text-center font-bold text-[#ababab]">
+                        {(categoryPage - 1) * ITEMS_PER_PAGE + index + 1}
+                      </td>
                       <td className="p-4 text-xl">{category.icon || "-"}</td>
                       <td className="p-4 font-semibold">{category.name}</td>
                       <td className="p-4 text-center">
@@ -905,7 +1069,7 @@ const MenuManagement = () => {
                   ))}
                   {filteredCategories.length === 0 && (
                     <tr>
-                      <td className="p-4 text-center text-[#ababab]" colSpan={5}>
+                      <td className="p-4 text-center text-[#ababab]" colSpan={6}>
                         No categories found
                       </td>
                     </tr>
@@ -963,7 +1127,7 @@ const MenuManagement = () => {
                   {editingMenuItem ? "Ubah Menu" : "Tambah Menu"}
                 </h3>
                 <p className="mt-1 text-sm text-[#ababab]">
-                  Isi data menu, HPP, gross profit, dan komposisi resep.
+                  Isi data menu, harga, dan komposisi resep.
                 </p>
               </div>
               <button
@@ -1002,7 +1166,7 @@ const MenuManagement = () => {
             {!hasMenuSizes && (
               <>
                 <label className="mt-4 block text-sm font-semibold text-[#ababab]">
-                  Harga Dasar
+                  Harga Reguler
                   <div className="mt-2 flex overflow-hidden rounded-lg bg-[#262626]">
                     <span className="flex shrink-0 items-center px-4 text-sm font-bold text-[#a79981]">
                       Rp
@@ -1021,7 +1185,7 @@ const MenuManagement = () => {
                 </label>
                 <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
                   <label className="block text-sm font-semibold text-amber-200">
-                    HPP
+                    HPP <span className="text-xs text-[#777]">(Opsional)</span>
                     <div className="mt-2 flex overflow-hidden rounded-lg border border-amber-500/30 bg-amber-500/10">
                       <span className="flex shrink-0 items-center px-4 text-sm font-bold text-amber-200">
                         Rp
@@ -1039,7 +1203,7 @@ const MenuManagement = () => {
                     </div>
                   </label>
                   <label className="block text-sm font-semibold text-emerald-200">
-                    Gross Profit
+                    Gross Profit <span className="text-xs text-[#777]">(Opsional)</span>
                     <div className="mt-2 flex overflow-hidden rounded-lg border border-emerald-500/30 bg-emerald-500/10">
                       <span className="flex shrink-0 items-center px-4 text-sm font-bold text-emerald-200">
                         Rp
@@ -1097,38 +1261,52 @@ const MenuManagement = () => {
                     </div>
                     <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-3">
                       {[
-                        ["price", "Harga jual", "#a79981"],
-                        ["hppCost", "HPP", "rgb(253 230 138)"],
-                        ["grossProfit", "Gross profit", "rgb(167 243 208)"],
-                      ].map(([field, placeholder, color]) => (
-                        <div
+                        ["price", "Harga Reguler", "18000", "#a79981", false],
+                        ["hppCost", "HPP", "0", "rgb(253 230 138)", true],
+                        [
+                          "grossProfit",
+                          "Gross Profit",
+                          "0",
+                          "rgb(167 243 208)",
+                          true,
+                        ],
+                      ].map(([field, label, placeholder, color, isOptional]) => (
+                        <label
                           key={field}
-                          className="flex min-w-0 overflow-hidden rounded-lg bg-[#262626]"
+                          className="block min-w-0 text-xs font-bold"
+                          style={{ color }}
                         >
-                          <span
-                            className="flex shrink-0 items-center px-2 text-sm font-bold"
-                            style={{ color }}
-                          >
-                            Rp
+                          <span>
+                            {label}{" "}
+                            {isOptional && (
+                              <span className="font-semibold text-[#777]">
+                                (Opsional)
+                              </span>
+                            )}
                           </span>
-                          <input
-                            value={size[field]}
-                            onChange={(event) =>
-                              updateMenuSize(index, field, event.target.value)
-                            }
-                            type="number"
-                            min="0"
-                            placeholder={placeholder}
-                            className="min-w-0 w-full bg-transparent py-3 pr-2 text-sm text-[#f5f5f5] outline-none"
-                          />
-                        </div>
+                          <div className="mt-1 flex min-w-0 overflow-hidden rounded-lg bg-[#262626]">
+                            <span className="flex shrink-0 items-center px-2 text-sm font-bold">
+                              Rp
+                            </span>
+                            <input
+                              value={size[field]}
+                              onChange={(event) =>
+                                updateMenuSize(index, field, event.target.value)
+                              }
+                              type="number"
+                              min="0"
+                              placeholder={placeholder}
+                              className="min-w-0 w-full bg-transparent py-3 pr-2 text-sm text-[#f5f5f5] outline-none"
+                            />
+                          </div>
+                        </label>
                       ))}
                     </div>
                   </div>
                 ))}
               </div>
               <p className="mt-2 text-xs text-[#777]">
-                Boleh kosong kalau menu hanya punya satu harga dasar.
+                Boleh kosong kalau menu hanya punya satu harga reguler. HPP dan gross profit boleh dikosongkan.
               </p>
             </div>
             <div className="mt-4">
