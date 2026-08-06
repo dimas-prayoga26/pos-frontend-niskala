@@ -111,40 +111,33 @@ const MenuContainer = () => {
     const categories = categoriesRes?.data?.data || [];
     const menuItems = menuItemsRes?.data?.data || [];
 
-    return (
-      categories.length && menuItems.length
-        ? categories
-            .map((category) => ({
-              id: category.id || category._id,
-              name: category.name,
-              icon: category.icon || categoryIcons[category.name] || "",
-              taxRate: category.taxRate ?? category.tax ?? null,
-              items: menuItems
-                .filter(
-                  (item) =>
-                    Number(item.categoryId) ===
-                    Number(category.id || category._id)
-                )
-                .map((item) => ({
-                  id: item.id || item._id,
-                  name: item.name,
-                  price: item.price,
-                  regularPrice: item.regularPrice ?? item.price,
-                  largePrice: item.largePrice,
-                  variants: item.variants || [],
-                  sizes: item.sizes || [],
-                  imagePath: item.imagePath || null,
-                  taxRate:
-                    item.category?.taxRate ??
-                    item.category?.tax ??
-                    category.taxRate ??
-                    category.tax ??
-                    null,
-                })),
-            }))
-            .filter((menu) => menu.items.length > 0)
-        : []
-    );
+    return categories.map((category) => ({
+      id: category.id || category._id,
+      name: category.name,
+      icon: category.icon || categoryIcons[category.name] || "",
+      taxRate: category.taxRate ?? category.tax ?? null,
+      items: menuItems
+        .filter(
+          (item) =>
+            Number(item.categoryId) === Number(category.id || category._id)
+        )
+        .map((item) => ({
+          id: item.id || item._id,
+          name: item.name,
+          price: item.price,
+          regularPrice: item.regularPrice ?? item.price,
+          largePrice: item.largePrice,
+          variants: item.variants || [],
+          sizes: item.sizes || [],
+          imagePath: item.imagePath || null,
+          taxRate:
+            item.category?.taxRate ??
+            item.category?.tax ??
+            category.taxRate ??
+            category.tax ??
+            null,
+        })),
+    }));
   }, [categoriesRes, menuItemsRes]);
 
   useEffect(() => {
@@ -478,6 +471,11 @@ const MenuContainer = () => {
             </div>
           );
         })}
+        {selected && selected.items.length === 0 && (
+          <div className="col-span-full rounded-lg border border-[#333] bg-[#1a1a1a] p-6 text-center text-sm font-semibold text-[#ababab]">
+            Belum ada menu tersedia di category ini.
+          </div>
+        )}
       </div>
     </>
   );
