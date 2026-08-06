@@ -937,7 +937,7 @@ const MenuManagement = () => {
               </span>
             </div>
             <div className="rounded-lg border border-[#333] bg-[#262626] p-3">
-              <div className="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-3">
+              <div className="grid grid-cols-1 gap-2 md:grid-cols-2 lg:grid-cols-4">
                 {positionCategories.map((category, index) => {
                   const categoryId = getCategoryId(category);
                   const isDragging = draggedCategoryId === categoryId;

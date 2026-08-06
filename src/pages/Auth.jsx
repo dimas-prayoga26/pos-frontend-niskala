@@ -1,15 +1,12 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect } from "react";
 import restaurant from "../assets/images/restaurant-img.jpg";
 import logo from "../../../assets/logo1.png";
-import Register from "../components/auth/Register";
 import Login from "../components/auth/Login";
 
 const Auth = () => {
   useEffect(() => {
     document.title = "POS | Auth";
   }, []);
-
-  const [isRegister, setIsRegister] = useState(false);
 
   return (
     <div className="min-h-screen w-full bg-[#101010] lg:grid lg:grid-cols-[0.95fr_1.05fr]">
@@ -49,25 +46,10 @@ const Auth = () => {
           </div>
 
           <h2 className="mb-6 mt-7 text-center text-2xl font-semibold text-[#a79981] sm:text-3xl md:mb-8 lg:text-4xl">
-            {isRegister ? "Employee Registration" : "Employee Login"}
+            Employee Login
           </h2>
 
-          {isRegister ? <Register setIsRegister={setIsRegister} /> : <Login />}
-
-          <div className="mt-6 flex justify-center text-center">
-            <p className="text-sm text-[#ababab]">
-              {isRegister
-                ? "Already have an account?"
-                : "Don't have an account?"}{" "}
-              <button
-                type="button"
-                onClick={() => setIsRegister(!isRegister)}
-                className="font-semibold text-[#a79981] hover:underline"
-              >
-                {isRegister ? "Sign in" : "Sign up"}
-              </button>
-            </p>
-          </div>
+          <Login />
         </div>
       </main>
     </div>
