@@ -15,6 +15,8 @@ export const getCategories = (params = {}) =>
   axiosWrapper.get("/api/category", { params });
 export const updateCategory = ({ categoryId, ...categoryData }) =>
   axiosWrapper.put(`/api/category/${categoryId}`, categoryData);
+export const updateCategoryPositions = (categoryIds) =>
+  axiosWrapper.put("/api/category/positions", { categoryIds });
 export const deleteCategory = (categoryId) =>
   axiosWrapper.delete(`/api/category/${categoryId}`);
 
