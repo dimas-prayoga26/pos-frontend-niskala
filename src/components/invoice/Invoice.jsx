@@ -78,7 +78,7 @@ const getAutoBluetoothReceiptScale = () => {
   return 1;
 };
 
-const getBluetoothReceiptScale = () => {
+const getBluetoothReceiptScale = (fallbackProfileName = "") => {
   try {
     const queryScale = new URLSearchParams(window.location.search).get(
       "receiptScale"
@@ -131,7 +131,10 @@ const getBluetoothReceiptScale = () => {
     return 1;
   }
 
-  return getAutoBluetoothReceiptScale();
+  return (
+    getBluetoothReceiptProfileScale(fallbackProfileName) ||
+    getAutoBluetoothReceiptScale()
+  );
 };
 
 const buildReceiptHtml = (orderInfo, { logoSrc = receiptMark } = {}) => {
@@ -946,8 +949,8 @@ const getReceiptLogoDataUrl = async () => {
   return receiptLogoDataUrlPromise;
 };
 
-const buildBluetoothPrintPayload = async (orderInfo) => {
-  const receiptScale = getBluetoothReceiptScale();
+const buildBluetoothPrintPayload = async (orderInfo, { receiptProfile } = {}) => {
+  const receiptScale = getBluetoothReceiptScale(receiptProfile);
 
   return [
     {
@@ -965,75 +968,83 @@ const buildBluetoothPrintPayload = async (orderInfo) => {
   ];
 };
 
+const printReceiptWithBrowser = (orderInfo) => {
+  return printReceiptDocument({
+    documentHtml: `
+      <html>
+        <head>
+          <title>Order Receipt</title>
+          <style>${receiptPrintStyle}</style>
+        </head>
+        <body>${buildReceiptHtml(orderInfo)}</body>
+      </html>
+    `,
+  });
+};
+
+export const printOrderReceipt = async (
+  orderInfo,
+  { receiptProfile } = {}
+) => {
+  if (!isAndroidDevice()) {
+    return printReceiptWithBrowser(orderInfo);
+  }
+
+  try {
+    const numericOrderId = orderInfo.id || orderInfo._id;
+
+    if (!numericOrderId) {
+      throw new Error("Order ID tidak ditemukan untuk struk ini.");
+    }
+
+    const response = await createThermalPrintUrl({
+      orderId: numericOrderId,
+      payload: await buildBluetoothPrintPayload(orderInfo, { receiptProfile }),
+    });
+    const responseUrl = response.data?.data?.url;
+
+    if (!responseUrl) {
+      throw new Error("URL thermal print gagal dibuat.");
+    }
+
+    const cleanupFallback = openBluetoothPrintApp({
+      responseUrl,
+      onFallback: () => {
+        enqueueSnackbar(
+          "Bluetooth Print app tidak terbuka. Membuka struk dengan cara lama.",
+          { variant: "warning" }
+        );
+        printReceiptWithBrowser(orderInfo);
+      },
+    });
+
+    window.setTimeout(() => {
+      cleanupFallback();
+    }, 3200);
+
+    return true;
+  } catch (error) {
+    enqueueSnackbar(
+      error?.message ||
+        "Gagal menyiapkan thermal print. Membuka struk dengan cara lama.",
+      { variant: "error" }
+    );
+    return printReceiptWithBrowser(orderInfo);
+  }
+};
+
 const Invoice = ({ orderInfo, setShowInvoice }) => {
   const orderCode = orderInfo.orderId || orderInfo.orderCode || orderInfo.id;
   const isPrintingRef = useRef(false);
 
-  const printWithExistingBehavior = () => {
-    return printReceiptDocument({
-      documentHtml: `
-        <html>
-          <head>
-            <title>Order Receipt</title>
-            <style>${receiptPrintStyle}</style>
-          </head>
-          <body>${buildReceiptHtml(orderInfo)}</body>
-        </html>
-      `,
-    });
-  };
-
   const handlePrint = async () => {
     if (isPrintingRef.current) return;
 
-    if (!isAndroidDevice()) {
-      printWithExistingBehavior();
-      return;
-    }
-
     isPrintingRef.current = true;
-
-    try {
-      const numericOrderId = orderInfo.id || orderInfo._id;
-
-      if (!numericOrderId) {
-        throw new Error("Order ID tidak ditemukan untuk struk ini.");
-      }
-
-      const response = await createThermalPrintUrl({
-        orderId: numericOrderId,
-        payload: await buildBluetoothPrintPayload(orderInfo),
-      });
-      const responseUrl = response.data?.data?.url;
-
-      if (!responseUrl) {
-        throw new Error("URL thermal print gagal dibuat.");
-      }
-
-      const cleanupFallback = openBluetoothPrintApp({
-        responseUrl,
-        onFallback: () => {
-          enqueueSnackbar(
-            "Bluetooth Print app tidak terbuka. Membuka struk dengan cara lama.",
-            { variant: "warning" }
-          );
-          printWithExistingBehavior();
-        },
-      });
-
-      window.setTimeout(() => {
-        cleanupFallback();
-        isPrintingRef.current = false;
-      }, 3200);
-    } catch (error) {
-      enqueueSnackbar(
-        error?.message ||
-          "Gagal menyiapkan thermal print. Membuka struk dengan cara lama.",
-        { variant: "error" }
-      );
-      printWithExistingBehavior();
+    await printOrderReceipt(orderInfo);
+    window.setTimeout(() => {
       isPrintingRef.current = false;
-    }
+    }, 3200);
   };
 
   return (
