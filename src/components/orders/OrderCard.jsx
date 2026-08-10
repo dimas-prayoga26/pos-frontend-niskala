@@ -3,7 +3,10 @@ import {
   MdDeleteOutline,
   MdInfoOutline,
   MdMoreVert,
+  MdPrint,
 } from "react-icons/md";
+import { enqueueSnackbar } from "notistack";
+import { printOrderReceipt } from "../invoice/Invoice";
 import {
   formatCurrency,
   formatDateAndTime,
@@ -20,6 +23,7 @@ const OrderCard = ({
   const [showDetails, setShowDetails] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isActionMenuOpen, setIsActionMenuOpen] = useState(false);
+  const [isPrintingReceipt, setIsPrintingReceipt] = useState(false);
   const [paymentAmount, setPaymentAmount] = useState("");
   const orderCode = order.orderId || order.orderCode || `ORD-${String(order.id).padStart(6, "0")}`;
   const cateringDetails = order.cateringDetails;
@@ -60,6 +64,27 @@ const OrderCard = ({
   };
   const handleConfirmDelete = () => {
     onOrderDelete?.();
+  };
+  const handlePrintReceipt = async () => {
+    if (isPrintingReceipt) return;
+
+    setIsPrintingReceipt(true);
+
+    try {
+      const didOpenPrint = await printOrderReceipt(order, {
+        receiptProfile: "advan",
+      });
+
+      if (!didOpenPrint) {
+        enqueueSnackbar("Popup diblokir. Izinkan popup untuk print receipt.", {
+          variant: "warning",
+        });
+      }
+    } finally {
+      window.setTimeout(() => {
+        setIsPrintingReceipt(false);
+      }, 3200);
+    }
   };
 
   return (
@@ -150,19 +175,31 @@ const OrderCard = ({
       {showDetails && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
           <div className="w-full max-w-lg rounded-lg bg-[#1f1f1f] text-[#f5f5f5] shadow-2xl">
-            <div className="flex items-start justify-between border-b border-[#333] p-4">
+            <div className="flex items-start justify-between gap-3 border-b border-[#333] p-4">
               <div>
                 <h2 className="text-xl font-bold">Order Details</h2>
                 <p className="mt-1 text-sm text-[#ababab]">
                   {order.customerDetails.name} / {order.items.length} Items
                 </p>
               </div>
-              <button
-                onClick={() => setShowDetails(false)}
-                className="rounded-lg bg-[#2a2a2a] px-3 py-1 text-sm text-[#ababab] hover:text-white"
-              >
-                Close
-              </button>
+              <div className="flex shrink-0 items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handlePrintReceipt}
+                  disabled={isPrintingReceipt}
+                  className="inline-flex items-center gap-2 rounded-lg bg-[#a79981] px-3 py-2 text-sm font-bold text-[#101010] transition hover:bg-[#b9aa91] disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  <MdPrint size={18} />
+                  {isPrintingReceipt ? "Printing..." : "Print"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowDetails(false)}
+                  className="rounded-lg bg-[#2a2a2a] px-3 py-2 text-sm text-[#ababab] hover:text-white"
+                >
+                  Close
+                </button>
+              </div>
             </div>
 
             <div className="max-h-[60vh] overflow-y-auto p-4">
