@@ -10,6 +10,7 @@ import { useSelector } from "react-redux";
 import {
   FiArchive,
   FiBookOpen,
+  FiCalendar,
   FiCreditCard,
   FiDollarSign,
   FiDownload,
@@ -32,6 +33,7 @@ import {
 } from "../../https";
 import {
   formatCurrency,
+  getOrderItemHpp,
   getOrderReceivedAmount,
   getOrdersHppTotal,
 } from "../../utils";
@@ -59,9 +61,17 @@ const getDateKey = (value = new Date()) => {
   return jakartaDateFormatter.format(date);
 };
 
-const getDateFromKey = (dateKey) => new Date(`${dateKey}T00:00:00`);
-
 const getMonthKey = (value = new Date()) => getDateKey(value).slice(0, 7);
+
+const getCurrentMonthStartKey = () => `${getMonthKey()}-01`;
+
+const formatRangeBadge = (startKey, endKey) => {
+  if (!startKey && !endKey) return "Select date";
+  if (startKey && endKey && startKey === endKey) return startKey;
+  if (startKey && endKey) return `${startKey} - ${endKey}`;
+  if (startKey) return `Mulai ${startKey}`;
+  return `Sampai ${endKey}`;
+};
 
 const getMonthLabel = (value) => {
   const dateKey = String(value || "").slice(0, 7);
@@ -152,6 +162,13 @@ const kasMethodOptions = [
   { value: "cash", label: "Cash" },
   { value: "qris", label: "QRIS" },
   { value: "transfer", label: "Transfer" },
+];
+
+const PERIOD_OPTIONS = [
+  { value: "today", label: "Hari Ini", badge: "Hari ini" },
+  { value: "last-7-days", label: "7 Hari Terakhir", badge: "7 hari" },
+  { value: "last-month", label: "Bulan Ini", badge: "Bulan ini" },
+  { value: "custom", label: "Select Date", badge: "Select date" },
 ];
 
 const rupiahExcelFormat = '"Rp" #,##0;[Red]-"Rp" #,##0;"Rp" 0';
@@ -512,6 +529,10 @@ const Metrics = () => {
   const currentUser = useSelector((state) => state.user);
   const isAdmin = currentUser.role?.toLowerCase() === "admin";
   const [selectedPeriod, setSelectedPeriod] = useState("last-month");
+  const [customDateRange, setCustomDateRange] = useState(() => ({
+    startDate: getCurrentMonthStartKey(),
+    endDate: getDateKey(),
+  }));
   const [isPeriodOpen, setIsPeriodOpen] = useState(false);
   const [isKasModalOpen, setIsKasModalOpen] = useState(false);
   const [kasForm, setKasForm] = useState(createEmptyKasForm);
@@ -585,40 +606,50 @@ const Metrics = () => {
     placeholderData: keepPreviousData,
   });
 
-  const periodOptions = [
-    { value: "today", label: "Hari Ini", badge: "Hari ini" },
-    { value: "last-7-days", label: "7 Hari Terakhir", badge: "7 hari" },
-    { value: "last-month", label: "Bulan Ini", badge: "Bulan ini" },
-    { value: "last-3-months", label: "3 Bulan Terakhir", badge: "3 bulan" },
-    { value: "all-time", label: "Semua Data", badge: "Semua" },
-  ];
-  const activePeriod =
-    periodOptions.find((period) => period.value === selectedPeriod) ||
-    periodOptions[2];
-
-  const getPeriodStartDate = (period) => {
+  const periodRange = useMemo(() => {
     const date = new Date();
     date.setHours(0, 0, 0, 0);
+    const todayKey = getDateKey(date);
 
-    if (period === "today") return date;
+    if (selectedPeriod === "today") {
+      return { startKey: todayKey, endKey: todayKey };
+    }
 
-    if (period === "last-7-days") {
+    if (selectedPeriod === "last-7-days") {
       date.setDate(date.getDate() - 6);
-      return date;
+      return { startKey: getDateKey(date), endKey: todayKey };
     }
 
-    if (period === "last-month") {
+    if (selectedPeriod === "last-month") {
       date.setDate(1);
-      return date;
+      return { startKey: getDateKey(date), endKey: todayKey };
     }
 
-    if (period === "last-3-months") {
-      date.setMonth(date.getMonth() - 3);
-      return date;
+    if (selectedPeriod === "custom") {
+      const startKey = customDateRange.startDate;
+      const endKey = customDateRange.endDate;
+
+      if (startKey && endKey && startKey > endKey) {
+        return { startKey: endKey, endKey: startKey };
+      }
+
+      return { startKey, endKey };
     }
 
-    return null;
-  };
+    return { startKey: getCurrentMonthStartKey(), endKey: todayKey };
+  }, [customDateRange.endDate, customDateRange.startDate, selectedPeriod]);
+  const activePeriod = useMemo(() => {
+    const period =
+      PERIOD_OPTIONS.find((item) => item.value === selectedPeriod) ||
+      PERIOD_OPTIONS[2];
+
+    if (selectedPeriod !== "custom") return period;
+
+    return {
+      ...period,
+      badge: formatRangeBadge(periodRange.startKey, periodRange.endKey),
+    };
+  }, [selectedPeriod, periodRange.endKey, periodRange.startKey]);
 
   const totalCategories = categoriesRes?.data?.data?.length || 0;
   const menuItems = menuItemsRes?.data?.data || [];
@@ -654,31 +685,28 @@ const Metrics = () => {
       );
     },
   });
-  const periodStartDate = useMemo(
-    () => getPeriodStartDate(selectedPeriod),
-    [selectedPeriod]
-  );
   const filteredRecaps = useMemo(() => {
     return dailyRecaps.filter((recap) => {
-      const recapDate = new Date(recap.recapDate);
+      const recapDateKey = getDateKey(recap.recapDate);
 
-      if (Number.isNaN(recapDate.getTime())) return false;
-      if (!periodStartDate) return true;
-
-      return recapDate >= periodStartDate;
+      return isDateKeyInRange(
+        recapDateKey,
+        periodRange.startKey,
+        periodRange.endKey
+      );
     });
-  }, [dailyRecaps, periodStartDate]);
+  }, [dailyRecaps, periodRange]);
   const filteredOrders = useMemo(() => {
-    if (!periodStartDate) return orders;
-
     return orders.filter((order) => {
-      const orderDate = new Date(order.orderDate);
+      const orderDateKey = getDateKey(order.orderDate);
 
-      if (Number.isNaN(orderDate.getTime())) return false;
-
-      return orderDate >= periodStartDate;
+      return isDateKeyInRange(
+        orderDateKey,
+        periodRange.startKey,
+        periodRange.endKey
+      );
     });
-  }, [orders, periodStartDate]);
+  }, [orders, periodRange]);
   const recappedDateKeys = useMemo(
     () => new Set(filteredRecaps.map((recap) => getDateKey(recap.recapDate))),
     [filteredRecaps]
@@ -916,375 +944,207 @@ const Metrics = () => {
 
   const handleExportMetrics = () => {
     const todayKey = getDateKey();
-    const { startKey: weekStartKey, endKey: weekEndKey } = getWeekRange();
-    const monthKey = getMonthKey();
-    const monthStartKey = `${monthKey}-01`;
-
-    const ordersInRange = (startKey, endKey, predicate = () => true) =>
-      orders.filter((order) => {
-        const orderDateKey = getDateKey(order.orderDate);
-        return isDateKeyInRange(orderDateKey, startKey, endKey) && predicate(order);
-      });
-
-    const recapsInRange = (startKey, endKey) =>
-      dailyRecaps.filter((recap) =>
-        isDateKeyInRange(getDateKey(recap.recapDate), startKey, endKey)
-      );
-
-    const sumOrderRevenue = (orderList) =>
-      orderList.reduce(
-        (total, order) => total + getOrderReceivedAmount(order),
-        0
-      );
-
-    const currentMonthOrders = ordersInRange(monthStartKey, todayKey);
-    const currentMonthRecaps = recapsInRange(monthStartKey, todayKey);
-    const currentMonthRecapDateKeys = new Set(
-      currentMonthRecaps.map((recap) => getDateKey(recap.recapDate))
-    );
-    const currentMonthRecappedOrders = currentMonthOrders.filter((order) =>
-      currentMonthRecapDateKeys.has(getDateKey(order.orderDate))
-    );
-    const currentMonthOfflineOrders = currentMonthOrders.filter(
-      (order) => order.orderType !== "Online" && !isCateringOrder(order)
-    );
-    const currentMonthOnlineOrders = currentMonthOrders.filter(
-      (order) => order.orderType === "Online" && !isCateringOrder(order)
-    );
-    const currentMonthCateringOrders = currentMonthOrders.filter(isCateringOrder);
-    const currentMonthRevenue = sumOrderRevenue(currentMonthOrders);
-    const currentMonthRecappedRevenue = sumOrderRevenue(
-      currentMonthRecappedOrders
-    );
-    const currentMonthHpp = getOrdersHppTotal(currentMonthOrders, menuItems);
-    const currentMonthRecappedHpp = getOrdersHppTotal(
-      currentMonthRecappedOrders,
-      menuItems
-    );
-    const currentMonthGrossProfit =
-      currentMonthRecappedRevenue - currentMonthRecappedHpp;
-    const currentMonthCashBalance = currentMonthRecaps.reduce((total, recap) => {
-      return (
-        total +
-        toNumber(recap.cashIn) +
-        toNumber(recap.qrisIn) +
-        toNumber(recap.transferIn) -
-        toNumber(recap.dailyExpense)
-      );
-    }, 0);
-    const stockNeedsOrderNames = stockItems
-      .filter((item) => item.status === "HARUS ORDER")
-      .map((item) => item.name)
-      .join(", ");
-    const activeCateringCount = orders.filter(
-      (order) => isCateringOrder(order) && order.orderStatus !== "Completed"
-    ).length;
-
-    const workbook = XLSX.utils.book_new();
-
-    appendSheet(
-      workbook,
-      "Ringkasan",
-      [
-        ["Omzet hari ini", sumOrderRevenue(ordersInRange(todayKey, todayKey))],
-        [
-          `Omzet minggu ini (${weekStartKey} s.d. ${weekEndKey})`,
-          sumOrderRevenue(ordersInRange(weekStartKey, weekEndKey)),
-        ],
-        ["Omzet bulan ini", currentMonthRevenue],
-        ["Laba kotor bulan ini", currentMonthGrossProfit],
-        [" - Offline", sumOrderRevenue(currentMonthOfflineOrders)],
-        [" - Online", sumOrderRevenue(currentMonthOnlineOrders)],
-        [" - Catering", sumOrderRevenue(currentMonthCateringOrders)],
-        ["Saldo kas", currentMonthCashBalance],
-        ["HPP bulan ini", currentMonthHpp],
-        ["Catering aktif (belum terkirim)", activeCateringCount],
-        ["Stok HARUS ORDER", stockNeedsOrderNames || "-"],
-      ],
-      [42, 34],
-      {
-        variant: "summary",
-        title: "NISKALA COFFEE & EATERY - RINGKASAN USAHA",
-        subtitle: `Diunduh ${todayKey} | Periode bulan ${getMonthLabel(monthKey)}`,
-        downloadedAt: todayKey,
-      }
-    );
-
-    appendSheet(
-      workbook,
-      "Harian",
-      [
-        [
-          "Tanggal",
-          "Petugas",
-          "Trans",
-          "Offline",
-          "Online",
-          "Catering",
-          "Total",
-          "HPP",
-          "Laba",
-          "Selisih kas",
-          "Menu laku",
-          "Catatan",
-        ],
-        ...dailyRecaps.map((recap) => {
-          const dateKey = getDateKey(recap.recapDate);
-          const dayOrders = ordersInRange(dateKey, dateKey);
-          const dayHpp = getOrdersHppTotal(dayOrders, menuItems);
-          const dayRevenue = sumOrderRevenue(dayOrders) || toNumber(recap.totalRevenue);
-
-          return [
-            dateKey,
-            recap.shiftOfficer || "-",
-            toNumber(recap.transactionTotal),
-            toNumber(recap.offlineRevenue),
-            toNumber(recap.onlineRevenue),
-            toNumber(recap.cateringRevenue),
-            dayRevenue,
-            dayHpp,
-            dayRevenue - dayHpp,
-            toNumber(recap.cashDifference),
-            recap.bestMenu || "-",
-            recap.note || "-",
-          ];
-        }),
-      ],
-      [14, 20, 10, 16, 16, 16, 16, 16, 16, 16, 24, 36]
-    );
-
-    appendSheet(
-      workbook,
-      "Mingguan",
-      [
-        [
-          "Periode",
-          "Offline",
-          "Online",
-          "Catering",
-          "Total",
-          "Laba kotor",
-          "Order cat.",
-          "Channel",
-          "Evaluasi tim",
-          "Evaluasi stok",
-          "Action plan",
-        ],
-        ...weeklyRecaps.map((recap) => [
-          `${getDateKey(recap.periodStartDate)} s.d. ${getDateKey(
-            recap.periodEndDate
-          )}`,
-          toNumber(recap.offlineRevenue),
-          toNumber(recap.onlineRevenue),
-          toNumber(recap.cateringRevenue),
-          toNumber(recap.totalOmzet),
-          toNumber(recap.grossProfit),
-          toNumber(recap.cateringOrderCount),
-          recap.topChannel || "-",
-          recap.teamEvaluation || "-",
-          recap.stockEvaluation || "-",
-          recap.actionPlan || "-",
-        ]),
-      ],
-      [24, 16, 16, 16, 16, 16, 12, 16, 34, 34, 42]
-    );
-
-    appendSheet(
-      workbook,
-      "Bulanan",
-      [
-        [
-          "Bulan",
-          "Omzet",
-          "HPP",
-          "Laba kotor",
-          "Laba bersih",
-          "Order cat.",
-          "Menu dipertahankan",
-          "Menu dievaluasi",
-          "Evaluasi promosi",
-          "Evaluasi supplier",
-          "Strategi bulan depan",
-        ],
-        ...monthlyRecaps.map((recap) => {
-          const monthStart = `${recap.periodMonth}-01`;
-          const monthEndDate = new Date(monthStart);
-          monthEndDate.setMonth(monthEndDate.getMonth() + 1);
-          monthEndDate.setDate(0);
-          const monthEnd = getDateKey(monthEndDate);
-          const monthOrders = ordersInRange(monthStart, monthEnd);
-          const monthRevenue =
-            sumOrderRevenue(monthOrders) || toNumber(recap.omzet);
-          const monthHpp = getOrdersHppTotal(monthOrders, menuItems);
-          const monthGrossProfit = monthRevenue - monthHpp;
-          const monthExpense = recapsInRange(monthStart, monthEnd).reduce(
-            (total, dailyRecap) => total + toNumber(dailyRecap.dailyExpense),
-            0
-          );
-
-          return [
-            getMonthLabel(recap.periodMonth),
-            monthRevenue,
-            monthHpp,
-            monthGrossProfit,
-            monthGrossProfit - monthExpense,
-            toNumber(recap.cateringOrderCount),
-            recap.retainedMenu || "-",
-            recap.evaluatedMenu || "-",
-            recap.promotionEvaluation || "-",
-            recap.supplierEvaluation || "-",
-            recap.nextMonthStrategy || "-",
-          ];
-        }),
-      ],
-      [18, 16, 16, 16, 16, 12, 28, 28, 34, 34, 42]
-    );
-
-    const orderRows = (orderList, includeCateringFields = false) => [
-      includeCateringFields
-        ? [
-            "Order ID",
-            "Tanggal",
-            "Customer",
-            "Items",
-            "Status",
-            "Metode Bayar",
-            "Total",
-            "DP diterima",
-            "Sisa",
-            "Tanggal event",
-            "Lunas",
-          ]
-        : [
-            "Order ID",
-            "Tanggal",
-            "Customer",
-            "Items",
-            "Tipe",
-            "Platform",
-            "Status",
-            "Metode Bayar",
-            "Total",
-            "Diterima",
-          ],
-      ...orderList.map((order) =>
-        includeCateringFields
-          ? [
-              getOrderCode(order),
-              formatDateTime(order.orderDate),
-              order.customerDetails?.name || "-",
-              getOrderItemCount(order),
-              order.orderStatus || "-",
-              order.paymentMethod || "-",
-              toNumber(order.bills?.totalWithTax),
-              toNumber(order.cateringDetails?.dp || order.bills?.dp),
-              toNumber(order.bills?.remainingBalance),
-              getDateKey(order.cateringDetails?.eventDate || null) || "-",
-              order.cateringDetails?.isPaid ? "Ya" : "Belum",
-            ]
-          : [
-              getOrderCode(order),
-              formatDateTime(order.orderDate),
-              order.customerDetails?.name || "-",
-              getOrderItemCount(order),
-              getOrderTypeLabel(order),
-              order.orderPlatform || "-",
-              order.orderStatus || "-",
-              order.paymentMethod || "-",
-              toNumber(order.bills?.totalWithTax),
-              getOrderReceivedAmount(order),
-            ]
-      ),
+    const headers = [
+      "No",
+      "Tanggal",
+      "Nama Menu",
+      "Jumlah",
+      " Harga ",
+      " Total Harga ",
+      "Jenis Pembayaran",
+      " Potongan Pendapatan ",
+      " Pendapatan Bersih ",
+      " HPP ",
+      " Keuntungan ",
     ];
-
-    appendSheet(
-      workbook,
-      "Catering",
-      orderRows(orders.filter(isCateringOrder), true),
-      [16, 24, 22, 10, 14, 16, 16, 16, 16, 16, 12]
+    const isQrisPayment = (paymentMethod) =>
+      String(paymentMethod || "").trim().toLowerCase() === "qris";
+    const sortedOrders = [...filteredOrders].sort(
+      (firstOrder, secondOrder) =>
+        new Date(firstOrder.orderDate) - new Date(secondOrder.orderDate)
     );
-    appendSheet(
-      workbook,
-      "Online",
-      orderRows(
-        orders.filter((order) => order.orderType === "Online" && !isCateringOrder(order))
-      ),
-      [16, 24, 22, 10, 22, 18, 14, 16, 16, 16]
-    );
-    appendSheet(
-      workbook,
-      "Offline",
-      orderRows(
-        orders.filter((order) => order.orderType !== "Online" && !isCateringOrder(order))
-      ),
-      [16, 24, 22, 10, 18, 14, 14, 16, 16, 16]
-    );
+    const reportRows = [];
+    let rowNumber = 1;
 
-    appendSheet(
-      workbook,
-      "Kas",
-      [
-        [
-          "Tanggal",
-          "Petugas",
-          "Cash masuk",
-          "QRIS masuk",
-          "Transfer masuk",
-          "Pengeluaran",
-          "Selisih kas",
-          "Saldo kas estimasi",
-        ],
-        ...dailyRecaps.map((recap) => {
-          const cashBalance =
-            toNumber(recap.cashIn) +
-            toNumber(recap.qrisIn) +
-            toNumber(recap.transferIn) -
-            toNumber(recap.dailyExpense);
+    sortedOrders.forEach((order) => {
+      const paymentMethod = order.paymentMethod || "-";
+      const hasQrisDeduction = isQrisPayment(paymentMethod);
 
-          return [
-            getDateKey(recap.recapDate),
-            recap.shiftOfficer || "-",
-            toNumber(recap.cashIn),
-            toNumber(recap.qrisIn),
-            toNumber(recap.transferIn),
-            toNumber(recap.dailyExpense),
-            toNumber(recap.cashDifference),
-            cashBalance,
-          ];
-        }),
-      ],
-      [14, 20, 16, 16, 18, 16, 16, 20]
+      (order.items || []).forEach((item) => {
+        const quantity = Math.max(Number(item.quantity) || 0, 0);
+        const price = toNumber(item.pricePerQuantity);
+        const totalPrice = price * quantity;
+        const deduction = hasQrisDeduction ? totalPrice * 0.007 : 0;
+        const netRevenue = totalPrice - deduction;
+        const hpp = getOrderItemHpp(item, menuItems) * quantity;
+
+        reportRows.push([
+          rowNumber,
+          getDateKey(order.orderDate),
+          item.name || "-",
+          quantity,
+          price,
+          totalPrice,
+          paymentMethod,
+          deduction,
+          netRevenue,
+          hpp,
+          netRevenue - hpp,
+        ]);
+        rowNumber += 1;
+      });
+    });
+
+    const totalNetRevenue = reportRows.reduce(
+      (total, row) => total + toNumber(row[8]),
+      0
+    );
+    const totalHpp = reportRows.reduce(
+      (total, row) => total + toNumber(row[9]),
+      0
+    );
+    const totalProfit = reportRows.reduce(
+      (total, row) => total + toNumber(row[10]),
+      0
     );
 
-    appendSheet(
-      workbook,
-      "Stok",
-      [
-        ["Nama", "Kategori", "Stok", "Minimal", "Unit", "Supplier", "Status"],
-        ...stockItems.map((item) => [
-          item.name,
-          item.category || "-",
-          item.isUnlimited ? "Bebas Stok" : toNumber(item.stock),
-          item.isUnlimited ? "-" : toNumber(item.minimumStock),
-          item.unit || "-",
-          item.supplier || "-",
-          item.isUnlimited ? "BEBAS STOK" : item.status || "-",
-        ]),
-      ],
-      [28, 18, 12, 12, 12, 24, 18]
-    );
+    reportRows.push([
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "TOTAL",
+      totalNetRevenue,
+      totalHpp,
+      totalProfit,
+    ]);
 
-    appendSheet(
-      workbook,
-      "Pembelian",
-      [
-        ["Tanggal", "Item", "Supplier", "Qty", "Satuan", "Harga", "Total", "Catatan"],
-        ["Belum ada data pembelian"],
-      ],
-      [14, 28, 24, 10, 12, 16, 16, 36]
-    );
+    const periodLabel =
+      selectedPeriod === "custom"
+        ? formatRangeBadge(periodRange.startKey, periodRange.endKey)
+        : activePeriod.label;
+    const worksheetRows = [
+      [`LAPORAN KEUANGAN NISKALA CAFE - ${periodLabel}`],
+      headers,
+      ...reportRows,
+    ];
+    const workbook = XLSX.utils.book_new();
+    const worksheet = XLSX.utils.aoa_to_sheet(worksheetRows);
+    const lastRowIndex = worksheetRows.length - 1;
+    const lastColumnIndex = headers.length - 1;
+    const lastDataRowIndex = Math.max(lastRowIndex - 1, 1);
 
-    XLSX.writeFile(workbook, `Laporan-Niskala-${todayKey}.xlsx`);
+    worksheet["!cols"] = [
+      { wch: 6 },
+      { wch: 14 },
+      { wch: 28 },
+      { wch: 10 },
+      { wch: 14 },
+      { wch: 16 },
+      { wch: 20 },
+      { wch: 22 },
+      { wch: 20 },
+      { wch: 14 },
+      { wch: 16 },
+    ];
+    worksheet["!rows"] = worksheetRows.map((_, rowIndex) => ({
+      hpt: rowIndex === 0 ? 28 : rowIndex === 1 ? 24 : 21,
+    }));
+    worksheet["!merges"] = [
+      {
+        s: { r: 0, c: 0 },
+        e: { r: 0, c: lastColumnIndex },
+      },
+    ];
+    worksheet["!autofilter"] = {
+      ref: XLSX.utils.encode_range({
+        s: { r: 1, c: 0 },
+        e: { r: lastDataRowIndex, c: lastColumnIndex },
+      }),
+    };
+    worksheet["!freeze"] = { xSplit: 0, ySplit: 2 };
+    worksheet["!views"] = [{ state: "frozen", xSplit: 0, ySplit: 2 }];
+
+    applyStyle(worksheet, 0, 0, {
+      font: { bold: true, sz: 15, color: { rgb: "FFFFFF" } },
+      fill: { fgColor: { rgb: "1F4E3D" } },
+      alignment: { horizontal: "center", vertical: "center" },
+    });
+
+    headers.forEach((_, columnIndex) => {
+      applyStyle(worksheet, 1, columnIndex, {
+        ...excelStyles.header,
+        alignment: {
+          horizontal: "center",
+          vertical: "center",
+          wrapText: true,
+        },
+      });
+    });
+
+    for (let rowIndex = 2; rowIndex <= lastRowIndex; rowIndex += 1) {
+      for (let columnIndex = 0; columnIndex <= lastColumnIndex; columnIndex += 1) {
+        const address = XLSX.utils.encode_cell({ r: rowIndex, c: columnIndex });
+        const isTotalRow = rowIndex === lastRowIndex;
+        const isEvenDataRow = (rowIndex - 2) % 2 === 0;
+        const baseDataStyle = {
+          ...excelStyles.cell,
+          fill: {
+            fgColor: {
+              rgb: isEvenDataRow ? "FFFFFF" : "F7F3EC",
+            },
+          },
+        };
+        const totalRowStyle = {
+          ...excelStyles.header,
+          fill: { fgColor: { rgb: "D9EAD3" } },
+          font: { bold: true, color: { rgb: "1F1F1F" } },
+        };
+
+        applyStyle(
+          worksheet,
+          rowIndex,
+          columnIndex,
+          isTotalRow ? totalRowStyle : baseDataStyle
+        );
+
+        if ([0, 3, 4, 5, 7, 8, 9, 10].includes(columnIndex)) {
+          worksheet[address].s = {
+            ...(worksheet[address].s || {}),
+            alignment: {
+              horizontal: "right",
+              vertical: "center",
+              wrapText: true,
+            },
+          };
+        }
+
+        if ([1, 6].includes(columnIndex)) {
+          worksheet[address].s = {
+            ...(worksheet[address].s || {}),
+            alignment: {
+              horizontal: "center",
+              vertical: "center",
+              wrapText: true,
+            },
+          };
+        }
+
+        if ([0, 3].includes(columnIndex)) {
+          worksheet[address].z = "#,##0";
+        }
+
+        if ([4, 5, 7, 8, 9, 10].includes(columnIndex)) {
+          worksheet[address].z = rupiahExcelFormat;
+        }
+      }
+    }
+
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Sheet1");
+    XLSX.writeFile(workbook, `Laporan-Keuangan-Niskala-${todayKey}.xlsx`);
   };
 
   return (
@@ -1337,14 +1197,16 @@ const Metrics = () => {
               </svg>
             </button>
             {isPeriodOpen && (
-              <div className="absolute right-0 top-[calc(100%+8px)] z-20 w-full min-w-44 overflow-hidden rounded-lg border border-[#333] bg-[#1a1a1a] shadow-2xl shadow-black/40 sm:w-44">
-                {periodOptions.map((period) => (
+              <div className="absolute right-0 top-[calc(100%+8px)] z-20 w-full min-w-44 overflow-hidden rounded-lg border border-[#333] bg-[#1a1a1a] shadow-2xl shadow-black/40 sm:w-72">
+                {PERIOD_OPTIONS.map((period) => (
                   <button
                     key={period.value}
                     type="button"
                     onClick={() => {
                       setSelectedPeriod(period.value);
-                      setIsPeriodOpen(false);
+                      if (period.value !== "custom") {
+                        setIsPeriodOpen(false);
+                      }
                     }}
                     className={`block w-full px-4 py-3 text-left text-sm font-semibold hover:bg-[#262626] ${
                       selectedPeriod === period.value
@@ -1352,9 +1214,44 @@ const Metrics = () => {
                         : "text-[#f5f5f5]"
                     }`}
                   >
-                    {period.label}
+                    <span className="inline-flex items-center gap-2">
+                      {period.value === "custom" && <FiCalendar />}
+                      {period.label}
+                    </span>
                   </button>
                 ))}
+                {selectedPeriod === "custom" && (
+                  <div className="space-y-3 border-t border-[#333] p-4">
+                    <label className="block text-xs font-semibold text-[#ababab]">
+                      Dari
+                      <input
+                        type="date"
+                        value={customDateRange.startDate}
+                        onChange={(event) =>
+                          setCustomDateRange((current) => ({
+                            ...current,
+                            startDate: event.target.value,
+                          }))
+                        }
+                        className="mt-1 w-full rounded-md border border-[#333] bg-[#101010] px-3 py-2 text-sm font-semibold text-[#f5f5f5] outline-none transition focus:border-[#a79981]"
+                      />
+                    </label>
+                    <label className="block text-xs font-semibold text-[#ababab]">
+                      Sampai
+                      <input
+                        type="date"
+                        value={customDateRange.endDate}
+                        onChange={(event) =>
+                          setCustomDateRange((current) => ({
+                            ...current,
+                            endDate: event.target.value,
+                          }))
+                        }
+                        className="mt-1 w-full rounded-md border border-[#333] bg-[#101010] px-3 py-2 text-sm font-semibold text-[#f5f5f5] outline-none transition focus:border-[#a79981]"
+                      />
+                    </label>
+                  </div>
+                )}
               </div>
             )}
           </div>
