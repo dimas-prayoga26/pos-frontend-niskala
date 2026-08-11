@@ -1,0 +1,96 @@
+.orders-date-range-picker {
+  max-width: calc(100vw - 2rem);
+  width: 20.5rem;
+}
+
+.orders-date-range-picker .rdrCalendarWrapper {
+  color: #1f2937;
+  font-family: inherit;
+  font-size: 12px;
+  width: 100%;
+}
+
+.orders-date-range-picker .rdrMonthAndYearWrapper {
+  height: 40px;
+  padding-top: 4px;
+}
+
+.orders-date-range-picker .rdrNextPrevButton {
+  height: 24px;
+  margin: 0 0.35rem;
+  width: 24px;
+}
+
+.orders-date-range-picker .rdrMonthAndYearPickers select {
+  color: #111827;
+  font-weight: 700;
+  padding: 4px 22px 4px 8px;
+}
+
+.orders-date-range-picker .rdrMonth {
+  width: 100%;
+  max-width: calc(100vw - 2rem);
+  padding: 0 0.85rem 0.75rem;
+}
+
+.orders-date-range-picker .rdrWeekDays,
+.orders-date-range-picker .rdrDays {
+  gap: 0;
+}
+
+.orders-date-range-picker .rdrWeekDay {
+  color: #4b5563;
+  font-weight: 700;
+  line-height: 24px;
+}
+
+.orders-date-range-picker .rdrDay {
+  height: 2rem;
+  line-height: 2rem;
+}
+
+.orders-date-range-picker .rdrDayNumber span {
+  color: #111827;
+  font-weight: 600;
+}
+
+.orders-date-range-picker .rdrDayPassive .rdrDayNumber span {
+  color: #9ca3af;
+}
+
+.orders-date-range-picker .rdrStartEdge,
+.orders-date-range-picker .rdrEndEdge,
+.orders-date-range-picker .rdrInRange {
+  color: #a79981 !important;
+}
+
+.orders-date-range-picker .rdrDayToday .rdrDayNumber span::after {
+  background: #a79981;
+}
+
+.orders-date-range-picker .orders-date-range-footer {
+  display: grid;
+  gap: 0.5rem;
+  padding: 0.55rem 0.65rem;
+}
+
+.orders-date-range-picker .orders-date-range-summary {
+  font-size: 11px;
+  line-height: 1.2;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.orders-date-range-picker .orders-date-range-actions {
+  display: grid;
+  gap: 0.35rem;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+@media (max-width: 767px) {
+  .orders-date-range-picker {
+    right: auto;
+    left: 0;
+    width: min(20.5rem, calc(100vw - 2rem));
+  }
+}
