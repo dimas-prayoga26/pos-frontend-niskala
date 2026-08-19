@@ -11,11 +11,6 @@ const useLoadData = () => {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    if (location.pathname === "/auth") {
-      setIsLoading(false);
-      return undefined;
-    }
-
     const fetchUser = async () => {
       try {
         const { data } = await getUserData();
@@ -23,7 +18,9 @@ const useLoadData = () => {
         dispatch(setUser({ _id, name, email, phone, role }));
       } catch (error) {
         dispatch(removeUser());
-        navigate("/auth");
+        if (location.pathname !== "/auth") {
+          navigate("/auth");
+        }
       } finally {
         setIsLoading(false);
       }
