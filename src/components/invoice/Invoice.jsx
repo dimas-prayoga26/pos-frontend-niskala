@@ -251,7 +251,9 @@ const buildReceiptHtml = (orderInfo, { logoSrc = receiptMark } = {}) => {
       ${receiptLine("total-separator")}
 
       <div class="footer">${
-        cateringDetails?.note
+        orderInfo.note
+          ? `Catatan: ${escapeHtml(orderInfo.note)}`
+          : cateringDetails?.note
           ? `Catatan: ${escapeHtml(cateringDetails.note)}`
           : "Thank you for your order"
       }</div>

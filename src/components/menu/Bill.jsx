@@ -125,6 +125,7 @@ const Bill = () => {
     items: cartData,
     paymentMethod: selectedPaymentMethod,
     paymentData,
+    note: customerData.note || "",
     cateringDetails: isCateringOrder
       ? {
           institution: customerData.catering?.institution || "",
@@ -499,7 +500,9 @@ const Bill = () => {
                 <div class="total-block grand"><span>Total</span><strong>${formatReceiptCurrency(totalPriceWithTax)}</strong></div>
               </div>
               ${
-                isCateringOrder && customerData.catering?.note
+                customerData.note
+                  ? `<div class="footer">Catatan: ${escapeHtml(customerData.note)}</div>`
+                  : isCateringOrder && customerData.catering?.note
                   ? `<div class="footer">Catatan: ${escapeHtml(customerData.catering.note)}</div>`
                   : `<div class="footer">Thank you for your order</div>`
               }
@@ -550,6 +553,20 @@ const Bill = () => {
         <h1 className="text-[#f5f5f5] text-md font-bold">
           {formatCurrency(totalPriceWithTax)}
         </h1>
+      </div>
+      <div className="px-5 mt-3">
+        <label className="block text-[#ababab] mb-2 text-xs font-medium">
+          Catatan Pesanan (opsional)
+        </label>
+        <textarea
+          value={customerData.note || ""}
+          onChange={(event) =>
+            dispatch(setCustomer({ note: event.target.value }))
+          }
+          placeholder="Contoh: less sugar, tanpa es, dibungkus terpisah"
+          rows={2}
+          className="w-full resize-none rounded-lg bg-[#1f1f1f] px-4 py-3 text-sm text-white outline-none"
+        />
       </div>
       {showCateringPayment && (
         <div className="px-5 mt-3">
