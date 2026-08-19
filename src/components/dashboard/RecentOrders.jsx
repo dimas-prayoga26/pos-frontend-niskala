@@ -136,6 +136,7 @@ const RecentOrders = () => {
               <th className="p-3">Tipe Order</th>
               <th className="p-3">Total</th>
               <th className="p-3 text-center">Metode Bayar</th>
+              <th className="p-3">Catatan</th>
             </tr>
           </thead>
           <tbody>
@@ -155,11 +156,14 @@ const RecentOrders = () => {
                 <td className="p-4">
                   {order.paymentMethod}
                 </td>
+                <td className="p-4 max-w-[200px] truncate" title={order.note || ""}>
+                  {order.note || "-"}
+                </td>
               </tr>
             ))}
             {filteredOrders.length === 0 && (
               <tr>
-                <td className="p-4 text-center text-[#ababab]" colSpan={7}>
+                <td className="p-4 text-center text-[#ababab]" colSpan={8}>
                   Tidak ada pesanan pada tanggal ini
                 </td>
               </tr>

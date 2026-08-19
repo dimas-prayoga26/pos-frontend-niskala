@@ -253,6 +253,14 @@ const OrderCard = ({
                   </>
                 )}
               </div>
+              <div className="mb-4 rounded-lg bg-[#262626] p-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-[#a79981]">
+                  Catatan Pesanan
+                </p>
+                <p className="mt-2 text-sm text-[#d4d4d4]">
+                  {order.note || "-"}
+                </p>
+              </div>
               {cateringDetails?.note && (
                 <div className="mb-4 rounded-lg bg-[#262626] p-3">
                   <p className="text-xs font-semibold uppercase tracking-wide text-[#a79981]">
