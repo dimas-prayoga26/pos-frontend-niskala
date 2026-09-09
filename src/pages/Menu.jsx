@@ -32,7 +32,12 @@ const Menu = () => {
             <div className="flex rounded-lg bg-[#1a1a1a] p-1">
               <button
                 onClick={() =>
-                  dispatch(setCustomer({ orderType: "Offline", orderPlatform: "" }))
+                  dispatch(setCustomer({
+                    orderType: "Offline",
+                    orderPlatformId: null,
+                    orderPlatform: "",
+                    platformTax: 0,
+                  }))
                 }
                 className={`px-4 py-2 text-sm font-semibold rounded-md ${
                   orderType === "Offline"
@@ -50,7 +55,7 @@ const Menu = () => {
                     : "text-[#ababab]"
                 }`}
               >
-                Online +20%
+                Online
               </button>
             </div>
           </div>

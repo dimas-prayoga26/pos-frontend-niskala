@@ -1,7 +1,12 @@
 import React, { useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { setCustomer } from "../../redux/slices/customerSlice";
-import { formatDate, getAvatarName } from "../../utils";
+import {
+  formatDate,
+  formatNominalInput,
+  getAvatarName,
+  normalizeNominalInput,
+} from "../../utils";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { getOrderPlatforms } from "../../https";
 import { MdKeyboardArrowDown } from "react-icons/md";
@@ -42,9 +47,18 @@ const CustomerInfo = () => {
       })
     );
   };
-  const updateOrderPlatform = (platformName) => {
-    dispatch(setCustomer({ orderPlatform: platformName }));
+  const updateOrderPlatform = (platform = null) => {
+    dispatch(
+      setCustomer({
+        orderPlatformId: platform?.id || platform?._id || null,
+        orderPlatform: platform?.name || "",
+        platformTax: Number(platform?.tax ?? platform?.taxRate ?? 0) || 0,
+      })
+    );
     setIsPlatformOpen(false);
+  };
+  const updatePlatformTax = (value) => {
+    dispatch(setCustomer({ platformTax: normalizeNominalInput(value) }));
   };
 
   const cateringFields = [
@@ -142,7 +156,7 @@ const CustomerInfo = () => {
               <div className="absolute left-0 right-0 top-[calc(100%+8px)] z-50 overflow-hidden rounded-lg border border-[#333] bg-[#1a1a1a] shadow-2xl shadow-black/40">
                 <button
                   type="button"
-                  onClick={() => updateOrderPlatform("")}
+                  onClick={() => updateOrderPlatform()}
                   className="block w-full px-4 py-3 text-left text-sm font-semibold text-[#ababab] hover:bg-[#262626] hover:text-white"
                 >
                   Pilih platform
@@ -151,7 +165,7 @@ const CustomerInfo = () => {
                   <button
                     key={platform.id || platform._id}
                     type="button"
-                    onClick={() => updateOrderPlatform(platform.name)}
+                    onClick={() => updateOrderPlatform(platform)}
                     className={`block w-full px-4 py-3 text-left text-sm font-semibold hover:bg-[#262626] ${
                       customerData.orderPlatform === platform.name
                         ? "bg-[#a79981] text-[#101010]"
@@ -162,6 +176,25 @@ const CustomerInfo = () => {
                   </button>
                 ))}
               </div>
+            )}
+
+            {customerData.orderPlatform && (
+              <label className="mt-3 block text-[#ababab] text-xs font-medium">
+                Biaya Platform
+                <div className="mt-2 flex overflow-hidden rounded-lg bg-[#1f1f1f] ring-1 ring-transparent transition focus-within:ring-[#a79981]/50">
+                  <span className="flex shrink-0 items-center px-4 text-sm font-bold text-[#a79981]">
+                    Rp
+                  </span>
+                  <input
+                    value={formatNominalInput(customerData.platformTax)}
+                    onChange={(event) => updatePlatformTax(event.target.value)}
+                    type="text"
+                    inputMode="numeric"
+                    placeholder="0"
+                    className="min-w-0 w-full bg-transparent py-3 pr-4 text-sm text-white outline-none"
+                  />
+                </div>
+              </label>
             )}
           </div>
         )}

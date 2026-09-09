@@ -89,7 +89,9 @@ const emptyMenuForm = {
   categoryId: "",
   isAvailable: true,
   name: "",
-  price: "",
+  regularPrice: "",
+  includeOnlinePlatform: false,
+  onlinePrice: "",
   hppCost: "",
   grossProfit: "",
   variants: [],
@@ -108,6 +110,50 @@ const resolveMenuImageUrl = (imagePath) => {
   if (imagePath.startsWith("/uploads/")) return `${backendBaseUrl}${imagePath}`;
 
   return imagePath;
+};
+
+const normalizeMoneyInput = (value) => {
+  const text = String(value ?? "").trim().replace(/\s/g, "");
+  if (!text) return "";
+
+  const hasComma = text.includes(",");
+  const hasDot = text.includes(".");
+
+  if (hasComma && hasDot) {
+    return text.replace(/\./g, "").replace(",", ".");
+  }
+
+  if (hasComma) {
+    return text.replace(",", ".");
+  }
+
+  if (hasDot) {
+    const parts = text.split(".");
+    const lastPart = parts[parts.length - 1];
+    const looksLikeThousands =
+      parts.length > 1 &&
+      lastPart.length === 3 &&
+      parts.every((part) => /^\d+$/.test(part));
+
+    return looksLikeThousands ? text.replace(/\./g, "") : text;
+  }
+
+  return text;
+};
+
+const parseMoneyInput = (value, fallback = 0) => {
+  const normalized = normalizeMoneyInput(value);
+  if (!normalized) return fallback;
+
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : fallback;
+};
+
+const isValidMoneyInput = (value) => {
+  if (value === "" || value === null || value === undefined) return true;
+
+  const normalized = normalizeMoneyInput(value);
+  return normalized !== "" && Number.isFinite(Number(normalized));
 };
 
 const getCategoryId = (category) => String(category?.id || category?._id || "");
@@ -348,7 +394,14 @@ const MenuManagement = () => {
         String(item.categoryId || item.category?.id || item.category?._id) ===
           selectedCategoryId) &&
       (!keyword ||
-        [item.name, item.category?.name, item.price, item.regularPrice, item.largePrice]
+        [
+          item.name,
+          item.category?.name,
+          item.regularPrice ?? item.price,
+          item.includeOnlinePlatform ? "online" : "offline",
+          item.onlinePrice,
+          item.largePrice,
+        ]
           .join(" ")
           .toLowerCase()
           .includes(keyword))
@@ -447,6 +500,8 @@ const MenuManagement = () => {
   const addMenuSizeField = () => {
     setMenuForm((current) => ({
       ...current,
+      includeOnlinePlatform: false,
+      onlinePrice: "",
       sizes: [
         ...current.sizes,
         { name: "", price: "", hppCost: "", grossProfit: "" },
@@ -557,10 +612,10 @@ const MenuManagement = () => {
     const sizes = menuForm.sizes
       .map((size) => ({
         name: size.name.trim(),
-        price: Number(size.price) || 0,
-        hppCost: size.hppCost === "" ? 0 : Number(size.hppCost) || 0,
+        price: parseMoneyInput(size.price),
+        hppCost: parseMoneyInput(size.hppCost),
         grossProfit:
-          size.grossProfit === "" ? 0 : Number(size.grossProfit) || 0,
+          parseMoneyInput(size.grossProfit),
       }))
       .filter((size) => size.name && size.price >= 0);
     const variants = menuForm.variants
@@ -581,10 +636,13 @@ const MenuManagement = () => {
           ingredient.quantity >= 0 &&
           ingredient.unit
       );
-    const basePrice = Number(menuForm.price) || 0;
-    const hppCost = menuForm.hppCost === "" ? 0 : Number(menuForm.hppCost) || 0;
-    const grossProfit =
-      menuForm.grossProfit === "" ? 0 : Number(menuForm.grossProfit) || 0;
+    const basePrice = parseMoneyInput(menuForm.regularPrice);
+    const onlinePrice =
+      menuForm.includeOnlinePlatform && menuForm.onlinePrice !== ""
+        ? parseMoneyInput(menuForm.onlinePrice)
+        : null;
+    const hppCost = parseMoneyInput(menuForm.hppCost);
+    const grossProfit = parseMoneyInput(menuForm.grossProfit);
 
     const hasMenuImage =
       Boolean(menuForm.imageFile) || Boolean(menuForm.imagePath.trim());
@@ -592,7 +650,7 @@ const MenuManagement = () => {
     if (
       !menuForm.categoryId ||
       !menuForm.name.trim() ||
-      (!hasMenuSizes && menuForm.price === "") ||
+      (!hasMenuSizes && menuForm.regularPrice === "") ||
       !hasMenuImage
     ) {
       enqueueSnackbar(
@@ -602,6 +660,44 @@ const MenuManagement = () => {
         {
           variant: "warning",
         }
+      );
+      return;
+    }
+
+    if (
+      menuForm.includeOnlinePlatform &&
+      !hasMenuSizes &&
+      menuForm.onlinePrice === ""
+    ) {
+      enqueueSnackbar("Harga online wajib diisi jika platform online disertakan.", {
+        variant: "warning",
+      });
+      return;
+    }
+
+    const baseMoneyFields = [
+      menuForm.regularPrice,
+      menuForm.hppCost,
+      menuForm.grossProfit,
+    ];
+
+    if (menuForm.includeOnlinePlatform) {
+      baseMoneyFields.push(menuForm.onlinePrice);
+    }
+
+    const hasInvalidBaseMoney =
+      !hasMenuSizes &&
+      baseMoneyFields.some((value) => !isValidMoneyInput(value));
+    const hasInvalidSizeMoney = menuForm.sizes.some((size) =>
+      [size.price, size.hppCost, size.grossProfit].some(
+        (value) => !isValidMoneyInput(value)
+      )
+    );
+
+    if (hasInvalidBaseMoney || hasInvalidSizeMoney) {
+      enqueueSnackbar(
+        "Format nominal tidak valid. Contoh yang benar: 20000, 20.000, atau 5440,5.",
+        { variant: "warning" }
       );
       return;
     }
@@ -619,7 +715,11 @@ const MenuManagement = () => {
     );
 
     if (
-      (!hasMenuSizes && (basePrice < 0 || hppCost < 0 || grossProfit < 0)) ||
+      (!hasMenuSizes &&
+        (basePrice < 0 ||
+          hppCost < 0 ||
+          grossProfit < 0 ||
+          (onlinePrice !== null && onlinePrice < 0))) ||
       hasInvalidSizeFinancial
     ) {
       enqueueSnackbar("Harga, HPP, dan gross profit tidak boleh minus.", {
@@ -631,8 +731,11 @@ const MenuManagement = () => {
     menuItemMutation.mutate({
       categoryId: menuForm.categoryId,
       name: menuForm.name.trim(),
-      price: hasMenuSizes ? null : basePrice,
+      includeOnlinePlatform: hasMenuSizes
+        ? false
+        : Boolean(menuForm.includeOnlinePlatform),
       regularPrice: hasMenuSizes ? null : basePrice,
+      onlinePrice: hasMenuSizes ? null : onlinePrice,
       largePrice: hasMenuSizes ? sizes[1]?.price ?? null : null,
       hppCost: hasMenuSizes ? null : hppCost,
       grossProfit: hasMenuSizes ? null : grossProfit,
@@ -674,7 +777,14 @@ const MenuManagement = () => {
       categoryId: String(item.categoryId || item.category?.id || ""),
       isAvailable: item.isAvailable !== false,
       name: item.name,
-      price: hasItemSizes ? "" : String(item.price ?? ""),
+      regularPrice: hasItemSizes
+        ? ""
+        : String(item.regularPrice ?? item.price ?? ""),
+      includeOnlinePlatform: Boolean(item.includeOnlinePlatform),
+      onlinePrice:
+        item.onlinePrice === null || item.onlinePrice === undefined
+          ? ""
+          : String(item.onlinePrice),
       hppCost: hasItemSizes ? "" : String(item.hppCost ?? item.hpp ?? ""),
       grossProfit: hasItemSizes ? "" : String(item.grossProfit ?? item.profit ?? ""),
       variants: item.variants?.length ? item.variants : [],
@@ -1165,24 +1275,75 @@ const MenuManagement = () => {
             </label>
             {!hasMenuSizes && (
               <>
-                <label className="mt-4 block text-sm font-semibold text-[#ababab]">
-                  Harga Reguler
-                  <div className="mt-2 flex overflow-hidden rounded-lg bg-[#262626]">
-                    <span className="flex shrink-0 items-center px-4 text-sm font-bold text-[#a79981]">
-                      Rp
+                <div className="mt-4">
+                  <div className="mb-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <span className="text-sm font-semibold text-[#ababab]">
+                      Harga
                     </span>
-                    <input
-                      value={menuForm.price}
-                      onChange={(event) =>
-                        updateMenuForm("price", event.target.value)
-                      }
-                      type="number"
-                      min="0"
-                      placeholder="18000"
-                      className="min-w-0 w-full bg-transparent py-3 pr-4 text-sm text-[#f5f5f5] outline-none"
-                    />
+                    <label className="flex w-fit items-center gap-3 text-sm font-bold text-[#ababab]">
+                      <span>Include online platform</span>
+                      <input
+                        type="checkbox"
+                        checked={Boolean(menuForm.includeOnlinePlatform)}
+                        onChange={(event) =>
+                          setMenuForm((current) => ({
+                            ...current,
+                            includeOnlinePlatform: event.target.checked,
+                            onlinePrice: event.target.checked
+                              ? current.onlinePrice
+                              : "",
+                          }))
+                        }
+                        className="peer sr-only"
+                      />
+                      <span className="relative h-7 w-12 rounded-full bg-[#333] transition after:absolute after:left-1 after:top-1 after:h-5 after:w-5 after:rounded-full after:bg-[#f5f5f5] after:transition peer-checked:bg-[#a79981] peer-checked:after:translate-x-5" />
+                    </label>
                   </div>
-                </label>
+                  <div
+                    className={`grid grid-cols-1 gap-3 ${
+                      menuForm.includeOnlinePlatform ? "sm:grid-cols-2" : ""
+                    }`}
+                  >
+                    <label className="block text-sm font-semibold text-[#ababab]">
+                      Harga Reguler
+                      <div className="mt-2 flex overflow-hidden rounded-lg bg-[#262626]">
+                        <span className="flex shrink-0 items-center px-4 text-sm font-bold text-[#a79981]">
+                          Rp
+                        </span>
+                        <input
+                          value={menuForm.regularPrice}
+                          onChange={(event) =>
+                            updateMenuForm("regularPrice", event.target.value)
+                          }
+                          type="text"
+                          inputMode="decimal"
+                          placeholder="18000"
+                          className="min-w-0 w-full bg-transparent py-3 pr-4 text-sm text-[#f5f5f5] outline-none"
+                        />
+                      </div>
+                    </label>
+                    {menuForm.includeOnlinePlatform && (
+                      <label className="block text-sm font-semibold text-sky-200">
+                        Harga Online
+                        <div className="mt-2 flex overflow-hidden rounded-lg border border-sky-500/30 bg-sky-500/10">
+                          <span className="flex shrink-0 items-center px-4 text-sm font-bold text-sky-200">
+                            Rp
+                          </span>
+                          <input
+                            value={menuForm.onlinePrice}
+                            onChange={(event) =>
+                              updateMenuForm("onlinePrice", event.target.value)
+                            }
+                            type="text"
+                            inputMode="decimal"
+                            placeholder="21000"
+                            className="min-w-0 w-full bg-transparent py-3 pr-4 text-sm text-[#f5f5f5] outline-none"
+                          />
+                        </div>
+                      </label>
+                    )}
+                  </div>
+                </div>
                 <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
                   <label className="block text-sm font-semibold text-amber-200">
                     HPP <span className="text-xs text-[#777]">(Opsional)</span>
@@ -1195,8 +1356,8 @@ const MenuManagement = () => {
                         onChange={(event) =>
                           updateMenuForm("hppCost", event.target.value)
                         }
-                        type="number"
-                        min="0"
+                        type="text"
+                        inputMode="decimal"
                         placeholder="0"
                         className="min-w-0 w-full bg-transparent py-3 pr-4 text-sm text-[#f5f5f5] outline-none"
                       />
@@ -1213,8 +1374,8 @@ const MenuManagement = () => {
                         onChange={(event) =>
                           updateMenuForm("grossProfit", event.target.value)
                         }
-                        type="number"
-                        min="0"
+                        type="text"
+                        inputMode="decimal"
                         placeholder="0"
                         className="min-w-0 w-full bg-transparent py-3 pr-4 text-sm text-[#f5f5f5] outline-none"
                       />
@@ -1293,8 +1454,8 @@ const MenuManagement = () => {
                               onChange={(event) =>
                                 updateMenuSize(index, field, event.target.value)
                               }
-                              type="number"
-                              min="0"
+                              type="text"
+                              inputMode="decimal"
                               placeholder={placeholder}
                               className="min-w-0 w-full bg-transparent py-3 pr-2 text-sm text-[#f5f5f5] outline-none"
                             />
@@ -1522,7 +1683,7 @@ const MenuManagement = () => {
               <div>
                 <h3 className="text-lg font-bold text-[#f5f5f5]">Menu Items</h3>
                 <p className="mt-1 text-sm text-[#ababab]">
-                  Daftar menu, harga, HPP, dan untung kotor.
+                  Daftar menu, harga reguler, harga online, HPP, dan untung kotor.
                 </p>
               </div>
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
@@ -1564,7 +1725,9 @@ const MenuManagement = () => {
                   <tr>
                     <th className="p-3">Menu</th>
                     <th className="p-3">Category</th>
-                    <th className="p-3">Harga</th>
+                    <th className="p-3 text-center">Online</th>
+                    <th className="p-3">Harga Reguler</th>
+                    <th className="p-3">Harga Online</th>
                     <th className="p-3">HPP</th>
                     <th className="p-3">Untung Kotor</th>
                     <th className="p-3 text-center">Status</th>
@@ -1579,11 +1742,27 @@ const MenuManagement = () => {
                     >
                       <td className="p-4 font-semibold">{item.name}</td>
                       <td className="p-4">{item.category?.name || "-"}</td>
+                      <td className="p-4 text-center">
+                        <span
+                          className={`inline-flex rounded-md px-3 py-1 text-xs font-bold ${
+                            item.includeOnlinePlatform
+                              ? "bg-sky-900/60 text-sky-300"
+                              : "bg-[#333] text-[#ababab]"
+                          }`}
+                        >
+                          {item.includeOnlinePlatform ? "Ya" : "Tidak"}
+                        </span>
+                      </td>
                       <td className="p-4">
                         <div className="text-sm font-semibold">
                           {(item.sizes?.length
                             ? item.sizes
-                            : [{ name: "Harga", price: item.price }]
+                            : [
+                                {
+                                  name: "Reguler",
+                                  price: item.regularPrice ?? item.price,
+                                },
+                              ]
                           ).map((size, sizeIndex) => (
                             <p
                               key={`${size.name}-${sizeIndex}`}
@@ -1593,6 +1772,11 @@ const MenuManagement = () => {
                             </p>
                           ))}
                         </div>
+                      </td>
+                      <td className="p-4 text-sm font-semibold text-sky-200">
+                        {item.onlinePrice === null || item.onlinePrice === undefined
+                          ? "-"
+                          : formatCurrency(item.onlinePrice)}
                       </td>
                       <td className="p-4 text-sm font-semibold text-amber-200">
                         <div>

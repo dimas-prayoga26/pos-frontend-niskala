@@ -14,11 +14,10 @@ import {
   formatJakartaReceiptDate,
   formatJakartaReceiptDateTime,
   formatReceiptCurrency,
+  normalizeNominalInput,
 } from "../../utils";
 import { printReceiptDocument } from "../../utils/printReceipt";
 import receiptMark from "../../../../assets/Vector.svg";
-
-const ONLINE_ORDER_RATE = 20;
 
 const getItemTaxRate = (item) => {
   const taxRate = Number(item.taxRate);
@@ -40,6 +39,8 @@ const getTaxLabel = (cartData) => {
   return "Tax (Mixed)";
 };
 
+const getPlatformFeeLabel = () => "Biaya Platform";
+
 const formatStockAmount = (value, unit) =>
   `${Number(value || 0).toLocaleString("id-ID")} ${unit || ""}`.trim();
 
@@ -57,12 +58,15 @@ const Bill = () => {
   const orderType = customerData.orderType || "Offline";
   const onlineOrderCharge = 0;
   const taxableTotal = total + onlineOrderCharge;
-  const tax = cartData.reduce(
+  const itemTax = cartData.reduce(
     (sum, item) => sum + ((Number(item.price) || 0) * getItemTaxRate(item)) / 100,
     0
   );
+  const rawPlatformFee = Number(normalizeNominalInput(customerData.platformTax)) || 0;
+  const platformFee = orderType === "Online" ? Math.max(rawPlatformFee, 0) : 0;
+  const tax = itemTax;
   const taxLabel = getTaxLabel(cartData);
-  const totalPriceWithTax = taxableTotal + tax;
+  const totalPriceWithTax = Math.max(taxableTotal + tax - platformFee, 0);
   const isCateringOrder = cartData.some(
     (item) => item.categoryName === "Catering"
   );
@@ -112,7 +116,9 @@ const Bill = () => {
       guests: customerData.guests || 1,
     },
     orderType,
+    orderPlatformId: customerData.orderPlatformId || null,
     orderPlatform: customerData.orderPlatform || "",
+    platformTax: platformFee,
     orderStatus: "In Progress",
     bills: {
       total: total,
@@ -159,6 +165,13 @@ const Bill = () => {
 
     if (orderType === "Online" && !customerData.orderPlatform) {
       enqueueSnackbar("Please select online order platform!", {
+        variant: "warning",
+      });
+      return;
+    }
+
+    if (rawPlatformFee < 0) {
+      enqueueSnackbar("Biaya platform tidak boleh minus.", {
         variant: "warning",
       });
       return;
@@ -493,10 +506,15 @@ const Bill = () => {
                 <div class="total-block"><span>Subtotal</span><strong>${formatReceiptCurrency(total)}</strong></div>
                 ${
                   onlineOrderCharge > 0
-                    ? `<div class="total-block"><span>Online (+${ONLINE_ORDER_RATE}%)</span><strong>${formatReceiptCurrency(onlineOrderCharge)}</strong></div>`
+                    ? `<div class="total-block"><span>Online</span><strong>${formatReceiptCurrency(onlineOrderCharge)}</strong></div>`
                     : ""
                 }
-                <div class="total-block"><span>${taxLabel}</span><strong>${formatReceiptCurrency(tax)}</strong></div>
+                <div class="total-block"><span>${taxLabel}</span><strong>${formatReceiptCurrency(itemTax)}</strong></div>
+                ${
+                  platformFee > 0
+                    ? `<div class="total-block"><span>${getPlatformFeeLabel()}</span><strong>-${formatReceiptCurrency(platformFee)}</strong></div>`
+                    : ""
+                }
                 <div class="total-block grand"><span>Total</span><strong>${formatReceiptCurrency(totalPriceWithTax)}</strong></div>
               </div>
               ${
@@ -533,7 +551,7 @@ const Bill = () => {
       {onlineOrderCharge > 0 && (
         <div className="flex items-center justify-between px-5 mt-2">
           <p className="text-xs text-[#ababab] font-medium mt-2">
-            Online (+20%)
+            Online
           </p>
           <h1 className="text-[#f5f5f5] text-md font-bold">
             {formatCurrency(onlineOrderCharge)}
@@ -543,12 +561,22 @@ const Bill = () => {
       <div className="flex items-center justify-between px-5 mt-2">
         <p className="text-xs text-[#ababab] font-medium mt-2">{taxLabel}</p>
         <h1 className="text-[#f5f5f5] text-md font-bold">
-          {formatCurrency(tax)}
+          {formatCurrency(itemTax)}
         </h1>
       </div>
+      {platformFee > 0 && (
+        <div className="flex items-center justify-between px-5 mt-2">
+          <p className="text-xs text-[#ababab] font-medium mt-2">
+            {getPlatformFeeLabel()}
+          </p>
+          <h1 className="text-[#f5f5f5] text-md font-bold">
+            -{formatCurrency(platformFee)}
+          </h1>
+        </div>
+      )}
       <div className="flex items-center justify-between px-5 mt-2">
         <p className="text-xs text-[#ababab] font-medium mt-2">
-          Total With Tax
+          Total
         </p>
         <h1 className="text-[#f5f5f5] text-md font-bold">
           {formatCurrency(totalPriceWithTax)}
