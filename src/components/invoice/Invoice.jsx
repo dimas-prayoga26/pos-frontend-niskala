@@ -148,6 +148,7 @@ const buildReceiptHtml = (orderInfo, { logoSrc = receiptMark } = {}) => {
 
   const orderCode = orderInfo.orderId || orderInfo.orderCode || orderInfo.id;
   const onlineOrderCharge = Number(orderInfo.bills.onlineOrderCharge) || 0;
+  const platformFee = Number(orderInfo.platformTax || 0);
   const cateringDetails = orderInfo.cateringDetails;
   const receiptLine = (className = "") =>
     `<div class="receipt-separator${className ? ` ${className}` : ""}"><div class="receipt-line"></div></div>`;
@@ -239,10 +240,15 @@ const buildReceiptHtml = (orderInfo, { logoSrc = receiptMark } = {}) => {
         <div class="total-block"><span>Subtotal</span><strong>${formatReceiptCurrency(orderInfo.bills.total)}</strong></div>
         ${
           onlineOrderCharge > 0
-            ? `<div class="total-block"><span>Online (+20%)</span><strong>${formatReceiptCurrency(onlineOrderCharge)}</strong></div>`
+            ? `<div class="total-block"><span>Online</span><strong>${formatReceiptCurrency(onlineOrderCharge)}</strong></div>`
             : ""
         }
         <div class="total-block"><span>Tax</span><strong>${formatReceiptCurrency(orderInfo.bills.tax)}</strong></div>
+        ${
+          platformFee > 0
+            ? `<div class="total-block"><span>Biaya Platform</span><strong>-${formatReceiptCurrency(platformFee)}</strong></div>`
+            : ""
+        }
       </div>
       ${receiptLine("tax-separator")}
       <div class="receipt-grand-total">

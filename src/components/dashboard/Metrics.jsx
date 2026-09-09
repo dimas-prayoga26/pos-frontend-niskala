@@ -142,6 +142,13 @@ const getOrderItemCount = (order) =>
     0
   );
 
+const getExportItemTotal = (item) => {
+  const quantity = Math.max(Number(item.quantity) || 0, 0);
+  const price = toNumber(item.pricePerQuantity ?? item.price);
+
+  return price * quantity;
+};
+
 const normalizeNominalInput = (value) => {
   const digitsOnly = String(value).replace(/\D/g, "");
 
@@ -952,13 +959,12 @@ const Metrics = () => {
       " Harga ",
       " Total Harga ",
       "Jenis Pembayaran",
-      " Potongan Pendapatan ",
+      " Platform ",
+      " Biaya Platform ",
       " Pendapatan Bersih ",
       " HPP ",
       " Keuntungan ",
     ];
-    const isQrisPayment = (paymentMethod) =>
-      String(paymentMethod || "").trim().toLowerCase() === "qris";
     const sortedOrders = [...filteredOrders].sort(
       (firstOrder, secondOrder) =>
         new Date(firstOrder.orderDate) - new Date(secondOrder.orderDate)
@@ -968,14 +974,27 @@ const Metrics = () => {
 
     sortedOrders.forEach((order) => {
       const paymentMethod = order.paymentMethod || "-";
-      const hasQrisDeduction = isQrisPayment(paymentMethod);
+      const platformName =
+        order.orderType === "Online" ? order.orderPlatform || "-" : "-";
+      const orderItems = order.items || [];
+      const orderItemsTotal = orderItems.reduce(
+        (total, item) => total + getExportItemTotal(item),
+        0
+      );
+      const platformFeeTotal =
+        order.orderType === "Online" && order.orderPlatform
+          ? Math.min(Math.max(toNumber(order.platformTax), 0), orderItemsTotal)
+          : 0;
 
-      (order.items || []).forEach((item) => {
+      orderItems.forEach((item) => {
         const quantity = Math.max(Number(item.quantity) || 0, 0);
-        const price = toNumber(item.pricePerQuantity);
+        const price = toNumber(item.pricePerQuantity ?? item.price);
         const totalPrice = price * quantity;
-        const deduction = hasQrisDeduction ? totalPrice * 0.007 : 0;
-        const netRevenue = totalPrice - deduction;
+        const platformFee =
+          orderItemsTotal > 0
+            ? (totalPrice / orderItemsTotal) * platformFeeTotal
+            : 0;
+        const netRevenue = totalPrice - platformFee;
         const hpp = getOrderItemHpp(item, menuItems) * quantity;
 
         reportRows.push([
@@ -986,7 +1005,8 @@ const Metrics = () => {
           price,
           totalPrice,
           paymentMethod,
-          deduction,
+          platformName,
+          platformFee,
           netRevenue,
           hpp,
           netRevenue - hpp,
@@ -996,15 +1016,19 @@ const Metrics = () => {
     });
 
     const totalNetRevenue = reportRows.reduce(
+      (total, row) => total + toNumber(row[9]),
+      0
+    );
+    const totalPlatformFee = reportRows.reduce(
       (total, row) => total + toNumber(row[8]),
       0
     );
     const totalHpp = reportRows.reduce(
-      (total, row) => total + toNumber(row[9]),
+      (total, row) => total + toNumber(row[10]),
       0
     );
     const totalProfit = reportRows.reduce(
-      (total, row) => total + toNumber(row[10]),
+      (total, row) => total + toNumber(row[11]),
       0
     );
 
@@ -1015,8 +1039,8 @@ const Metrics = () => {
       "",
       "",
       "",
-      "",
       "TOTAL",
+      totalPlatformFee,
       totalNetRevenue,
       totalHpp,
       totalProfit,
@@ -1045,7 +1069,8 @@ const Metrics = () => {
       { wch: 14 },
       { wch: 16 },
       { wch: 20 },
-      { wch: 22 },
+      { wch: 16 },
+      { wch: 18 },
       { wch: 20 },
       { wch: 14 },
       { wch: 16 },
@@ -1111,7 +1136,7 @@ const Metrics = () => {
           isTotalRow ? totalRowStyle : baseDataStyle
         );
 
-        if ([0, 3, 4, 5, 7, 8, 9, 10].includes(columnIndex)) {
+        if ([0, 3, 4, 5, 8, 9, 10, 11].includes(columnIndex)) {
           worksheet[address].s = {
             ...(worksheet[address].s || {}),
             alignment: {
@@ -1122,7 +1147,7 @@ const Metrics = () => {
           };
         }
 
-        if ([1, 6].includes(columnIndex)) {
+        if ([1, 6, 7].includes(columnIndex)) {
           worksheet[address].s = {
             ...(worksheet[address].s || {}),
             alignment: {
@@ -1137,7 +1162,7 @@ const Metrics = () => {
           worksheet[address].z = "#,##0";
         }
 
-        if ([4, 5, 7, 8, 9, 10].includes(columnIndex)) {
+        if ([4, 5, 8, 9, 10, 11].includes(columnIndex)) {
           worksheet[address].z = rupiahExcelFormat;
         }
       }

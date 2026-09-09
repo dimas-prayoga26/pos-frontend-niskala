@@ -33,6 +33,15 @@ export const formatCurrency = (value) =>
 export const formatReceiptCurrency = (value) =>
   `Rp ${Math.round(Number(value) || 0).toLocaleString("id-ID")}`;
 
+export const normalizeNominalInput = (value) =>
+  String(value ?? "").replace(/\D/g, "");
+
+export const formatNominalInput = (value) => {
+  const digitsOnly = normalizeNominalInput(value);
+
+  return digitsOnly ? Number(digitsOnly).toLocaleString("id-ID") : "";
+};
+
 export const APP_TIME_ZONE = "Asia/Jakarta";
 
 const normalizeDateInput = (value = new Date()) => {

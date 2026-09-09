@@ -119,13 +119,16 @@ const MenuContainer = () => {
       items: menuItems
         .filter(
           (item) =>
-            Number(item.categoryId) === Number(category.id || category._id)
+            Number(item.categoryId) === Number(category.id || category._id) &&
+            (!isOnlineOrder || Boolean(item.includeOnlinePlatform))
         )
         .map((item) => ({
           id: item.id || item._id,
           name: item.name,
           price: item.price,
           regularPrice: item.regularPrice ?? item.price,
+          includeOnlinePlatform: Boolean(item.includeOnlinePlatform),
+          onlinePrice: item.onlinePrice ?? null,
           largePrice: item.largePrice,
           variants: item.variants || [],
           sizes: item.sizes || [],
@@ -138,7 +141,7 @@ const MenuContainer = () => {
             null,
         })),
     }));
-  }, [categoriesRes, menuItemsRes]);
+  }, [categoriesRes, isOnlineOrder, menuItemsRes]);
 
   useEffect(() => {
     if (!menuData.length) return;
@@ -169,12 +172,23 @@ const MenuContainer = () => {
   const getItemQuantity = (id) =>
     cartData.find((item) => item.id === id)?.quantity || 0;
 
-  const getMenuPrice = (price) => {
-    const basePrice = Number(price) || 0;
-    return isOnlineOrder ? Math.round(basePrice * 1.2) : basePrice;
+  const hasOnlinePrice = (price) =>
+    price !== null && price !== undefined && price !== "";
+
+  const getMenuPrice = (regularPrice, onlinePrice, includeOnlinePlatform) => {
+    if (
+      isOnlineOrder &&
+      includeOnlinePlatform &&
+      hasOnlinePrice(onlinePrice)
+    ) {
+      return Number(onlinePrice) || 0;
+    }
+
+    return Number(regularPrice) || 0;
   };
 
-  const getBaseItemPrice = (item) => item.sizes?.[0]?.price ?? item.price;
+  const getBaseItemPrice = (item) =>
+    item.sizes?.[0]?.price ?? item.regularPrice ?? item.price;
 
   const getOriginalSizePrices = (item) => {
     if (item.sizes?.length > 1) {
@@ -199,14 +213,18 @@ const MenuContainer = () => {
     if (!originalSizePrices) return null;
 
     return {
-      Reguler: getMenuPrice(originalSizePrices.Reguler),
-      Large: getMenuPrice(originalSizePrices.Large),
+      Reguler: Number(originalSizePrices.Reguler) || 0,
+      Large: Number(originalSizePrices.Large) || 0,
     };
   };
 
   const getDefaultMenuPrice = (item) =>
     getSizePrices(item)?.[getSelectedSizeName(item)] ??
-    getMenuPrice(getBaseItemPrice(item));
+    getMenuPrice(
+      getBaseItemPrice(item),
+      item.onlinePrice,
+      item.includeOnlinePlatform
+    );
 
   const increment = (item) => {
     const cartItemId = getCartItemId(item);
@@ -214,7 +232,12 @@ const MenuContainer = () => {
     const sizePrices = getSizePrices(item);
     const selectedSize = getSelectedSizeName(item);
     const menuPrice =
-      sizePrices?.[selectedSize] ?? getMenuPrice(getBaseItemPrice(item));
+      sizePrices?.[selectedSize] ??
+      getMenuPrice(
+        getBaseItemPrice(item),
+        item.onlinePrice,
+        item.includeOnlinePlatform
+      );
 
     dispatch(
       addItems({
@@ -243,7 +266,12 @@ const MenuContainer = () => {
     const sizePrices = getSizePrices(item);
     const selectedSize = getSelectedSizeName(item);
     const menuPrice =
-      sizePrices?.[selectedSize] ?? getMenuPrice(getBaseItemPrice(item));
+      sizePrices?.[selectedSize] ??
+      getMenuPrice(
+        getBaseItemPrice(item),
+        item.onlinePrice,
+        item.includeOnlinePlatform
+      );
 
     return {
       id: cartItemId,

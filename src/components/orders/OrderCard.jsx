@@ -30,6 +30,9 @@ const OrderCard = ({
   const isCatering = Boolean(cateringDetails);
   const isOnlineOrder =
     order.orderType === "Online" || (Number(order.bills?.onlineOrderCharge) || 0) > 0;
+  const platformFee = Number(order.platformTax || 0);
+  const orderTypeLabel = isOnlineOrder ? "Online" : order.orderType || "-";
+  const onlineBadgeLabel = order.orderPlatform || "Online";
   const cateringTotal = Number(order.bills?.totalWithTax) || 0;
   const rawCateringPaid = Number(cateringDetails?.dp ?? order.bills?.dp ?? 0) || 0;
   const isFullCateringPayment = cateringDetails?.paymentPlan !== "DP";
@@ -104,7 +107,7 @@ const OrderCard = ({
                 )}
                 {isOnlineOrder && (
                   <span className="rounded-md bg-[#2e5b46] px-2 py-1 text-xs font-bold text-[#bdf5d3]">
-                    {order.orderPlatform || "Online"}
+                    {onlineBadgeLabel}
                   </span>
                 )}
               </div>
@@ -216,7 +219,7 @@ const OrderCard = ({
                 )}
                 <p>
                   <span className="text-[#f5f5f5]">Order Type:</span>{" "}
-                  {order.orderType || "-"}
+                  {orderTypeLabel}
                 </p>
                 {isOnlineOrder && (
                   <p>
@@ -384,7 +387,7 @@ const OrderCard = ({
               </div>
               {(Number(order.bills.onlineOrderCharge) || 0) > 0 && (
                 <div className="mt-2 flex justify-between text-sm text-[#ababab]">
-                  <span>Online (+20%)</span>
+                  <span>Online</span>
                   <span>{formatCurrency(order.bills.onlineOrderCharge)}</span>
                 </div>
               )}
@@ -392,6 +395,12 @@ const OrderCard = ({
                 <span>Tax</span>
                 <span>{formatCurrency(order.bills.tax)}</span>
               </div>
+              {platformFee > 0 && (
+                <div className="mt-2 flex justify-between text-sm text-[#ababab]">
+                  <span>Biaya Platform</span>
+                  <span>-{formatCurrency(platformFee)}</span>
+                </div>
+              )}
               <div className="mt-3 flex justify-between text-lg font-bold text-[#f5f5f5]">
                 <span>Total</span>
                 <span>{formatCurrency(order.bills.totalWithTax)}</span>
