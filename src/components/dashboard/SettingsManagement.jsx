@@ -1,4 +1,5 @@
-import React, { useMemo, useState } from "react";
+import { useMemo, useState } from "react";
+import SupplierManagement from "./SupplierManagement";
 import {
   keepPreviousData,
   useMutation,
@@ -25,6 +26,7 @@ const emptyPlatformForm = {
 };
 
 const SettingsManagement = () => {
+  const [activeMenu, setActiveMenu] = useState("platform");
   const queryClient = useQueryClient();
   const [platformForm, setPlatformForm] = useState(emptyPlatformForm);
   const [editingPlatform, setEditingPlatform] = useState(null);
@@ -147,14 +149,23 @@ const SettingsManagement = () => {
     <div className="container mx-auto rounded-lg bg-[#262626] p-4">
       <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div>
-          <h2 className="text-xl font-semibold text-[#f5f5f5]">Setting</h2>
+          <h2 className="text-xl font-semibold text-[#f5f5f5]">Pengaturan</h2>
           <p className="mt-1 text-sm text-[#ababab]">
-            Atur platform online food yang tampil di menu order.
+            Kelola platform online food dan suplier bahan belanjaan.
           </p>
         </div>
+        <nav aria-label="Menu pengaturan" className="flex gap-1 self-start rounded-lg bg-[#1f1f1f] p-1">
+          {[{id:"platform",label:"Platform"},{id:"suplier",label:"Suplier"}].map(menu => (
+            <button key={menu.id} type="button" aria-pressed={activeMenu===menu.id}
+              onClick={()=>setActiveMenu(menu.id)}
+              className={`rounded-md px-5 py-2 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#d6c7ae] ${activeMenu===menu.id ? "bg-[#a79981] text-[#101010]" : "text-[#ababab] hover:bg-[#333] hover:text-white"}`}>
+              {menu.label}
+            </button>
+          ))}
+        </nav>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[360px_1fr]">
+      {activeMenu === "suplier" ? <SupplierManagement /> : <div className="grid grid-cols-1 gap-4 xl:grid-cols-[360px_1fr]">
         <form
           onSubmit={handleSubmitPlatform}
           className="rounded-lg bg-[#1f1f1f] p-4"
@@ -309,7 +320,7 @@ const SettingsManagement = () => {
             </table>
           </div>
         </div>
-      </div>
+      </div>}
     </div>
   );
 };

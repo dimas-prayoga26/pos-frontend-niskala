@@ -20,6 +20,7 @@ import {
   updateMenuItem,
 } from "../../https";
 import { formatCurrency } from "../../utils";
+import { backendBaseUrl } from "../../https/backendUrl";
 
 const iconOptions = [
   "☕",
@@ -102,7 +103,6 @@ const emptyMenuForm = {
 };
 
 const ITEMS_PER_PAGE = 10;
-const backendBaseUrl = import.meta.env.VITE_BACKEND_URL || "";
 
 const resolveMenuImageUrl = (imagePath) => {
   if (!imagePath) return "";

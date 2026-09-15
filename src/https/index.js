@@ -49,6 +49,8 @@ export const verifyMidtransPayment = (data) =>
 export const addOrder = (data) => axiosWrapper.post("/api/order/", data);
 export const createThermalPrintUrl = ({ orderId, payload }) =>
   axiosWrapper.post(`/api/order/${orderId}/thermal-print-url`, { payload });
+export const createDraftThermalPrintUrl = ({ payload }) =>
+  axiosWrapper.post("/api/order/draft/thermal-print-url", { payload });
 export const getOrders = () => axiosWrapper.get("/api/order");
 export const deleteOrder = (orderId) =>
   axiosWrapper.delete(`/api/order/${orderId}`);
@@ -77,6 +79,11 @@ export const addDailyCash = ({ recapId, ...data }) =>
   axiosWrapper.patch(`/api/recap/daily/${recapId}/cash`, data);
 
 // Stock Item Endpoints
+export const getShoppingSuppliers = () => axiosWrapper.get("/api/shopping/suppliers");
+export const addSupplier = (data) => axiosWrapper.post("/api/shopping/suppliers", data);
+export const updateSupplier = ({ id, ...data }) => axiosWrapper.put(`/api/shopping/suppliers/${id}`, data);
+export const getPurchases = (params) => axiosWrapper.get("/api/shopping/purchases", { params });
+export const savePurchase = (data) => axiosWrapper.post("/api/shopping/purchases", data);
 export const addStockItem = (data) => axiosWrapper.post("/api/stock-item/", data);
 export const getStockItems = () => axiosWrapper.get("/api/stock-item");
 export const updateStockItem = ({ stockItemId, ...stockItemData }) =>

@@ -1,4 +1,5 @@
 import axios from "axios";
+import { backendBaseUrl } from "./backendUrl";
 
 const defaultHeader = {
   "Content-Type": "application/json",
@@ -6,7 +7,7 @@ const defaultHeader = {
 };
 
 export const axiosWrapper = axios.create({
-  baseURL: import.meta.env.VITE_BACKEND_URL,
+  baseURL: backendBaseUrl,
   withCredentials: true,
   headers: { ...defaultHeader },
 });

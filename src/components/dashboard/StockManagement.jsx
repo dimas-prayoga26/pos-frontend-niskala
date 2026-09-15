@@ -14,6 +14,7 @@ import {
   updateStockQuantity,
 } from "../../https";
 import { useSelector } from "react-redux";
+import ShoppingManagement from "./ShoppingManagement";
 
 const ITEMS_PER_PAGE = 10;
 
@@ -62,20 +63,6 @@ const StockManagement = () => {
   }
 
   const stockItems = stockItemsRes?.data?.data || [];
-  const shoppingItems = useMemo(() => {
-    return stockItems.filter(
-      (item) =>
-        !item.isUnlimited && ["HAMPIR HABIS", "HARUS ORDER"].includes(item.status)
-    );
-  }, [stockItems]);
-  const visibleItems = activeStockTab === "shopping" ? shoppingItems : stockItems;
-  const activeStockTitle =
-    activeStockTab === "shopping" ? "Bahan Belanjaan" : "Stok Barang";
-  const activeStockDescription =
-    activeStockTab === "shopping"
-      ? "Daftar bahan yang perlu disiapkan untuk restock."
-      : "Daftar bahan, kategori, jumlah stok, dan status restock.";
-
   const refreshStockItems = () => {
     queryClient.invalidateQueries({ queryKey: ["stock-items"] });
   };
@@ -142,9 +129,9 @@ const StockManagement = () => {
   const filteredItems = useMemo(() => {
     const keyword = searchQuery.trim().toLowerCase();
 
-    if (!keyword) return visibleItems;
+    if (!keyword) return stockItems;
 
-    return visibleItems.filter((item) => {
+    return stockItems.filter((item) => {
       const searchableText = [
         item.name,
         item.category,
@@ -159,7 +146,7 @@ const StockManagement = () => {
 
       return searchableText.includes(keyword);
     });
-  }, [visibleItems, searchQuery]);
+  }, [stockItems, searchQuery]);
 
   const totalPages = Math.max(
     Math.ceil(filteredItems.length / ITEMS_PER_PAGE),
@@ -252,23 +239,6 @@ const StockManagement = () => {
     setPendingDeleteItem(item);
   };
 
-  const getShoppingSuggestion = (item) => {
-    const stock = Number(item.stock) || 0;
-    const minimumStock = Number(item.minimumStock) || 0;
-    const unit = item.unit || "";
-    const neededToMinimum = Math.max(minimumStock - stock, 0);
-
-    if (item.status === "HARUS ORDER") {
-      if (neededToMinimum > 0) {
-        return `Beli min. ${neededToMinimum.toLocaleString("id-ID")} ${unit}`;
-      }
-
-      return "Beli segera";
-    }
-
-    return "Siapkan restock";
-  };
-
   return (
     <div className="container mx-auto bg-[#262626] p-4 rounded-lg">
       <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
@@ -298,18 +268,19 @@ const StockManagement = () => {
         </div>
       </div>
 
-      <div className="rounded-lg bg-[#1f1f1f] p-4">
+      {activeStockTab === "shopping" && <ShoppingManagement stockItems={stockItems} isAdmin={isAdmin} />}
+      {activeStockTab === "stock" && <div className="rounded-lg bg-[#1f1f1f] p-4">
         <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h3 className="text-lg font-bold text-[#f5f5f5]">
-              {activeStockTitle}
+              Stok Barang
             </h3>
             <p className="mt-1 text-sm text-[#ababab]">
-              {activeStockDescription}
+              Daftar bahan, kategori, jumlah stok, dan status restock.
             </p>
           </div>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-            {isAdmin && (
+            {isAdmin && activeStockTab === "stock" && (
               <button
                 type="button"
                 onClick={() => {
@@ -326,70 +297,13 @@ const StockManagement = () => {
               value={searchQuery}
               onChange={(event) => setSearchQuery(event.target.value)}
               type="search"
-              placeholder={
-                activeStockTab === "shopping"
-                  ? "Cari bahan belanjaan"
-                  : "Search stock"
-              }
+              placeholder="Search stock"
               className="rounded-lg bg-[#262626] px-4 py-2 text-sm text-[#f5f5f5] outline-none placeholder:text-[#777]"
             />
           </div>
         </div>
 
         <div className="overflow-x-auto">
-        {activeStockTab === "shopping" ? (
-          <table className="w-full text-left text-[#f5f5f5]">
-            <thead className="bg-[#333] text-[#ababab]">
-              <tr>
-                <th className="p-3">Bahan</th>
-                <th className="p-3">Kategori</th>
-                <th className="p-3 text-center">Stok Saat Ini</th>
-                <th className="p-3 text-center">Minimum</th>
-                <th className="p-3">Saran Belanja</th>
-                <th className="p-3">Supplier</th>
-                <th className="p-3 text-center">Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {paginatedItems.map((item) => (
-                <tr
-                  key={item.id || item._id}
-                  className="border-b border-gray-600 hover:bg-[#333]"
-                >
-                  <td className="p-4 font-semibold">{item.name}</td>
-                  <td className="p-4">{item.category || "-"}</td>
-                  <td className="p-4 text-center">
-                    {item.isUnlimited ? "Bebas Stok" : `${item.stock} ${item.unit || ""}`}
-                  </td>
-                  <td className="p-4 text-center">
-                    {item.isUnlimited ? "-" : `${item.minimumStock} ${item.unit || ""}`}
-                  </td>
-                  <td className="p-4 font-semibold text-[#d6c7ae]">
-                    {getShoppingSuggestion(item)}
-                  </td>
-                  <td className="p-4">{item.supplier || "-"}</td>
-                  <td className="p-4 text-center">
-                    <span
-                      className={`inline-flex min-w-[110px] items-center justify-center rounded-lg px-2 py-1 text-sm font-semibold ${
-                        statusClassNames[item.status] ||
-                        "bg-[#2e4a40] text-green-400"
-                      }`}
-                    >
-                      {item.status}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-              {filteredItems.length === 0 && (
-                <tr>
-                  <td className="p-4 text-center text-[#ababab]" colSpan={7}>
-                    Tidak ada bahan belanjaan saat ini
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        ) : (
           <table className="w-full text-left text-[#f5f5f5]">
             <thead className="bg-[#333] text-[#ababab]">
               <tr>
@@ -488,7 +402,6 @@ const StockManagement = () => {
               )}
             </tbody>
           </table>
-        )}
         </div>
 
         <div className="mt-4 flex flex-col gap-3 text-sm text-[#ababab] sm:flex-row sm:items-center sm:justify-between">
@@ -525,7 +438,7 @@ const StockManagement = () => {
             </button>
           </div>
         </div>
-      </div>
+      </div>}
 
       {isAdmin && showAddModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-black/70 p-4">

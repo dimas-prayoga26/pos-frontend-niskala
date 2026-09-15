@@ -1,8 +1,9 @@
 import { useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { io } from "socket.io-client";
+import { backendBaseUrl } from "../https/backendUrl";
 
-const socketUrl = import.meta.env.VITE_BACKEND_URL;
+const socketUrl = backendBaseUrl;
 const realtimeTransports = (
   import.meta.env.VITE_REALTIME_TRANSPORTS || "polling"
 )
@@ -44,6 +45,10 @@ const useRealtimeData = () => {
     const refreshStockData = () => {
       queryClient.invalidateQueries({ queryKey: ["stock-items"] });
     };
+    const refreshShoppingData = () => {
+      queryClient.invalidateQueries({ queryKey: ["purchases"] });
+      queryClient.invalidateQueries({ queryKey: ["shopping-suppliers"] });
+    };
     const refreshPlatformData = () => {
       queryClient.invalidateQueries({ queryKey: ["order-platforms"] });
     };
@@ -55,6 +60,7 @@ const useRealtimeData = () => {
     socket.on("orders:changed", refreshOrders);
     socket.on("menu:changed", refreshMenuData);
     socket.on("stock:changed", refreshStockData);
+    socket.on("shopping:changed", refreshShoppingData);
     socket.on("platforms:changed", refreshPlatformData);
     socket.on("recaps:changed", refreshRecapData);
 
@@ -62,6 +68,7 @@ const useRealtimeData = () => {
       socket.off("orders:changed", refreshOrders);
       socket.off("menu:changed", refreshMenuData);
       socket.off("stock:changed", refreshStockData);
+      socket.off("shopping:changed", refreshShoppingData);
       socket.off("platforms:changed", refreshPlatformData);
       socket.off("recaps:changed", refreshRecapData);
     };

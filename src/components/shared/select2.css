@@ -1,0 +1,11 @@
+.shopping-select2 { position: relative; }
+.shopping-select2 .select2-container .select2-selection--single { height:42px; background:#262626; border:1px solid #555; border-radius:8px; }
+.shopping-select2 .select2-container--default .select2-selection--single .select2-selection__rendered { color:#f5f5f5; line-height:40px; padding-left:12px; padding-right:32px; }
+.shopping-select2 .select2-container--default .select2-selection--single .select2-selection__arrow { height:40px; }
+.shopping-select2 .select2-dropdown { background:#262626; color:#f5f5f5; border-color:#777; z-index:1100; }
+.shopping-select2 .select2-search__field { background:#1f1f1f; color:#fff; border:1px solid #777 !important; border-radius:4px; }
+.shopping-select2 .select2-container--default .select2-results__option[aria-selected=true] { background:#484035; }
+.shopping-select2 .select2-container--default .select2-results__option--highlighted[aria-selected] { background:#a79981; color:#101010; }
+.shopping-select2 .select2-container--default.select2-container--disabled .select2-selection--single { background:#333; opacity:.6; }
+.shopping-select2 .select2-container--focus .select2-selection { border-color:#d6c7ae; }
+.shopping-select2 .select2-selection__clear { color:#ddd; }

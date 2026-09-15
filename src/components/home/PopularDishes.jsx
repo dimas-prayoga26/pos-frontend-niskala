@@ -3,10 +3,10 @@ import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { getMenuItems, getOrders } from "../../https";
 import { formatCurrency } from "../../utils";
 import noImage from "../../assets/no-image.svg";
+import { backendBaseUrl } from "../../https/backendUrl";
 
 const drinkCategories = ["Coffee", "Non-Coffee", "Beverages"];
 const normalizeName = (value) => String(value || "").trim().toLowerCase();
-const backendBaseUrl = import.meta.env.VITE_BACKEND_URL || "";
 
 const resolveMenuImage = (imagePath) => {
   if (!imagePath) return noImage;
