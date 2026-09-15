@@ -74,9 +74,7 @@ const OrderCard = ({
     setIsPrintingReceipt(true);
 
     try {
-      const didOpenPrint = await printOrderReceipt(order, {
-        receiptProfile: "advan",
-      });
+      const didOpenPrint = await printOrderReceipt(order);
 
       if (!didOpenPrint) {
         enqueueSnackbar("Popup diblokir. Izinkan popup untuk print receipt.", {

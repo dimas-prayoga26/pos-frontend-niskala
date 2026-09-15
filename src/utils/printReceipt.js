@@ -4,14 +4,17 @@ const isMobilePrintBrowser = () =>
 export const isAndroidDevice = () => {
   const userAgentDataPlatform = window.navigator.userAgentData?.platform;
 
-  if (userAgentDataPlatform) {
-    return /Android/i.test(userAgentDataPlatform);
+  if (/Android/i.test(userAgentDataPlatform || window.navigator.userAgent)) {
+    return true;
   }
 
-  return /Android/i.test(window.navigator.userAgent);
+  // Android Chrome's desktop mode reports a Linux x86_64 UA. On HTTP LAN
+  // pages UA Client Hints are unavailable, but the platform remains Linux ARM.
+  return /Linux arm|Linux aarch64/i.test(window.navigator.platform || "") &&
+    window.navigator.maxTouchPoints > 0;
 };
 
-export const openBluetoothPrintApp = ({ onFallback, responseUrl }) => {
+export const openAndroidPrintApp = ({ onFallback, url }) => {
   let didLeavePage = false;
 
   const handleVisibilityChange = () => {
@@ -21,7 +24,7 @@ export const openBluetoothPrintApp = ({ onFallback, responseUrl }) => {
   };
 
   document.addEventListener("visibilitychange", handleVisibilityChange);
-  window.location.href = `my.bluetoothprint.scheme://${responseUrl}`;
+  window.location.href = url;
 
   const fallbackTimer = window.setTimeout(() => {
     document.removeEventListener("visibilitychange", handleVisibilityChange);
@@ -36,6 +39,9 @@ export const openBluetoothPrintApp = ({ onFallback, responseUrl }) => {
     document.removeEventListener("visibilitychange", handleVisibilityChange);
   };
 };
+
+export const openBluetoothPrintApp = ({ onFallback, responseUrl }) =>
+  openAndroidPrintApp({ onFallback, url: `my.bluetoothprint.scheme://${responseUrl}` });
 
 const waitForPrintAssets = (printWindow) => {
   const images = Array.from(printWindow.document.images || []);

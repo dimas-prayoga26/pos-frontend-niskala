@@ -22,6 +22,7 @@ import gulabJamun from "../../assets/images/gulab-jamun.webp";
 import pooriSabji from "../../assets/images/poori-sabji.webp";
 import roganJosh from "../../assets/images/rogan-josh.jpg";
 import noImage from "../../assets/no-image.svg";
+import { backendBaseUrl } from "../../https/backendUrl";
 
 const menuItemImages = {
   "Butter Chicken": butterChicken,
@@ -84,7 +85,6 @@ const categoryIcons = {
 };
 
 const defaultSizeName = "Reguler";
-const backendBaseUrl = import.meta.env.VITE_BACKEND_URL || "";
 
 const MenuContainer = () => {
   const [selected, setSelected] = useState(null);

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { getTotalPrice } from "../../redux/slices/cartSlice";
 import { addOrder } from "../../https/index";
@@ -6,7 +6,7 @@ import { enqueueSnackbar } from "notistack";
 import { useMutation } from "@tanstack/react-query";
 import { removeAllItems } from "../../redux/slices/cartSlice";
 import { removeCustomer, setCustomer } from "../../redux/slices/customerSlice";
-import Invoice from "../invoice/Invoice";
+import Invoice, { printOrderReceipt } from "../invoice/Invoice";
 import NonCashPaymentModal from "./NonCashPaymentModal";
 import { MdWarningAmber } from "react-icons/md";
 import {
@@ -16,7 +16,7 @@ import {
   formatReceiptCurrency,
   normalizeNominalInput,
 } from "../../utils";
-import { printReceiptDocument } from "../../utils/printReceipt";
+import { isAndroidDevice, printReceiptDocument } from "../../utils/printReceipt";
 import receiptMark from "../../../../assets/Vector.svg";
 
 const getItemTaxRate = (item) => {
@@ -83,6 +83,8 @@ const Bill = () => {
       : 0;
 
   const [paymentMethod, setPaymentMethod] = useState();
+  const isPrintingReceiptRef = useRef(false);
+  const isSubmittingOrderRef = useRef(false);
   const [showNonCashPayment, setShowNonCashPayment] = useState(false);
   const [showInvoice, setShowInvoice] = useState(false);
   const [orderInfo, setOrderInfo] = useState();
@@ -148,6 +150,7 @@ const Bill = () => {
   });
 
   const handlePlaceOrder = async () => {
+    if (isSubmittingOrderRef.current || showNonCashPayment || stockWarningItems.length) return;
     if (cartData.length === 0) {
       enqueueSnackbar("Please add at least one menu item!", {
         variant: "warning",
@@ -187,12 +190,12 @@ const Bill = () => {
     if (paymentMethod === "Non Tunai") {
       setShowNonCashPayment(true);
     } else {
-      orderMutation.mutate(buildOrderData());
+      submitOrder(buildOrderData());
     }
   };
 
   const handleConfirmNonCashPayment = (selectedPaymentMethod) => {
-    orderMutation.mutate(
+    submitOrder(
       buildOrderData(
         {
           manual_payment_type: selectedPaymentMethod,
@@ -221,11 +224,12 @@ const Bill = () => {
 
     setStockWarningItems([]);
     setPendingOrderData(null);
-    orderMutation.mutate(nextOrderData);
+    submitOrder(nextOrderData);
   };
 
   const orderMutation = useMutation({
     mutationFn: (reqData) => addOrder(reqData),
+    retry: false,
     onSuccess: (resData) => {
       const { data } = resData.data;
       console.log(data);
@@ -256,9 +260,20 @@ const Bill = () => {
         { variant: "error" }
       );
     },
+    onSettled: () => {
+      isSubmittingOrderRef.current = false;
+    },
   });
 
-  const handlePrintReceipt = () => {
+  const submitOrder = (orderData) => {
+    // Lock synchronously: a second click can arrive before React renders disabled.
+    if (isSubmittingOrderRef.current) return;
+    isSubmittingOrderRef.current = true;
+    orderMutation.mutate(orderData);
+  };
+
+  const handlePrintReceipt = async () => {
+    if (isPrintingReceiptRef.current) return;
     const escapeHtml = (value) =>
       String(value ?? "")
         .replace(/&/g, "&amp;")
@@ -271,6 +286,21 @@ const Bill = () => {
       enqueueSnackbar("Please add at least one menu item before printing!", {
         variant: "warning",
       });
+      return;
+    }
+
+    if (isAndroidDevice()) {
+      isPrintingReceiptRef.current = true;
+      try {
+        await printOrderReceipt({
+          ...buildOrderData(),
+          orderCode: "DRAFT",
+          createdAt: new Date().toISOString(),
+          paymentMethod: paymentMethod || "-",
+        }, { isDraft: true });
+      } finally {
+        window.setTimeout(() => { isPrintingReceiptRef.current = false; }, 3200);
+      }
       return;
     }
 
@@ -676,9 +706,11 @@ const Bill = () => {
         </button>
         <button
           onClick={handlePlaceOrder}
-          className="bg-[#a79981] px-4 py-3 w-full rounded-lg text-[#101010] font-semibold text-lg"
+          disabled={orderMutation.isPending || showNonCashPayment || stockWarningItems.length > 0 || cartData.length === 0}
+          aria-busy={orderMutation.isPending}
+          className="bg-[#a79981] px-4 py-3 w-full rounded-lg text-[#101010] font-semibold text-lg disabled:cursor-not-allowed disabled:opacity-50"
         >
-          Place Order
+          {orderMutation.isPending ? "Menyimpan..." : "Place Order"}
         </button>
       </div>
 
