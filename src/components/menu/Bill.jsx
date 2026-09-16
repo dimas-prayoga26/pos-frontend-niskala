@@ -49,6 +49,17 @@ const getInsufficientStockItems = (error) =>
     ? error.response?.data?.details?.insufficientStock || []
     : [];
 
+const getReceiptVariantText = (variant) => {
+  const parts = String(variant ?? "")
+    .split("/")
+    .map((part) => part.trim())
+    .filter(Boolean);
+
+  return parts.find((part) =>
+    /^(cold|hot|ice|iced|dingin|panas)$/i.test(part)
+  ) || "";
+};
+
 const Bill = () => {
   const dispatch = useDispatch();
 
@@ -312,7 +323,10 @@ const Bill = () => {
               .join(", ")}</div>`
           : "";
         const variantText = item.variant
-          ? `<div class="line-note">Pilihan: ${escapeHtml(item.variant)}</div>`
+          ? getReceiptVariantText(item.variant)
+          : "";
+        const variantLine = variantText
+          ? `<div class="line-note">Pilihan: ${escapeHtml(variantText)}</div>`
           : "";
 
         return `
@@ -325,7 +339,7 @@ const Bill = () => {
               <strong>${formatReceiptCurrency(item.price)}</strong>
             </div>
               ${addOnsText}
-              ${variantText}
+              ${variantLine}
           </div>
         `;
       })
@@ -361,6 +375,7 @@ const Bill = () => {
                 width: 44mm;
                 margin: 0 auto;
                 padding: 5px 2mm 8px 0;
+                transform: translateX(3.7mm);
               }
               .center {
                 text-align: center;
@@ -368,6 +383,7 @@ const Bill = () => {
               .brand {
                 text-align: center;
                 margin-bottom: 5px;
+                transform: translateX(1.3mm);
               }
               .logo-mark {
                 display: block;
@@ -384,6 +400,7 @@ const Bill = () => {
                 font-weight: 900;
                 line-height: 1;
                 text-transform: uppercase;
+                transform: translateX(1.1mm);
                 -webkit-text-stroke: 0.06px #000;
               }
               .brand-subtitle {
@@ -400,6 +417,7 @@ const Bill = () => {
                 font-weight: 900;
                 text-align: center;
                 text-transform: uppercase;
+                transform: translateX(1.3mm);
               }
               .muted,
               .line-note {
@@ -498,6 +516,7 @@ const Bill = () => {
                 margin-top: 9px;
                 text-align: center;
                 font-size: 5px;
+                transform: translateX(3.2mm);
               }
               @media print {
                 body { padding: 0; }
