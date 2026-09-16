@@ -13,6 +13,17 @@ import {
   formatJakartaReceiptDate,
 } from "../../utils/index";
 
+const getOrderVariantText = (variant) => {
+  const parts = String(variant ?? "")
+    .split("/")
+    .map((part) => part.trim())
+    .filter(Boolean);
+
+  return parts.find((part) =>
+    /^(cold|hot|ice|iced|dingin|panas)$/i.test(part)
+  ) || "";
+};
+
 const OrderCard = ({
   order,
   onCateringPaymentAdd,
@@ -358,7 +369,9 @@ const OrderCard = ({
                         </h3>
                         <p className="mt-1 text-xs text-[#ababab]">
                           Qty: {item.quantity}
-                          {item.variant ? ` / Pilihan: ${item.variant}` : ""}
+                          {getOrderVariantText(item.variant)
+                            ? ` / Pilihan: ${getOrderVariantText(item.variant)}`
+                            : ""}
                         </p>
                         {item.addOns?.length > 0 && (
                           <p className="mt-1 text-xs text-[#a79981]">

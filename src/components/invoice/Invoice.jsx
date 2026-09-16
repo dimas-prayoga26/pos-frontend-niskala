@@ -25,6 +25,14 @@ const BLUETOOTH_RECEIPT_PROFILES = {
   samsung: 2,
   advan: 3,
 };
+const RECEIPT_CONTENT_SHIFT_PX = 14;
+const RECEIPT_CONTENT_SHIFT_MM = 3.7;
+const RECEIPT_HEADER_EXTRA_SHIFT_PX = 5;
+const RECEIPT_HEADER_EXTRA_SHIFT_MM = 1.3;
+const RECEIPT_BRAND_NAME_EXTRA_SHIFT_PX = 4;
+const RECEIPT_BRAND_NAME_EXTRA_SHIFT_MM = 1.1;
+const RECEIPT_FOOTER_EXTRA_SHIFT_PX = 12;
+const RECEIPT_FOOTER_EXTRA_SHIFT_MM = 3.2;
 
 const clampBluetoothReceiptScale = (value) => {
   const scale = Number(value);
@@ -182,9 +190,6 @@ const buildReceiptHtml = (orderInfo, { logoSrc = receiptMark } = {}) => {
       const temperature = variantParts.temperature
         ? `<div class="line-note item-option">Varian: ${escapeHtml(variantParts.temperature)}</div>`
         : "";
-      const size = variantParts.size
-        ? `<div class="line-note item-size">Size: ${escapeHtml(variantParts.size)}</div>`
-        : "";
 
       return `
         <div class="item">
@@ -196,7 +201,6 @@ const buildReceiptHtml = (orderInfo, { logoSrc = receiptMark } = {}) => {
             <span class="line-note">Qty: ${item.quantity}</span>
             <strong>${formatReceiptCurrency(item.price)}</strong>
           </div>
-          ${size}
           ${addOns}
         </div>
         ${receiptLine("item-separator")}
@@ -294,6 +298,7 @@ const receiptPrintStyle = `
     width: 44mm;
     margin: 0 auto;
     padding: 5px 2mm 8px 0;
+    transform: translateX(${RECEIPT_CONTENT_SHIFT_MM}mm);
   }
   .receipt-separator {
     display: none;
@@ -304,6 +309,7 @@ const receiptPrintStyle = `
   .brand {
     text-align: center;
     margin-bottom: 5px;
+    transform: translateX(${RECEIPT_HEADER_EXTRA_SHIFT_MM}mm);
   }
   .logo-mark {
     display: block;
@@ -320,6 +326,7 @@ const receiptPrintStyle = `
     font-weight: 900;
     line-height: 1;
     text-transform: uppercase;
+    transform: translateX(${RECEIPT_BRAND_NAME_EXTRA_SHIFT_MM}mm);
     -webkit-text-stroke: 0.06px #000;
   }
   .brand-subtitle {
@@ -336,6 +343,7 @@ const receiptPrintStyle = `
     font-weight: 900;
     text-align: center;
     text-transform: uppercase;
+    transform: translateX(${RECEIPT_HEADER_EXTRA_SHIFT_MM}mm);
   }
   .meta {
     border-top: 1px dashed #000;
@@ -453,6 +461,7 @@ const receiptPrintStyle = `
     margin-top: 9px;
     text-align: center;
     font-size: 5px;
+    transform: translateX(${RECEIPT_FOOTER_EXTRA_SHIFT_MM}mm);
   }
 `;
 
@@ -754,6 +763,14 @@ const buildBluetoothReceiptScaleStyle = (scale) => {
   const priceLabelColumn = px(isAdvanScale ? 68 : 56);
   const priceValueColumn = px(isAdvanScale ? 95 : 62);
   const totalValueColumn = px(isAdvanScale ? 95 : 63);
+  const receiptShift = cssPx(RECEIPT_CONTENT_SHIFT_PX, layoutScale);
+  const headerExtraShift = cssPx(RECEIPT_HEADER_EXTRA_SHIFT_PX, layoutScale);
+  const brandNameExtraShift = cssPx(RECEIPT_BRAND_NAME_EXTRA_SHIFT_PX, layoutScale);
+  const footerExtraShift = cssPx(RECEIPT_FOOTER_EXTRA_SHIFT_PX, layoutScale);
+  const shiftedHeader = `calc(${headerShift} + ${receiptShift} + ${headerExtraShift})`;
+  const shiftedContent = `calc(${contentShift} + ${receiptShift})`;
+  const shiftedBrandName = `calc(${brandNameShift} + ${brandNameExtraShift})`;
+  const shiftedFooter = `calc(${footerShift} + ${footerExtraShift})`;
 
   return `
     html,
@@ -783,26 +800,26 @@ const buildBluetoothReceiptScaleStyle = (scale) => {
     }
     .bluetooth-print-page .brand {
       width: ${headerWidth} !important;
-      margin-left: ${headerShift} !important;
+      margin-left: ${shiftedHeader} !important;
       margin-right: auto !important;
       margin-bottom: ${px(3)} !important;
     }
     .bluetooth-print-page .brand-name {
       font-size: ${fontPx(10)} !important;
-      transform: translateX(${brandNameShift}) !important;
+      transform: translateX(${shiftedBrandName}) !important;
     }
     .bluetooth-print-page .brand-subtitle {
       font-size: ${fontPx(4)} !important;
     }
     .bluetooth-print-page .receipt-title {
       width: ${headerWidth} !important;
-      margin: 0 auto ${px(4)} ${headerShift} !important;
+      margin: 0 auto ${px(4)} ${shiftedHeader} !important;
       font-size: ${fontPx(6)} !important;
     }
     .bluetooth-print-page .meta,
     .bluetooth-print-page .item {
       width: ${contentWidth} !important;
-      margin-left: ${contentShift} !important;
+      margin-left: ${shiftedContent} !important;
       margin-right: auto !important;
     }
     .bluetooth-print-page .meta {
@@ -813,7 +830,7 @@ const buildBluetoothReceiptScaleStyle = (scale) => {
     }
     .bluetooth-print-page .receipt-separator {
       width: ${linePx(160)} !important;
-      margin: ${px(2)} auto ${px(2)} ${contentShift} !important;
+      margin: ${px(2)} auto ${px(2)} ${shiftedContent} !important;
     }
     .bluetooth-print-page .receipt-line {
       width: ${linePx(118)} !important;
@@ -867,14 +884,14 @@ const buildBluetoothReceiptScaleStyle = (scale) => {
       row-gap: ${px(3)} !important;
       width: ${px(140)} !important;
       margin-top: ${px(2)} !important;
-      margin-left: ${contentShift} !important;
+      margin-left: ${shiftedContent} !important;
       margin-right: auto !important;
       margin-bottom: ${px(2)} !important;
       padding: ${px(2)} 0 ${px(2)} !important;
     }
     .bluetooth-print-page .receipt-grand-total {
       width: ${px(140)} !important;
-      margin-left: ${contentShift} !important;
+      margin-left: ${shiftedContent} !important;
       margin-right: auto !important;
       padding-bottom: ${px(2)} !important;
     }
@@ -901,7 +918,7 @@ const buildBluetoothReceiptScaleStyle = (scale) => {
       margin-right: auto !important;
       margin-bottom: ${px(8)} !important;
       font-size: ${fontPx(4)} !important;
-      transform: translateX(${footerShift}) !important;
+      transform: translateX(${shiftedFooter}) !important;
     }
   `;
 };
@@ -1015,12 +1032,7 @@ export const printOrderReceipt = async (
           sourceWidth: 219,
         }
       );
-      const cleanup = openAndroidPrintApp({ url, onFallback: () => {
-        enqueueSnackbar("Ketuk Buka RawBT jika aplikasi belum terbuka.", {
-          variant: "info", persist: true,
-          action: <a href={url} style={{ color: "white", fontWeight: "bold", padding: 8 }}>Buka RawBT</a>,
-        });
-      } });
+      const cleanup = openAndroidPrintApp({ url });
       window.setTimeout(cleanup, 3200);
       return true;
     } catch (error) {
