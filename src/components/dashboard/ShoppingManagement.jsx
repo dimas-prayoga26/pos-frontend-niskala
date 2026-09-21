@@ -14,7 +14,40 @@ const today = () => new Intl.DateTimeFormat("en-CA", { timeZone:"Asia/Jakarta", 
 let rowKey = 0;
 const blankRow = () => ({ key: ++rowKey, stockItemId:"", quantity:"", unit:"", unitPrice:"" });
 const currency = n => `Rp ${Number(n || 0).toLocaleString("id-ID", { maximumFractionDigits:2 })}`;
-const lineTotal = row => Math.round(Number(row.quantity || 0) * Number(row.unitPrice || 0) * 100) / 100;
+const parseShoppingQuantity = value => {
+  const input = String(value ?? "").trim().replace(",", ".");
+
+  if (!input) return NaN;
+
+  const fraction = input.match(/^(\d+(?:\.\d+)?)\s*\/\s*(\d+(?:\.\d+)?)$/);
+
+  if (fraction) {
+    const numerator = Number(fraction[1]);
+    const denominator = Number(fraction[2]);
+
+    return denominator > 0 ? numerator / denominator : NaN;
+  }
+
+  return Number(input);
+};
+const shoppingQuantity = value => {
+  const quantity = parseShoppingQuantity(value);
+
+  return Number.isFinite(quantity) ? quantity : 0;
+};
+const purchaseUnitForStockUnit = unit => {
+  const normalizedUnit = String(unit || "").trim().toLowerCase();
+
+  if (["gr", "g", "gram"].includes(normalizedUnit)) return "kg";
+
+  return unit || "";
+};
+const lineTotal = row => Math.round(shoppingQuantity(row.quantity) * Number(row.unitPrice || 0) * 100) / 100;
+const formatRupiahInput = value => {
+  const digits = String(value ?? "").replace(/\D/g, "");
+
+  return digits ? Number(digits).toLocaleString("id-ID") : "";
+};
 
 export default function ShoppingManagement({ stockItems, isAdmin }) {
   const queryClient = useQueryClient();
@@ -62,14 +95,14 @@ export default function ShoppingManagement({ stockItems, isAdmin }) {
   const submit = async event => {
     event.preventDefault();
     if(lock.current)return;
-    if(!form.suplierId || rows.some(row=>!row.stockItemId || !row.unit.trim() || Number(row.quantity)<=0 || row.unitPrice==="")) {
+    if(!form.suplierId || rows.some(row=>!row.stockItemId || !row.unit.trim() || !Number.isFinite(parseShoppingQuantity(row.quantity)) || parseShoppingQuantity(row.quantity)<=0 || row.unitPrice==="")) {
       enqueueSnackbar("Lengkapi toko, barang, qty, satuan, dan harga satuan.",{variant:"error"});return;
     }
     const supplierDraft = extraSuppliers.find(item=>item.id===form.suplierId);
     const {suplierId,...details} = form;
     const payload = {...details,...(supplierDraft ? {suplierName:supplierDraft.name} : {suplierId}),items:rows.map(({stockItemId,quantity,unit,unitPrice})=>{
       const draft = extraItems.find(item=>item.id===stockItemId);
-      return {...(draft ? {itemName:draft.name} : {stockItemId}),quantity,unit,unitPrice};
+      return {...(draft ? {itemName:draft.name} : {stockItemId}),quantity:parseShoppingQuantity(quantity),unit,unitPrice};
     })};
     const signature=JSON.stringify(payload);
     if(!submission.current || submission.current.signature!==signature)submission.current={signature,id:requestId()};
@@ -126,16 +159,16 @@ export default function ShoppingManagement({ stockItems, isAdmin }) {
                 </button>
               </div>
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[minmax(220px,2fr)_minmax(80px,.6fr)_minmax(90px,.7fr)_minmax(120px,1fr)_minmax(120px,1fr)]">
-                <div><span className="mb-1 block text-sm">Nama Barang</span><CreatableSelect2 options={itemOptions} value={row.stockItemId} onSelect={option=>updateRow(row.key,{stockItemId:option?.id||"",unit:option?.unit||""})} onCreate={addItem} placeholder="Cari atau buat barang" disabled={saving}/></div>
-                <label><span className="mb-1 block text-sm">Qty</span><input required type="number" min="0.001" step="0.001" max="999999999" value={row.quantity} onChange={e=>updateRow(row.key,{quantity:e.target.value})} className={inputClass}/></label>
-                <label><span className="mb-1 block text-sm">Satuan</span><input required list="shopping-units" maxLength={30} placeholder="kg / pcs" value={row.unit} onChange={e=>updateRow(row.key,{unit:e.target.value})} className={inputClass}/></label>
-                <label><span className="mb-1 block text-sm">Harga Satuan</span><input required type="number" min="0" step="0.01" value={row.unitPrice} onChange={e=>updateRow(row.key,{unitPrice:e.target.value})} className={inputClass}/></label>
+                <div><span className="mb-1 block text-sm">Nama Barang</span><CreatableSelect2 options={itemOptions} value={row.stockItemId} onSelect={option=>updateRow(row.key,{stockItemId:option?.id||"",unit:purchaseUnitForStockUnit(option?.unit)})} onCreate={addItem} placeholder="Cari atau buat barang" disabled={saving}/></div>
+                <label><span className="mb-1 block text-sm">Qty</span><input required type="text" inputMode="decimal" value={row.quantity} onChange={e=>updateRow(row.key,{quantity:e.target.value})} className={inputClass}/></label>
+                <label><span className="mb-1 block text-sm">Satuan</span><input required list="shopping-units" maxLength={30} placeholder="kg / pcs" value={row.unit} onChange={e=>updateRow(row.key,{unit:e.target.value})} onBlur={e=>updateRow(row.key,{unit:purchaseUnitForStockUnit(e.target.value)})} className={inputClass}/></label>
+                <label><span className="mb-1 block text-sm">Harga Satuan</span><input required type="text" inputMode="numeric" value={formatRupiahInput(row.unitPrice)} onChange={e=>updateRow(row.key,{unitPrice:e.target.value.replace(/\D/g,"")})} className={inputClass}/></label>
                 <div><span className="mb-1 block text-sm">Jumlah</span><p className="py-2 font-bold">{currency(lineTotal(row))}</p></div>
               </div>
               {itemOptions.find(item=>String(item.id)===String(row.stockItemId))?.unit && <p className="mt-2 text-xs text-[#ababab]">Satuan stok: {itemOptions.find(item=>String(item.id)===String(row.stockItemId)).unit}. Konversi kg ↔ gr dan liter ↔ ml dihitung otomatis.</p>}
             </div>)}
           </div>
-          <datalist id="shopping-units">{["kg","gr","pcs","liter","ml","botol","pack","dus"].map(value=><option key={value} value={value}/>)}</datalist>
+          <datalist id="shopping-units">{["kg","pcs","liter","ml","botol","pack","dus"].map(value=><option key={value} value={value}/>)}</datalist>
           <button type="button" disabled={rows.length>=100} onClick={()=>setRows(current=>[...current,blankRow()])} className="mb-4 rounded-lg border border-[#a79981] px-4 py-2 text-sm text-[#d6c7ae]">+ Tambah Barang</button>
           <label className="block"><span className="mb-1 block text-sm">Catatan (opsional)</span><textarea className={inputClass} maxLength={500} value={form.note} onChange={e=>setForm({...form,note:e.target.value})}/></label>
         </fieldset>
