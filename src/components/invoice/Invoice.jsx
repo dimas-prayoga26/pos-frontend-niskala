@@ -10,12 +10,12 @@ import {
 } from "../../utils";
 import {
   isAndroidDevice,
-  openAndroidPrintApp,
   openBluetoothPrintApp,
   printReceiptDocument,
 } from "../../utils/printReceipt";
 import receiptMark from "../../../../assets/Vector.svg";
-import { createRawbtReceiptIntent, usesRawbt } from "../../utils/rawbtPrint";
+// RawBT support is intentionally parked for now; live receipt printing uses Thermer.
+// import { createRawbtReceiptIntent, usesRawbt } from "../../utils/rawbtPrint";
 
 const BLUETOOTH_RECEIPT_SCALE_STORAGE_KEY = "niskalaBluetoothReceiptScale";
 const BLUETOOTH_RECEIPT_PROFILE_STORAGE_KEY = "niskalaBluetoothReceiptProfile";
@@ -1017,6 +1017,7 @@ export const printOrderReceipt = async (
     return printReceiptWithBrowser(orderInfo);
   }
 
+  /*
   if (usesRawbt()) {
     try {
       const receiptHtml = buildReceiptHtml({
@@ -1040,6 +1041,7 @@ export const printOrderReceipt = async (
       return false;
     }
   }
+  */
 
   try {
     const numericOrderId = orderInfo.id || orderInfo._id;
