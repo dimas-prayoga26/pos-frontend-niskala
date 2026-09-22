@@ -1,7 +1,6 @@
 /* eslint-disable react/prop-types */
 import { useRef } from "react";
 import { enqueueSnackbar } from "notistack";
-import { createDraftThermalPrintUrl, createThermalPrintUrl } from "../../https";
 import {
   formatCurrency,
   formatJakartaReceiptDate,
@@ -10,12 +9,11 @@ import {
 } from "../../utils";
 import {
   isAndroidDevice,
-  openBluetoothPrintApp,
+  openAndroidPrintApp,
   printReceiptDocument,
 } from "../../utils/printReceipt";
 import receiptMark from "../../../../assets/Vector.svg";
-// RawBT support is intentionally parked for now; live receipt printing uses Thermer.
-// import { createRawbtReceiptIntent, usesRawbt } from "../../utils/rawbtPrint";
+import { createRawbtReceiptIntent } from "../../utils/rawbtPrint";
 
 const BLUETOOTH_RECEIPT_SCALE_STORAGE_KEY = "niskalaBluetoothReceiptScale";
 const BLUETOOTH_RECEIPT_PROFILE_STORAGE_KEY = "niskalaBluetoothReceiptProfile";
@@ -1017,70 +1015,25 @@ export const printOrderReceipt = async (
     return printReceiptWithBrowser(orderInfo);
   }
 
-  /*
-  if (usesRawbt()) {
-    try {
-      const receiptHtml = buildReceiptHtml({
-        ...orderInfo,
-        orderCode: isDraft ? "DRAFT" : orderInfo.orderCode,
-        orderDate: orderInfo.orderDate || orderInfo.createdAt || new Date().toISOString(),
-      }, { logoSrc: await getReceiptLogoDataUrl() });
-      const url = await createRawbtReceiptIntent(
-        `<div class="bluetooth-print-page">${receiptHtml}</div>`,
-        {
-          // Use the existing Advan profile explicitly, independent of UA/storage.
-          style: `${bluetoothReceiptPrintStyle}${buildBluetoothReceiptScaleStyle(BLUETOOTH_RECEIPT_PROFILES.advan)}`,
-          sourceWidth: 219,
-        }
-      );
-      const cleanup = openAndroidPrintApp({ url });
-      window.setTimeout(cleanup, 3200);
-      return true;
-    } catch (error) {
-      enqueueSnackbar(error?.message || "Gagal menyiapkan struk RawBT.", { variant: "error" });
-      return false;
-    }
-  }
-  */
-
   try {
-    const numericOrderId = orderInfo.id || orderInfo._id;
-
-    if (!isDraft && !numericOrderId) {
-      throw new Error("Order ID tidak ditemukan untuk struk ini.");
-    }
-
-    const payload = await buildBluetoothPrintPayload(orderInfo, { receiptProfile });
-    const response = isDraft
-      ? await createDraftThermalPrintUrl({ payload })
-      : await createThermalPrintUrl({ orderId: numericOrderId, payload });
-    const responseUrl = response.data?.data?.url;
-
-    if (!responseUrl) {
-      throw new Error("URL thermal print gagal dibuat.");
-    }
-
-    const cleanupFallback = openBluetoothPrintApp({
-      responseUrl,
-      onFallback: () => {
-        enqueueSnackbar(
-          "Thermer belum terbuka. Izinkan pembukaan aplikasi di Chrome, lalu tekan Print Receipt lagi.",
-          { variant: "warning" }
-        );
-      },
-    });
-
-    window.setTimeout(() => {
-      cleanupFallback();
-    }, 3200);
-
+    const receiptHtml = buildReceiptHtml({
+      ...orderInfo,
+      orderCode: isDraft ? "DRAFT" : orderInfo.orderCode,
+      orderDate: orderInfo.orderDate || orderInfo.createdAt || new Date().toISOString(),
+    }, { logoSrc: await getReceiptLogoDataUrl() });
+    const url = await createRawbtReceiptIntent(
+      `<div class="bluetooth-print-page">${receiptHtml}</div>`,
+      {
+        // Use the existing Advan profile explicitly, independent of UA/storage.
+        style: `${bluetoothReceiptPrintStyle}${buildBluetoothReceiptScaleStyle(BLUETOOTH_RECEIPT_PROFILES.advan)}`,
+        sourceWidth: 219,
+      }
+    );
+    const cleanup = openAndroidPrintApp({ url });
+    window.setTimeout(cleanup, 3200);
     return true;
   } catch (error) {
-    enqueueSnackbar(
-      error?.response?.data?.message || error?.message ||
-        "Gagal menyiapkan struk Thermer. Coba cetak lagi.",
-      { variant: "error" }
-    );
+    enqueueSnackbar(error?.message || "Gagal menyiapkan struk RawBT.", { variant: "error" });
     return false;
   }
 };
