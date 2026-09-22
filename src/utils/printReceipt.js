@@ -40,9 +40,6 @@ export const openAndroidPrintApp = ({ onFallback, url }) => {
   };
 };
 
-export const openBluetoothPrintApp = ({ onFallback, responseUrl }) =>
-  openAndroidPrintApp({ onFallback, url: `my.bluetoothprint.scheme://${responseUrl}` });
-
 const waitForPrintAssets = (printWindow) => {
   const images = Array.from(printWindow.document.images || []);
 
