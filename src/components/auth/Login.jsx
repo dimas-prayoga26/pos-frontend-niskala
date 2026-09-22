@@ -41,19 +41,20 @@ const Login = () => {
 
   return (
     <div className="w-full">
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-5">
         <div>
           <label className="mb-2 block text-sm font-medium text-[#ababab]">
             Employee Email
           </label>
-          <div className="flex min-h-[52px] items-center rounded-lg bg-[#1f1f1f] px-4 py-3 ring-1 ring-transparent transition focus-within:ring-[#a79981]/50 sm:min-h-[58px]">
+          <div className="flex min-h-[50px] items-center rounded-lg bg-[#1f1f1f] px-4 py-3 ring-1 ring-transparent transition focus-within:ring-[#a79981]/50 sm:min-h-[56px]">
             <input
               type="email"
               name="email"
               value={formData.email}
               onChange={handleChange}
               placeholder="Enter employee email"
-              className="min-w-0 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-[#6f6f6f] sm:text-base"
+              autoComplete="email"
+              className="min-w-0 flex-1 bg-transparent text-base text-white outline-none placeholder:text-[#6f6f6f]"
               required
             />
           </div>
@@ -62,14 +63,15 @@ const Login = () => {
           <label className="mb-2 block text-sm font-medium text-[#ababab]">
             Password
           </label>
-          <div className="flex min-h-[52px] items-center rounded-lg bg-[#1f1f1f] px-4 py-3 ring-1 ring-transparent transition focus-within:ring-[#a79981]/50 sm:min-h-[58px]">
+          <div className="flex min-h-[50px] items-center rounded-lg bg-[#1f1f1f] px-4 py-3 ring-1 ring-transparent transition focus-within:ring-[#a79981]/50 sm:min-h-[56px]">
             <input
               type="password"
               name="password"
               value={formData.password}
               onChange={handleChange}
               placeholder="Enter password"
-              className="min-w-0 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-[#6f6f6f] sm:text-base"
+              autoComplete="current-password"
+              className="min-w-0 flex-1 bg-transparent text-base text-white outline-none placeholder:text-[#6f6f6f]"
               required
             />
           </div>
@@ -78,7 +80,7 @@ const Login = () => {
         <button
           type="submit"
           disabled={loginMutation.isPending}
-          className="mt-2 w-full rounded-lg bg-[#a79981] py-3 text-base font-bold text-[#101010] transition hover:bg-[#b8ad97] disabled:cursor-not-allowed disabled:opacity-70 sm:text-lg"
+          className="mt-2 min-h-[52px] w-full rounded-lg bg-[#a79981] px-4 py-3 text-base font-bold text-[#101010] transition hover:bg-[#b8ad97] disabled:cursor-not-allowed disabled:opacity-70 sm:min-h-[56px] sm:text-lg"
         >
           {loginMutation.isPending ? "Signing in..." : "Sign in"}
         </button>
