@@ -18,12 +18,17 @@ import {
   formatNominalInput,
   normalizeNominalInput,
 } from "../../utils";
+import CreatableSelect2 from "../shared/CreatableSelect2";
 
 const emptyPlatformForm = {
   isActive: true,
   name: "",
   tax: "",
 };
+const statusOptions = [
+  { id: "active", text: "Aktif" },
+  { id: "inactive", text: "Nonaktif" },
+];
 
 const SettingsManagement = () => {
   const [activeMenu, setActiveMenu] = useState("platform");
@@ -203,16 +208,17 @@ const SettingsManagement = () => {
 
           <label className="mt-4 block text-sm font-semibold text-[#ababab]">
             Status
-            <select
-              value={platformForm.isActive ? "active" : "inactive"}
-              onChange={(event) =>
-                updatePlatformForm("isActive", event.target.value === "active")
-              }
-              className="mt-2 w-full rounded-lg bg-[#262626] px-4 py-3 text-sm text-[#f5f5f5] outline-none"
-            >
-              <option value="active">Aktif</option>
-              <option value="inactive">Nonaktif</option>
-            </select>
+            <div className="mt-2">
+              <CreatableSelect2
+                options={statusOptions}
+                value={platformForm.isActive ? "active" : "inactive"}
+                onSelect={(option) =>
+                  updatePlatformForm("isActive", option?.id === "active")
+                }
+                placeholder="Pilih status"
+                label="Status"
+              />
+            </div>
           </label>
 
           <div className="mt-5 flex gap-2">

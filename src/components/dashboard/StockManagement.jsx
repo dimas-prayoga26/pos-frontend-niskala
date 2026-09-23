@@ -17,6 +17,23 @@ import { useSelector } from "react-redux";
 import ShoppingManagement from "./ShoppingManagement";
 
 const ITEMS_PER_PAGE = 10;
+const formatCurrency = (value) =>
+  `Rp ${Number(value || 0).toLocaleString("id-ID", { maximumFractionDigits: 2 })}`;
+const getCostDisplay = (item) => {
+  const unit = String(item.unit || "").toLowerCase();
+  const averageCost = Number(item.averageCost || 0);
+
+  if (["gr", "g", "gram"].includes(unit)) {
+    return `${formatCurrency(averageCost * 1000)} / kg`;
+  }
+
+  if (["ml", "milliliter", "mililiter"].includes(unit)) {
+    return `${formatCurrency(averageCost * 1000)} / liter`;
+  }
+
+  return `${formatCurrency(averageCost)} / ${item.unit || "unit"}`;
+};
+const getAssetDisplay = (item) => formatCurrency(item.stockValue);
 
 const emptyStockForm = {
   name: "",
@@ -138,6 +155,8 @@ const StockManagement = () => {
         item.unit,
         item.stock,
         item.minimumStock,
+        item.averageCost,
+        item.stockValue,
         item.status,
         item.supplier,
       ]
@@ -311,6 +330,8 @@ const StockManagement = () => {
                 <th className="p-3">Kategori</th>
                 <th className="p-3 text-center">Satuan</th>
                 <th className="p-3 text-center">Stok</th>
+                <th className="p-3 text-right">Nilai Asset</th>
+                <th className="p-3 text-right">COGS Sekarang</th>
                 <th className="p-3 text-center">Minimum</th>
                 <th className="p-3 text-center">Status</th>
                 {isAdmin && <th className="p-3 text-center">Aksi</th>}
@@ -355,6 +376,16 @@ const StockManagement = () => {
                       </button>
                     </div>
                   </td>
+                  <td className="p-4 text-right">
+                    <span className="whitespace-nowrap font-semibold">
+                      {getAssetDisplay(item)}
+                    </span>
+                  </td>
+                  <td className="p-4 text-right">
+                    <span className="whitespace-nowrap font-semibold text-[#f6d365]">
+                      {getCostDisplay(item)}
+                    </span>
+                  </td>
                   <td className="p-4 text-center">
                     {item.isUnlimited ? "-" : item.minimumStock}
                   </td>
@@ -394,7 +425,7 @@ const StockManagement = () => {
                 <tr>
                   <td
                     className="p-4 text-center text-[#ababab]"
-                    colSpan={isAdmin ? 7 : 6}
+                    colSpan={isAdmin ? 9 : 8}
                   >
                     No stock data found
                   </td>

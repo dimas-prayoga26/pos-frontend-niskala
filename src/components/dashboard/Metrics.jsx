@@ -37,6 +37,7 @@ import {
   getOrderReceivedAmount,
   getOrdersHppTotal,
 } from "../../utils";
+import CreatableSelect2 from "../shared/CreatableSelect2";
 
 const jakartaDateFormatter = new Intl.DateTimeFormat("en-CA", {
   timeZone: "Asia/Jakarta",
@@ -1361,19 +1362,18 @@ const Metrics = () => {
                 <span className="text-sm font-bold text-[#bcbcbc]">
                   Tanggal rekap
                 </span>
-                <select
-                  value={kasForm.recapId}
-                  onChange={(event) =>
-                    updateKasForm("recapId", event.target.value)
-                  }
-                  className="mt-2 w-full rounded-md border border-[#333] bg-[#202020] px-4 py-3 text-sm font-bold text-[#f5f5f5] outline-none focus:border-[#a79981]"
-                >
-                  {dailyRecapOptions.map((recap) => (
-                    <option key={recap.value} value={recap.value}>
-                      {recap.label} - {recap.description}
-                    </option>
-                  ))}
-                </select>
+                <div className="mt-2">
+                  <CreatableSelect2
+                    options={dailyRecapOptions.map((recap) => ({
+                      id: recap.value,
+                      text: `${recap.label} - ${recap.description}`,
+                    }))}
+                    value={kasForm.recapId}
+                    onSelect={(option) => updateKasForm("recapId", option?.id || "")}
+                    placeholder="Pilih tanggal rekap"
+                    label="Tanggal rekap"
+                  />
+                </div>
               </label>
 
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -1381,19 +1381,18 @@ const Metrics = () => {
                   <span className="text-sm font-bold text-[#bcbcbc]">
                     Jenis kas
                   </span>
-                  <select
-                    value={kasForm.method}
-                    onChange={(event) =>
-                      updateKasForm("method", event.target.value)
-                    }
-                    className="mt-2 w-full rounded-md border border-[#333] bg-[#202020] px-4 py-3 text-sm font-bold text-[#f5f5f5] outline-none focus:border-[#a79981]"
-                  >
-                    {kasMethodOptions.map((method) => (
-                      <option key={method.value} value={method.value}>
-                        {method.label}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="mt-2">
+                    <CreatableSelect2
+                      options={kasMethodOptions.map((method) => ({
+                        id: method.value,
+                        text: method.label,
+                      }))}
+                      value={kasForm.method}
+                      onSelect={(option) => updateKasForm("method", option?.id || "")}
+                      placeholder="Pilih jenis kas"
+                      label="Jenis kas"
+                    />
+                  </div>
                 </label>
 
                 <label className="block">

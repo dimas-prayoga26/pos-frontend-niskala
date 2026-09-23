@@ -7,7 +7,6 @@ import {
 } from "@tanstack/react-query";
 import { enqueueSnackbar } from "notistack";
 import { useSelector } from "react-redux";
-import Select from "react-select";
 import {
   addRecap,
   getMenuItems,
@@ -15,6 +14,7 @@ import {
   getRecaps,
   getUsers,
 } from "../../https";
+import CreatableSelect2 from "../shared/CreatableSelect2";
 import {
   formatCurrency,
   getOrderHppTotal,
@@ -424,142 +424,34 @@ const createMonthlySummary = ({ dailyRecaps, menuItems, orders, periodMonth }) =
   };
 };
 
-const selectStyles = {
-  control: (base, state) => ({
-    ...base,
-    minHeight: 40,
-    height: 40,
-    borderRadius: 8,
-    borderColor: state.isFocused ? "#025cca" : "#333",
-    backgroundColor: "#1f1f1f",
-    boxShadow: "none",
-    cursor: "pointer",
-    ":hover": {
-      borderColor: state.isFocused ? "#025cca" : "#333",
-    },
-  }),
-  valueContainer: (base) => ({
-    ...base,
-    height: 40,
-    padding: "0 12px",
-  }),
-  input: (base) => ({
-    ...base,
-    color: "#f5f5f5",
-    margin: 0,
-    padding: 0,
-  }),
-  singleValue: (base) => ({
-    ...base,
-    color: "#f5f5f5",
-    fontWeight: 600,
-  }),
-  placeholder: (base) => ({
-    ...base,
-    color: "#777",
-    fontWeight: 600,
-  }),
-  indicatorsContainer: (base) => ({
-    ...base,
-    height: 40,
-  }),
-  indicatorSeparator: () => ({
-    display: "none",
-  }),
-  dropdownIndicator: (base) => ({
-    ...base,
-    color: "#ababab",
-    padding: "0 10px",
-    ":hover": {
-      color: "#f5f5f5",
-    },
-  }),
-  clearIndicator: (base) => ({
-    ...base,
-    color: "#ababab",
-    padding: "0 4px",
-    ":hover": {
-      color: "#f5f5f5",
-    },
-  }),
-  menu: (base) => ({
-    ...base,
-    zIndex: 80,
-    overflow: "hidden",
-    borderRadius: 8,
-    border: "1px solid #333",
-    backgroundColor: "#1a1a1a",
-    boxShadow: "0 25px 50px -12px rgb(0 0 0 / 0.4)",
-  }),
-  menuPortal: (base) => ({
-    ...base,
-    zIndex: 80,
-  }),
-  menuList: (base) => ({
-    ...base,
-    maxHeight: 192,
-    padding: 0,
-    backgroundColor: "#1a1a1a",
-  }),
-  option: (base, state) => ({
-    ...base,
-    padding: "12px 16px",
-    color: "#f5f5f5",
-    backgroundColor: state.isSelected
-      ? "#025cca"
-      : state.isFocused
-        ? "#262626"
-        : "#1a1a1a",
-    cursor: "pointer",
-    ":active": {
-      backgroundColor: "#025cca",
-    },
-  }),
-  noOptionsMessage: (base) => ({
-    ...base,
-    color: "#ababab",
-  }),
-};
-
 const SelectField = ({
   label,
   value,
   onChange,
   options,
   placeholder,
-  isSearchable = true,
 }) => {
-  const selectedOption =
-    options.find((option) => String(option.value) === String(value)) || null;
+  const select2Options = options.map((option) => ({
+    id: option.value,
+    text: option.description
+      ? `${option.label} - ${option.description}`
+      : option.label,
+  }));
 
   return (
     <div>
       <label className="block text-sm font-semibold text-[#ababab]">
         {label}
       </label>
-      <Select
-        className="mt-2"
-        value={selectedOption}
-        onChange={(selected) => onChange(selected?.value || "")}
-        options={options}
-        placeholder={placeholder}
-        isSearchable={isSearchable}
-        isClearable
-        noOptionsMessage={() => "Tidak ada data"}
-        menuPosition="fixed"
-        menuPortalTarget={typeof document !== "undefined" ? document.body : null}
-        styles={selectStyles}
-        formatOptionLabel={(option) => (
-          <div>
-            <span className="block truncate font-semibold">{option.label}</span>
-            {option.description && (
-              <span className="mt-1 block truncate text-xs text-[#ababab]">
-                {option.description}
-              </span>
-            )}
-          </div>
-        )}
-      />
+      <div className="mt-2">
+        <CreatableSelect2
+          options={select2Options}
+          value={value}
+          onSelect={(selected) => onChange(selected?.id || "")}
+          label={label}
+          placeholder={placeholder}
+        />
+      </div>
     </div>
   );
 };

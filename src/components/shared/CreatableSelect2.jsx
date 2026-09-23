@@ -57,8 +57,11 @@ export default function CreatableSelect2({ options, value, onSelect, onCreate, p
   }, [placeholder, canCreate]);
   useEffect(() => {
     const element = $(select.current);
-    element.empty().append(new Option("", ""));
-    options.forEach(option => element.append(new Option(option.text, String(option.id))));
+    const emptyOption = options.find(option => String(option.id) === "");
+    element.empty().append(new Option(emptyOption?.text || "", ""));
+    options
+      .filter(option => String(option.id) !== "")
+      .forEach(option => element.append(new Option(option.text, String(option.id))));
     element.val(value ? String(value) : "").trigger("change.select2");
   }, [options, value]);
   useEffect(() => { $(select.current).prop("disabled", Boolean(disabled || saving)); }, [disabled, saving]);

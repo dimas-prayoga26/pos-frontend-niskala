@@ -21,6 +21,8 @@ import {
 } from "../../https";
 import { formatCurrency } from "../../utils";
 import { backendBaseUrl } from "../../https/backendUrl";
+import CreatableSelect2 from "../shared/CreatableSelect2";
+import { MdErrorOutline } from "react-icons/md";
 
 const iconOptions = [
   "☕",
@@ -79,6 +81,15 @@ const iconOptions = [
   "➕",
 ];
 
+const categoryStatusOptions = [
+  { id: "active", text: "Aktif" },
+  { id: "inactive", text: "Nonaktif" },
+];
+const menuAvailabilityOptions = [
+  { id: "available", text: "Tersedia" },
+  { id: "unavailable", text: "Tidak Tersedia" },
+];
+
 const emptyCategoryForm = {
   isActive: true,
   name: "",
@@ -103,6 +114,7 @@ const emptyMenuForm = {
 };
 
 const ITEMS_PER_PAGE = 10;
+const MENU_SIZES_ENABLED = false;
 
 const resolveMenuImageUrl = (imagePath) => {
   if (!imagePath) return "";
@@ -157,6 +169,60 @@ const isValidMoneyInput = (value) => {
 };
 
 const getCategoryId = (category) => String(category?.id || category?._id || "");
+const normalizeStockUnit = (unit) => String(unit || "").trim().toLowerCase();
+
+const getCogsDisplay = (stockItem) => {
+  if (!stockItem) return "COGS: -";
+
+  const unit = normalizeStockUnit(stockItem.unit);
+  const averageCost = Number(stockItem.averageCost || 0);
+
+  if (["gr", "g", "gram"].includes(unit)) {
+    return `COGS: ${formatCurrency(averageCost * 1000)} / kg`;
+  }
+
+  if (["ml", "milliliter", "mililiter"].includes(unit)) {
+    return `COGS: ${formatCurrency(averageCost * 1000)} / liter`;
+  }
+
+  return `COGS: ${formatCurrency(averageCost)} / ${stockItem.unit || "unit"}`;
+};
+
+const getIngredientCost = (ingredient, stockItem) => {
+  if (!stockItem) return 0;
+
+  const quantity = Number(ingredient.quantity || 0);
+  const averageCost = Number(stockItem.averageCost || 0);
+
+  if (!Number.isFinite(quantity) || !Number.isFinite(averageCost)) return 0;
+
+  return quantity * averageCost;
+};
+
+const getIngredientCostDescription = (ingredient, stockItem, cost) => {
+  if (!stockItem) return "Pilih bahan stok dulu untuk menghitung cost.";
+
+  const quantity = Number(ingredient.quantity || 0);
+  const unit = stockItem.unit || ingredient.unit || "unit";
+  const normalizedUnit = normalizeStockUnit(unit);
+  const averageCost = Number(stockItem.averageCost || 0);
+
+  if (["gr", "g", "gram"].includes(normalizedUnit)) {
+    return `${formatMoneyDisplay(averageCost * 1000)} : 1000 x ${quantity || 0} = ${formatMoneyDisplay(cost)}`;
+  }
+
+  if (["ml", "milliliter", "mililiter"].includes(normalizedUnit)) {
+    return `${formatMoneyDisplay(averageCost * 1000)} : 1000 x ${quantity || 0} = ${formatMoneyDisplay(cost)}`;
+  }
+
+  return `${formatMoneyDisplay(averageCost)} x ${quantity || 0} = ${formatMoneyDisplay(cost)}`;
+};
+
+const roundMoney = (value) =>
+  Math.round((Number(value) || 0) * 100) / 100;
+
+const formatMoneyDisplay = (value) =>
+  Number(value || 0).toLocaleString("id-ID", { maximumFractionDigits: 2 });
 
 const MenuManagement = () => {
   const queryClient = useQueryClient();
@@ -209,6 +275,35 @@ const MenuManagement = () => {
         .filter(Boolean)
         .filter((sizeName, index, list) => list.indexOf(sizeName) === index),
     [menuForm.sizes]
+  );
+  const categorySelectOptions = useMemo(
+    () =>
+      categories.map((category) => ({
+        id: String(category.id || category._id),
+        text: `${category.icon ? `${category.icon} ` : ""}${category.name}`,
+      })),
+    [categories]
+  );
+  const menuCategoryFilterOptions = useMemo(
+    () => [{ id: "", text: "Semua kategori" }, ...categorySelectOptions],
+    [categorySelectOptions]
+  );
+  const ingredientSizeSelectOptions = useMemo(
+    () => [
+      { id: "", text: "Semua ukuran" },
+      ...ingredientSizeOptions.map((sizeName) => ({ id: sizeName, text: sizeName })),
+    ],
+    [ingredientSizeOptions]
+  );
+  const stockItemSelectOptions = useMemo(
+    () => [
+      { id: "", text: "Pilih dari stok" },
+      ...stockItems.map((stockItem) => ({
+        id: String(stockItem.id || stockItem._id),
+        text: stockItem.name,
+      })),
+    ],
+    [stockItems]
   );
 
   useEffect(() => {
@@ -435,7 +530,24 @@ const MenuManagement = () => {
     ? (menuPage - 1) * ITEMS_PER_PAGE + 1
     : 0;
   const menuEnd = Math.min(menuPage * ITEMS_PER_PAGE, filteredMenuItems.length);
-  const hasMenuSizes = menuForm.sizes.length > 0;
+  const hasMenuSizes = MENU_SIZES_ENABLED && menuForm.sizes.length > 0;
+  const autoIngredientCostTotal = useMemo(
+    () =>
+      menuForm.ingredients.reduce((total, ingredient) => {
+        const selectedStockItem = stockItems.find(
+          (stockItem) =>
+            String(stockItem.id || stockItem._id) ===
+            String(ingredient.stockItemId || "")
+        );
+
+        return total + getIngredientCost(ingredient, selectedStockItem);
+      }, 0),
+    [menuForm.ingredients, stockItems]
+  );
+  const autoHppCost = roundMoney(autoIngredientCostTotal * 1.3);
+  const autoGrossProfit = roundMoney(
+    parseMoneyInput(menuForm.regularPrice) - autoHppCost
+  );
 
   useEffect(() => {
     setCategoryPage(1);
@@ -604,12 +716,13 @@ const MenuManagement = () => {
   const handleSubmitMenuItem = (event) => {
     event.preventDefault();
 
-    const hasIncompleteSize = menuForm.sizes.some(
+    const activeMenuSizes = MENU_SIZES_ENABLED ? menuForm.sizes : [];
+    const hasIncompleteSize = activeMenuSizes.some(
       (size) =>
         !size.name.trim() ||
         size.price === ""
     );
-    const sizes = menuForm.sizes
+    const sizes = activeMenuSizes
       .map((size) => ({
         name: size.name.trim(),
         price: parseMoneyInput(size.price),
@@ -623,7 +736,7 @@ const MenuManagement = () => {
       .filter(Boolean);
     const ingredients = menuForm.ingredients
       .map((ingredient) => ({
-        sizeName: ingredient.sizeName || "",
+        sizeName: MENU_SIZES_ENABLED ? ingredient.sizeName || "" : "",
         stockItemId: ingredient.stockItemId || null,
         ingredientName: ingredient.ingredientName.trim(),
         quantity: Number(ingredient.quantity) || 0,
@@ -641,8 +754,10 @@ const MenuManagement = () => {
       menuForm.includeOnlinePlatform && menuForm.onlinePrice !== ""
         ? parseMoneyInput(menuForm.onlinePrice)
         : null;
-    const hppCost = parseMoneyInput(menuForm.hppCost);
-    const grossProfit = parseMoneyInput(menuForm.grossProfit);
+    const hppCost = hasMenuSizes ? parseMoneyInput(menuForm.hppCost) : autoHppCost;
+    const grossProfit = hasMenuSizes
+      ? parseMoneyInput(menuForm.grossProfit)
+      : autoGrossProfit;
 
     const hasMenuImage =
       Boolean(menuForm.imageFile) || Boolean(menuForm.imagePath.trim());
@@ -675,11 +790,7 @@ const MenuManagement = () => {
       return;
     }
 
-    const baseMoneyFields = [
-      menuForm.regularPrice,
-      menuForm.hppCost,
-      menuForm.grossProfit,
-    ];
+    const baseMoneyFields = [menuForm.regularPrice];
 
     if (menuForm.includeOnlinePlatform) {
       baseMoneyFields.push(menuForm.onlinePrice);
@@ -688,7 +799,7 @@ const MenuManagement = () => {
     const hasInvalidBaseMoney =
       !hasMenuSizes &&
       baseMoneyFields.some((value) => !isValidMoneyInput(value));
-    const hasInvalidSizeMoney = menuForm.sizes.some((size) =>
+    const hasInvalidSizeMoney = activeMenuSizes.some((size) =>
       [size.price, size.hppCost, size.grossProfit].some(
         (value) => !isValidMoneyInput(value)
       )
@@ -718,11 +829,10 @@ const MenuManagement = () => {
       (!hasMenuSizes &&
         (basePrice < 0 ||
           hppCost < 0 ||
-          grossProfit < 0 ||
           (onlinePrice !== null && onlinePrice < 0))) ||
       hasInvalidSizeFinancial
     ) {
-      enqueueSnackbar("Harga, HPP, dan gross profit tidak boleh minus.", {
+      enqueueSnackbar("Harga dan HPP tidak boleh minus.", {
         variant: "warning",
       });
       return;
@@ -741,7 +851,7 @@ const MenuManagement = () => {
       grossProfit: hasMenuSizes ? null : grossProfit,
       ingredients,
       variants,
-      sizes,
+      sizes: MENU_SIZES_ENABLED ? sizes : [],
       imageFile: menuForm.imageFile,
       imagePath: menuForm.imagePath.trim(),
       isAvailable: Boolean(menuForm.isAvailable),
@@ -769,7 +879,8 @@ const MenuManagement = () => {
   };
 
   const startEditMenuItem = (item) => {
-    const hasItemSizes = Boolean(item.sizes?.length);
+    const firstSize = item.sizes?.[0] || {};
+    const hasItemSizes = MENU_SIZES_ENABLED && Boolean(item.sizes?.length);
 
     setEditingMenuItem(item);
     setIsMenuFormOpen(true);
@@ -779,23 +890,35 @@ const MenuManagement = () => {
       name: item.name,
       regularPrice: hasItemSizes
         ? ""
-        : String(item.regularPrice ?? item.price ?? ""),
+        : String(item.regularPrice ?? item.price ?? firstSize.price ?? ""),
       includeOnlinePlatform: Boolean(item.includeOnlinePlatform),
       onlinePrice:
         item.onlinePrice === null || item.onlinePrice === undefined
           ? ""
           : String(item.onlinePrice),
-      hppCost: hasItemSizes ? "" : String(item.hppCost ?? item.hpp ?? ""),
-      grossProfit: hasItemSizes ? "" : String(item.grossProfit ?? item.profit ?? ""),
+      hppCost: hasItemSizes
+        ? ""
+        : String(item.hppCost ?? item.hpp ?? firstSize.hppCost ?? firstSize.hpp ?? ""),
+      grossProfit: hasItemSizes
+        ? ""
+        : String(
+            item.grossProfit ??
+              item.profit ??
+              firstSize.grossProfit ??
+              firstSize.profit ??
+              ""
+          ),
       variants: item.variants?.length ? item.variants : [],
-      sizes: (item.sizes || []).map((size) => ({
-        name: size.name,
-        price: String(size.price),
-        hppCost: String(size.hppCost ?? size.hpp ?? ""),
-        grossProfit: String(size.grossProfit ?? size.profit ?? ""),
-      })),
+      sizes: MENU_SIZES_ENABLED
+        ? (item.sizes || []).map((size) => ({
+            name: size.name,
+            price: String(size.price),
+            hppCost: String(size.hppCost ?? size.hpp ?? ""),
+            grossProfit: String(size.grossProfit ?? size.profit ?? ""),
+          }))
+        : [],
       ingredients: (item.ingredients || []).map((ingredient) => ({
-        sizeName: ingredient.sizeName || "",
+        sizeName: MENU_SIZES_ENABLED ? ingredient.sizeName || "" : "",
         stockItemId: String(ingredient.stockItemId || ""),
         ingredientName: ingredient.ingredientName || ingredient.name || "",
         quantity: String(ingredient.quantity ?? ""),
@@ -988,19 +1111,17 @@ const MenuManagement = () => {
                 </label>
                 <label className="mt-4 block text-sm font-semibold text-[#ababab]">
                   Status
-                  <select
-                    value={categoryForm.isActive ? "active" : "inactive"}
-                    onChange={(event) =>
-                      updateCategoryForm(
-                        "isActive",
-                        event.target.value === "active"
-                      )
-                    }
-                    className="mt-2 w-full rounded-lg bg-[#262626] px-4 py-3 text-sm text-[#f5f5f5] outline-none"
-                  >
-                    <option value="active">Aktif</option>
-                    <option value="inactive">Nonaktif</option>
-                  </select>
+                  <div className="mt-2">
+                    <CreatableSelect2
+                      options={categoryStatusOptions}
+                      value={categoryForm.isActive ? "active" : "inactive"}
+                      onSelect={(option) =>
+                        updateCategoryForm("isActive", option?.id === "active")
+                      }
+                      placeholder="Pilih status"
+                      label="Status"
+                    />
+                  </div>
                 </label>
                 <div className="sticky bottom-0 -mx-4 mt-5 flex gap-2 border-t border-[#333] bg-[#1f1f1f] px-4 py-4">
                   <button
@@ -1250,19 +1371,15 @@ const MenuManagement = () => {
             </div>
             <label className="mt-4 block text-sm font-semibold text-[#ababab]">
               Category
-              <select
-                value={menuForm.categoryId}
-                onChange={(event) => updateMenuForm("categoryId", event.target.value)}
-                className="mt-2 w-full rounded-lg bg-[#262626] px-4 py-3 text-sm text-[#f5f5f5] outline-none"
-              >
-                <option value="">Pilih category</option>
-                {categories.map((category) => (
-                  <option key={category.id || category._id} value={category.id || category._id}>
-                    {category.icon ? `${category.icon} ` : ""}
-                    {category.name}
-                  </option>
-                ))}
-              </select>
+              <div className="mt-2">
+                <CreatableSelect2
+                  options={[{ id: "", text: "Pilih category" }, ...categorySelectOptions]}
+                  value={menuForm.categoryId}
+                  onSelect={(option) => updateMenuForm("categoryId", option?.id || "")}
+                  placeholder="Pilih category"
+                  label="Category"
+                />
+              </div>
             </label>
             <label className="mt-4 block text-sm font-semibold text-[#ababab]">
               Nama Menu
@@ -1273,6 +1390,245 @@ const MenuManagement = () => {
                 className="mt-2 w-full rounded-lg bg-[#262626] px-4 py-3 text-sm text-[#f5f5f5] outline-none"
               />
             </label>
+            {MENU_SIZES_ENABLED && (
+              <div className="mt-4">
+                <div className="mb-2 flex items-center justify-between">
+                  <span className="text-sm font-semibold text-[#ababab]">
+                    Ukuran & Harga <span className="text-xs text-[#777]">(Opsional)</span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={addMenuSizeField}
+                    className="rounded-md bg-[#333] px-3 py-1 text-xs font-bold text-[#f5f5f5]"
+                  >
+                    Tambah
+                  </button>
+                </div>
+                <div className="space-y-2">
+                  {menuForm.sizes.map((size, index) => (
+                    <div
+                      key={index}
+                      className="rounded-lg border border-[#333] bg-[#202020] p-3"
+                    >
+                      <div className="grid grid-cols-[minmax(0,1fr)_40px] gap-2">
+                        <input
+                          value={size.name}
+                          onChange={(event) =>
+                            updateMenuSize(index, "name", event.target.value)
+                          }
+                          placeholder="Nama ukuran, contoh: Reguler / Large"
+                          className="min-w-0 rounded-lg bg-[#262626] px-3 py-3 text-sm text-[#f5f5f5] outline-none"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => removeMenuSizeField(index)}
+                          className="w-10 rounded-lg bg-[#333] text-sm font-bold text-red-300"
+                        >
+                          X
+                        </button>
+                      </div>
+                      <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-3">
+                        {[
+                          ["price", "Harga Reguler", "18000", "#a79981", false],
+                          ["hppCost", "HPP", "0", "rgb(253 230 138)", true],
+                          [
+                            "grossProfit",
+                            "Gross Profit",
+                            "0",
+                            "rgb(167 243 208)",
+                            true,
+                          ],
+                        ].map(([field, label, placeholder, color, isOptional]) => (
+                          <label
+                            key={field}
+                            className="block min-w-0 text-xs font-bold"
+                            style={{ color }}
+                          >
+                            <span>
+                              {label}{" "}
+                              {isOptional && (
+                                <span className="font-semibold text-[#777]">
+                                  (Opsional)
+                                </span>
+                              )}
+                            </span>
+                            <div className="mt-1 flex min-w-0 overflow-hidden rounded-lg bg-[#262626]">
+                              <span className="flex shrink-0 items-center px-2 text-sm font-bold">
+                                Rp
+                              </span>
+                              <input
+                                value={size[field]}
+                                onChange={(event) =>
+                                  updateMenuSize(index, field, event.target.value)
+                                }
+                                type="text"
+                                inputMode="decimal"
+                                placeholder={placeholder}
+                                className="min-w-0 w-full bg-transparent py-3 pr-2 text-sm text-[#f5f5f5] outline-none"
+                              />
+                            </div>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <p className="mt-2 text-xs text-[#777]">
+                  Boleh kosong kalau menu hanya punya satu harga reguler. HPP dan gross profit boleh dikosongkan.
+                </p>
+              </div>
+            )}
+            <div className="mt-4">
+              <div className="mb-2 flex items-center justify-between">
+                <span className="text-sm font-semibold text-[#ababab]">
+                  Varian <span className="text-xs text-[#777]">(Opsional)</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={addMenuVariantField}
+                  className="rounded-md bg-[#333] px-3 py-1 text-xs font-bold text-[#f5f5f5]"
+                >
+                  Tambah
+                </button>
+              </div>
+              <div className="space-y-2">
+                {menuForm.variants.map((variant, index) => (
+                  <div key={index} className="grid grid-cols-[1fr_auto] gap-2">
+                    <input
+                      value={variant}
+                      onChange={(event) =>
+                        updateMenuVariant(index, event.target.value)
+                      }
+                      placeholder="Cold / Hot / Less Sugar"
+                      className="rounded-lg bg-[#262626] px-3 py-3 text-sm text-[#f5f5f5] outline-none"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removeMenuVariantField(index)}
+                      className="rounded-lg bg-[#333] px-3 text-sm font-bold text-red-300"
+                    >
+                      X
+                    </button>
+                  </div>
+                ))}
+              </div>
+              <p className="mt-2 text-xs text-[#777]">
+                Boleh kosong. Contoh varian: Hot, Cold, Less Sugar.
+              </p>
+            </div>
+            <div className="mt-4">
+              <div className="mb-2 flex items-center justify-between">
+                <span className="text-sm font-semibold text-[#ababab]">
+                  Komposisi Bahan <span className="text-xs text-[#777]">(Opsional)</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={addMenuIngredientField}
+                  className="rounded-md bg-[#333] px-3 py-1 text-xs font-bold text-[#f5f5f5]"
+                >
+                  Tambah
+                </button>
+              </div>
+              <div className="space-y-3">
+                {menuForm.ingredients.map((ingredient, index) => {
+                  const selectedIngredientStockItem = stockItems.find(
+                    (stockItem) =>
+                      String(stockItem.id || stockItem._id) ===
+                      String(ingredient.stockItemId || "")
+                  );
+                  const ingredientCost = getIngredientCost(
+                    ingredient,
+                    selectedIngredientStockItem
+                  );
+
+                  return (
+                    <div
+                      key={index}
+                      className="rounded-lg border border-[#333] bg-[#202020] p-3"
+                    >
+                      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                        <CreatableSelect2
+                          options={stockItemSelectOptions}
+                          value={ingredient.stockItemId}
+                          onSelect={(option) =>
+                            selectIngredientStockItem(index, option?.id || "")
+                          }
+                          placeholder="Pilih dari stok"
+                          label="Stok bahan"
+                        />
+                        <input
+                          value={getCogsDisplay(selectedIngredientStockItem)}
+                          disabled
+                          aria-label="COGS sekarang"
+                          className="min-w-0 rounded-lg bg-[#262626] px-3 py-3 text-sm font-semibold text-[#f5f5f5] outline-none disabled:opacity-100"
+                        />
+                      </div>
+                      <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_84px_minmax(0,0.8fr)_42px]">
+                        <input
+                          value={ingredient.quantity}
+                          onChange={(event) =>
+                            updateMenuIngredient(
+                              index,
+                              "quantity",
+                              event.target.value
+                            )
+                          }
+                          type="number"
+                          min="0"
+                          step="0.001"
+                          placeholder="Gramasi"
+                          className="min-w-0 rounded-lg bg-[#262626] px-3 py-3 text-sm text-[#f5f5f5] outline-none"
+                        />
+                        <input
+                          value={selectedIngredientStockItem?.unit || ingredient.unit}
+                          disabled
+                          placeholder="gr"
+                          aria-label="Satuan bahan"
+                          className="min-w-0 rounded-lg bg-[#262626] px-3 py-3 text-sm font-semibold text-[#ababab] outline-none disabled:opacity-100"
+                        />
+                        <div className="group relative flex min-w-0 items-center rounded-lg bg-[#262626]">
+                          <input
+                            value={formatCurrency(ingredientCost)}
+                            disabled
+                            aria-label="Cost bahan"
+                            className="min-w-0 flex-1 bg-transparent px-3 py-3 pr-10 text-sm font-semibold text-[#f5f5f5] outline-none disabled:opacity-100"
+                          />
+                          <button
+                            type="button"
+                            title={getIngredientCostDescription(
+                              ingredient,
+                              selectedIngredientStockItem,
+                              ingredientCost
+                            )}
+                            className="absolute right-3 inline-flex h-5 w-5 items-center justify-center text-[#f5f5f5] outline-none"
+                            aria-label="Keterangan perhitungan cost"
+                          >
+                            <MdErrorOutline size={18} />
+                          </button>
+                          <span className="pointer-events-none absolute bottom-[calc(100%+8px)] right-0 z-20 hidden w-72 rounded-lg border border-[#444] bg-[#151515] px-3 py-2 text-xs font-semibold leading-relaxed text-[#f5f5f5] shadow-xl group-hover:block group-focus-within:block">
+                            {getIngredientCostDescription(
+                              ingredient,
+                              selectedIngredientStockItem,
+                              ingredientCost
+                            )}
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => removeMenuIngredientField(index)}
+                          className="w-10 rounded-lg bg-[#333] text-sm font-bold text-red-300"
+                        >
+                          X
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              <p className="mt-2 text-xs text-[#777]">
+                Boleh kosong. Dipakai sebagai catatan resep dan pengurangan stok otomatis.
+              </p>
+            </div>
             {!hasMenuSizes && (
               <>
                 <div className="mt-4">
@@ -1346,271 +1702,38 @@ const MenuManagement = () => {
                 </div>
                 <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
                   <label className="block text-sm font-semibold text-amber-200">
-                    HPP <span className="text-xs text-[#777]">(Opsional)</span>
+                    HPP <span className="text-xs text-[#777]">(Auto +30%)</span>
                     <div className="mt-2 flex overflow-hidden rounded-lg border border-amber-500/30 bg-amber-500/10">
                       <span className="flex shrink-0 items-center px-4 text-sm font-bold text-amber-200">
                         Rp
                       </span>
                       <input
-                        value={menuForm.hppCost}
-                        onChange={(event) =>
-                          updateMenuForm("hppCost", event.target.value)
-                        }
+                        value={formatMoneyDisplay(autoHppCost)}
+                        disabled
                         type="text"
-                        inputMode="decimal"
                         placeholder="0"
-                        className="min-w-0 w-full bg-transparent py-3 pr-4 text-sm text-[#f5f5f5] outline-none"
+                        className="min-w-0 w-full bg-transparent py-3 pr-4 text-sm text-[#f5f5f5] outline-none disabled:opacity-100"
                       />
                     </div>
                   </label>
                   <label className="block text-sm font-semibold text-emerald-200">
-                    Gross Profit <span className="text-xs text-[#777]">(Opsional)</span>
+                    Gross Profit <span className="text-xs text-[#777]">(Auto)</span>
                     <div className="mt-2 flex overflow-hidden rounded-lg border border-emerald-500/30 bg-emerald-500/10">
                       <span className="flex shrink-0 items-center px-4 text-sm font-bold text-emerald-200">
                         Rp
                       </span>
                       <input
-                        value={menuForm.grossProfit}
-                        onChange={(event) =>
-                          updateMenuForm("grossProfit", event.target.value)
-                        }
+                        value={formatMoneyDisplay(autoGrossProfit)}
+                        disabled
                         type="text"
-                        inputMode="decimal"
                         placeholder="0"
-                        className="min-w-0 w-full bg-transparent py-3 pr-4 text-sm text-[#f5f5f5] outline-none"
+                        className="min-w-0 w-full bg-transparent py-3 pr-4 text-sm text-[#f5f5f5] outline-none disabled:opacity-100"
                       />
                     </div>
                   </label>
                 </div>
               </>
             )}
-            <div className="mt-4">
-              <div className="mb-2 flex items-center justify-between">
-                <span className="text-sm font-semibold text-[#ababab]">
-                  Ukuran & Harga <span className="text-xs text-[#777]">(Opsional)</span>
-                </span>
-                <button
-                  type="button"
-                  onClick={addMenuSizeField}
-                  className="rounded-md bg-[#333] px-3 py-1 text-xs font-bold text-[#f5f5f5]"
-                >
-                  Tambah
-                </button>
-              </div>
-              <div className="space-y-2">
-                {menuForm.sizes.map((size, index) => (
-                  <div
-                    key={index}
-                    className="rounded-lg border border-[#333] bg-[#202020] p-3"
-                  >
-                    <div className="grid grid-cols-[minmax(0,1fr)_40px] gap-2">
-                      <input
-                        value={size.name}
-                        onChange={(event) =>
-                          updateMenuSize(index, "name", event.target.value)
-                        }
-                        placeholder="Nama ukuran, contoh: Reguler / Large"
-                        className="min-w-0 rounded-lg bg-[#262626] px-3 py-3 text-sm text-[#f5f5f5] outline-none"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => removeMenuSizeField(index)}
-                        className="w-10 rounded-lg bg-[#333] text-sm font-bold text-red-300"
-                      >
-                        X
-                      </button>
-                    </div>
-                    <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-3">
-                      {[
-                        ["price", "Harga Reguler", "18000", "#a79981", false],
-                        ["hppCost", "HPP", "0", "rgb(253 230 138)", true],
-                        [
-                          "grossProfit",
-                          "Gross Profit",
-                          "0",
-                          "rgb(167 243 208)",
-                          true,
-                        ],
-                      ].map(([field, label, placeholder, color, isOptional]) => (
-                        <label
-                          key={field}
-                          className="block min-w-0 text-xs font-bold"
-                          style={{ color }}
-                        >
-                          <span>
-                            {label}{" "}
-                            {isOptional && (
-                              <span className="font-semibold text-[#777]">
-                                (Opsional)
-                              </span>
-                            )}
-                          </span>
-                          <div className="mt-1 flex min-w-0 overflow-hidden rounded-lg bg-[#262626]">
-                            <span className="flex shrink-0 items-center px-2 text-sm font-bold">
-                              Rp
-                            </span>
-                            <input
-                              value={size[field]}
-                              onChange={(event) =>
-                                updateMenuSize(index, field, event.target.value)
-                              }
-                              type="text"
-                              inputMode="decimal"
-                              placeholder={placeholder}
-                              className="min-w-0 w-full bg-transparent py-3 pr-2 text-sm text-[#f5f5f5] outline-none"
-                            />
-                          </div>
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <p className="mt-2 text-xs text-[#777]">
-                Boleh kosong kalau menu hanya punya satu harga reguler. HPP dan gross profit boleh dikosongkan.
-              </p>
-            </div>
-            <div className="mt-4">
-              <div className="mb-2 flex items-center justify-between">
-                <span className="text-sm font-semibold text-[#ababab]">
-                  Varian <span className="text-xs text-[#777]">(Opsional)</span>
-                </span>
-                <button
-                  type="button"
-                  onClick={addMenuVariantField}
-                  className="rounded-md bg-[#333] px-3 py-1 text-xs font-bold text-[#f5f5f5]"
-                >
-                  Tambah
-                </button>
-              </div>
-              <div className="space-y-2">
-                {menuForm.variants.map((variant, index) => (
-                  <div key={index} className="grid grid-cols-[1fr_auto] gap-2">
-                    <input
-                      value={variant}
-                      onChange={(event) =>
-                        updateMenuVariant(index, event.target.value)
-                      }
-                      placeholder="Cold / Hot / Less Sugar"
-                      className="rounded-lg bg-[#262626] px-3 py-3 text-sm text-[#f5f5f5] outline-none"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => removeMenuVariantField(index)}
-                      className="rounded-lg bg-[#333] px-3 text-sm font-bold text-red-300"
-                    >
-                      X
-                    </button>
-                  </div>
-                ))}
-              </div>
-              <p className="mt-2 text-xs text-[#777]">
-                Boleh kosong. Contoh varian: Hot, Cold, Less Sugar.
-              </p>
-            </div>
-            <div className="mt-4">
-              <div className="mb-2 flex items-center justify-between">
-                <span className="text-sm font-semibold text-[#ababab]">
-                  Komposisi Bahan <span className="text-xs text-[#777]">(Opsional)</span>
-                </span>
-                <button
-                  type="button"
-                  onClick={addMenuIngredientField}
-                  className="rounded-md bg-[#333] px-3 py-1 text-xs font-bold text-[#f5f5f5]"
-                >
-                  Tambah
-                </button>
-              </div>
-              <div className="space-y-3">
-                {menuForm.ingredients.map((ingredient, index) => (
-                    <div
-                      key={index}
-                      className="rounded-lg border border-[#333] bg-[#202020] p-3"
-                    >
-                      <div className="grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,0.8fr)_minmax(0,1.1fr)_minmax(0,1fr)]">
-                        <select
-                          value={ingredient.sizeName}
-                          onChange={(event) =>
-                            updateMenuIngredient(index, "sizeName", event.target.value)
-                          }
-                          className="min-w-0 rounded-lg bg-[#262626] px-3 py-3 text-sm text-[#f5f5f5] outline-none"
-                        >
-                          <option value="">Semua ukuran</option>
-                          {ingredientSizeOptions.map((sizeName) => (
-                            <option key={sizeName} value={sizeName}>
-                              {sizeName}
-                            </option>
-                          ))}
-                        </select>
-                        <select
-                          value={ingredient.stockItemId}
-                          onChange={(event) =>
-                            selectIngredientStockItem(index, event.target.value)
-                          }
-                          className="min-w-0 rounded-lg bg-[#262626] px-3 py-3 text-sm text-[#f5f5f5] outline-none"
-                        >
-                          <option value="">Pilih dari stok</option>
-                          {stockItems.map((stockItem) => (
-                            <option
-                              key={stockItem.id || stockItem._id}
-                              value={stockItem.id || stockItem._id}
-                            >
-                              {stockItem.name}
-                            </option>
-                          ))}
-                        </select>
-                        <input
-                          value={ingredient.ingredientName}
-                          onChange={(event) =>
-                            updateMenuIngredient(
-                              index,
-                              "ingredientName",
-                              event.target.value
-                            )
-                          }
-                          placeholder="Nama bahan"
-                          className="min-w-0 rounded-lg bg-[#262626] px-3 py-3 text-sm text-[#f5f5f5] outline-none"
-                        />
-                      </div>
-                      <div className="mt-2 grid grid-cols-[minmax(0,1fr)_84px_42px] gap-2">
-                        <input
-                          value={ingredient.quantity}
-                          onChange={(event) =>
-                            updateMenuIngredient(
-                              index,
-                              "quantity",
-                              event.target.value
-                            )
-                          }
-                          type="number"
-                          min="0"
-                          step="0.001"
-                          placeholder="Gramasi"
-                          className="min-w-0 rounded-lg bg-[#262626] px-3 py-3 text-sm text-[#f5f5f5] outline-none"
-                        />
-                        <input
-                          value={ingredient.unit}
-                          onChange={(event) =>
-                            updateMenuIngredient(index, "unit", event.target.value)
-                          }
-                          placeholder="gr"
-                          className="min-w-0 rounded-lg bg-[#262626] px-3 py-3 text-sm text-[#f5f5f5] outline-none"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => removeMenuIngredientField(index)}
-                          className="w-10 rounded-lg bg-[#333] text-sm font-bold text-red-300"
-                        >
-                          X
-                        </button>
-                      </div>
-                    </div>
-                ))}
-              </div>
-              <p className="mt-2 text-xs text-[#777]">
-                Boleh kosong. Dipakai sebagai catatan resep dan pengurangan stok otomatis.
-              </p>
-            </div>
             <div className="mt-4">
               <label className="block text-sm font-semibold text-[#ababab]">
                 Upload Image
@@ -1640,19 +1763,17 @@ const MenuManagement = () => {
             </div>
             <label className="mt-4 block text-sm font-semibold text-[#ababab]">
               Status
-              <select
-                value={menuForm.isAvailable ? "available" : "unavailable"}
-                onChange={(event) =>
-                  updateMenuForm(
-                    "isAvailable",
-                    event.target.value === "available"
-                  )
-                }
-                className="mt-2 w-full rounded-lg bg-[#262626] px-4 py-3 text-sm text-[#f5f5f5] outline-none"
-              >
-                <option value="available">Tersedia</option>
-                <option value="unavailable">Tidak Tersedia</option>
-              </select>
+              <div className="mt-2">
+                <CreatableSelect2
+                  options={menuAvailabilityOptions}
+                  value={menuForm.isAvailable ? "available" : "unavailable"}
+                  onSelect={(option) =>
+                    updateMenuForm("isAvailable", option?.id === "available")
+                  }
+                  placeholder="Pilih status"
+                  label="Status menu"
+                />
+              </div>
             </label>
             <div className="sticky bottom-0 -mx-4 mt-5 flex gap-2 border-t border-[#333] bg-[#1f1f1f] px-4 py-4">
               <button
@@ -1694,22 +1815,15 @@ const MenuManagement = () => {
                 >
                   Tambah Menu
                 </button>
-                <select
-                  value={menuCategoryFilter}
-                  onChange={(event) => setMenuCategoryFilter(event.target.value)}
-                  className="rounded-lg bg-[#262626] px-4 py-2 text-sm text-[#f5f5f5] outline-none"
-                >
-                  <option value="">Semua kategori</option>
-                  {categories.map((category) => (
-                    <option
-                      key={category.id || category._id}
-                      value={category.id || category._id}
-                    >
-                      {category.icon ? `${category.icon} ` : ""}
-                      {category.name}
-                    </option>
-                  ))}
-                </select>
+                <div className="min-w-[210px]">
+                  <CreatableSelect2
+                    options={menuCategoryFilterOptions}
+                    value={menuCategoryFilter}
+                    onSelect={(option) => setMenuCategoryFilter(option?.id || "")}
+                    placeholder="Semua kategori"
+                    label="Filter kategori"
+                  />
+                </div>
                 <input
                   value={menuSearch}
                   onChange={(event) => setMenuSearch(event.target.value)}
