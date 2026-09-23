@@ -80,6 +80,10 @@ export const addSupplier = (data) => axiosWrapper.post("/api/shopping/suppliers"
 export const updateSupplier = ({ id, ...data }) => axiosWrapper.put(`/api/shopping/suppliers/${id}`, data);
 export const getPurchases = (params) => axiosWrapper.get("/api/shopping/purchases", { params });
 export const savePurchase = (data) => axiosWrapper.post("/api/shopping/purchases", data);
+export const updatePurchaseItem = ({ id, ...data }) =>
+  axiosWrapper.put(`/api/shopping/purchase-items/${id}`, data);
+export const deletePurchaseItem = (id) =>
+  axiosWrapper.delete(`/api/shopping/purchase-items/${id}`);
 export const addStockItem = (data) => axiosWrapper.post("/api/stock-item/", data);
 export const getStockItems = () => axiosWrapper.get("/api/stock-item");
 export const updateStockItem = ({ stockItemId, ...stockItemData }) =>

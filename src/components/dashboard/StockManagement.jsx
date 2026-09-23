@@ -7,11 +7,8 @@ import {
 } from "@tanstack/react-query";
 import { enqueueSnackbar } from "notistack";
 import {
-  addStockItem,
   deleteStockItem,
   getStockItems,
-  updateStockItem,
-  updateStockQuantity,
 } from "../../https";
 import { useSelector } from "react-redux";
 import ShoppingManagement from "./ShoppingManagement";
@@ -35,16 +32,6 @@ const getCostDisplay = (item) => {
 };
 const getAssetDisplay = (item) => formatCurrency(item.stockValue);
 
-const emptyStockForm = {
-  name: "",
-  category: "",
-  unit: "pcs",
-  stock: "0",
-  minimumStock: "0",
-  supplier: "",
-  isUnlimited: false,
-};
-
 const statusClassNames = {
   "BEBAS STOK": "bg-[#314259] text-blue-200",
   "HARUS ORDER": "bg-[#4a2e2e] text-red-400",
@@ -64,9 +51,6 @@ const StockManagement = () => {
   const [activeStockTab, setActiveStockTab] = useState("stock");
   const [searchQuery, setSearchQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [stockForm, setStockForm] = useState(emptyStockForm);
-  const [editingStockId, setEditingStockId] = useState(null);
   const [pendingDeleteItem, setPendingDeleteItem] = useState(null);
 
   const { data: stockItemsRes, isError } = useQuery({
@@ -85,7 +69,7 @@ const StockManagement = () => {
   };
 
   useEffect(() => {
-    if (!showAddModal && !pendingDeleteItem) return undefined;
+    if (!pendingDeleteItem) return undefined;
 
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
@@ -93,43 +77,7 @@ const StockManagement = () => {
     return () => {
       document.body.style.overflow = previousOverflow;
     };
-  }, [showAddModal, pendingDeleteItem]);
-
-  const stockItemAddMutation = useMutation({
-    mutationFn: addStockItem,
-    onSuccess: () => {
-      refreshStockItems();
-      enqueueSnackbar("Bahan berhasil ditambahkan.", { variant: "success" });
-      setStockForm(emptyStockForm);
-      setShowAddModal(false);
-      setCurrentPage(1);
-    },
-    onError: () => {
-      enqueueSnackbar("Gagal menambahkan bahan.", { variant: "error" });
-    },
-  });
-
-  const stockQuantityMutation = useMutation({
-    mutationFn: updateStockQuantity,
-    onSuccess: refreshStockItems,
-    onError: () => {
-      enqueueSnackbar("Gagal mengubah stok.", { variant: "error" });
-    },
-  });
-
-  const stockItemUpdateMutation = useMutation({
-    mutationFn: updateStockItem,
-    onSuccess: () => {
-      refreshStockItems();
-      enqueueSnackbar("Bahan berhasil diubah.", { variant: "success" });
-      setStockForm(emptyStockForm);
-      setEditingStockId(null);
-      setShowAddModal(false);
-    },
-    onError: () => {
-      enqueueSnackbar("Gagal mengubah bahan.", { variant: "error" });
-    },
-  });
+  }, [pendingDeleteItem]);
 
   const stockItemDeleteMutation = useMutation({
     mutationFn: deleteStockItem,
@@ -185,75 +133,6 @@ const StockManagement = () => {
     if (currentPage > totalPages) setCurrentPage(totalPages);
   }, [currentPage, totalPages]);
 
-  const updateStockForm = (field, value) => {
-    setStockForm((current) => ({
-      ...current,
-      [field]: value,
-    }));
-  };
-
-  const closeAddModal = () => {
-    setShowAddModal(false);
-    setStockForm(emptyStockForm);
-    setEditingStockId(null);
-  };
-
-  const handleSubmitStock = (event) => {
-    event.preventDefault();
-
-    if (
-      !stockForm.name.trim() ||
-      !stockForm.category.trim() ||
-      !stockForm.unit.trim()
-    ) {
-      enqueueSnackbar("Bahan, kategori, dan satuan wajib diisi.", {
-        variant: "warning",
-      });
-      return;
-    }
-
-    const payload = {
-      name: stockForm.name.trim(),
-      category: stockForm.category.trim(),
-      unit: stockForm.unit.trim(),
-      stock: Math.max(Number(stockForm.stock) || 0, 0),
-      minimumStock: Math.max(Number(stockForm.minimumStock) || 0, 0),
-      supplier: stockForm.supplier.trim(),
-      isUnlimited: Boolean(stockForm.isUnlimited),
-    };
-
-    if (editingStockId) {
-      stockItemUpdateMutation.mutate({
-        stockItemId: editingStockId,
-        ...payload,
-      });
-      return;
-    }
-
-    stockItemAddMutation.mutate(payload);
-  };
-
-  const adjustStock = (item, amount) => {
-    stockQuantityMutation.mutate({
-      stockItemId: item.id || item._id,
-      stock: Math.max(Number(item.stock) + amount, 0),
-    });
-  };
-
-  const handleEdit = (item) => {
-    setEditingStockId(item.id || item._id);
-    setStockForm({
-      name: item.name,
-      category: item.category,
-      unit: item.unit,
-      stock: String(item.stock),
-      minimumStock: String(item.minimumStock),
-      supplier: item.supplier || "",
-      isUnlimited: Boolean(item.isUnlimited),
-    });
-    setShowAddModal(true);
-  };
-
   const handleDelete = (item) => {
     setPendingDeleteItem(item);
   };
@@ -299,19 +178,6 @@ const StockManagement = () => {
             </p>
           </div>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-            {isAdmin && activeStockTab === "stock" && (
-              <button
-                type="button"
-                onClick={() => {
-                  setStockForm(emptyStockForm);
-                  setEditingStockId(null);
-                  setShowAddModal(true);
-                }}
-                className="rounded-lg bg-[#a79981] px-4 py-2 text-sm font-bold text-[#101010] hover:bg-[#b7aa94]"
-              >
-                Tambah Stok
-              </button>
-            )}
             <input
               value={searchQuery}
               onChange={(event) => setSearchQuery(event.target.value)}
@@ -354,27 +220,9 @@ const StockManagement = () => {
                   <td className="p-4">{item.category || "-"}</td>
                   <td className="p-4 text-center">{item.unit || "-"}</td>
                   <td className="p-4">
-                    <div className="flex items-center justify-center gap-3">
-                      <button
-                        type="button"
-                        onClick={() => adjustStock(item, -1)}
-                        disabled={stockQuantityMutation.isPending || item.isUnlimited}
-                        className="h-7 w-7 rounded-md bg-[#1f1f1f] font-bold text-[#ababab] hover:bg-[#333] disabled:opacity-60"
-                      >
-                        -
-                      </button>
-                      <span className="min-w-8 text-center font-semibold">
-                        {item.isUnlimited ? "Bebas Stok" : item.stock}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => adjustStock(item, 1)}
-                        disabled={stockQuantityMutation.isPending || item.isUnlimited}
-                        className="h-7 w-7 rounded-md bg-[#1f1f1f] font-bold text-[#ababab] hover:bg-[#333] disabled:opacity-60"
-                      >
-                        +
-                      </button>
-                    </div>
+                    <span className="block text-center font-semibold">
+                      {item.isUnlimited ? "Bebas Stok" : item.stock}
+                    </span>
                   </td>
                   <td className="p-4 text-right">
                     <span className="whitespace-nowrap font-semibold">
@@ -401,14 +249,7 @@ const StockManagement = () => {
                   </td>
                   {isAdmin && (
                     <td className="p-4">
-                      <div className="flex items-center justify-center gap-4 text-sm font-semibold">
-                        <button
-                          type="button"
-                          onClick={() => handleEdit(item)}
-                          className="text-[#a79981] hover:text-[#d6c7ae]"
-                        >
-                          Ubah
-                        </button>
+                      <div className="flex items-center justify-center text-sm font-semibold">
                         <button
                           type="button"
                           onClick={() => handleDelete(item)}
@@ -471,133 +312,6 @@ const StockManagement = () => {
         </div>
       </div>}
 
-      {isAdmin && showAddModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-black/70 p-4">
-          <form
-            onSubmit={handleSubmitStock}
-            className="max-h-[88vh] w-full max-w-2xl overflow-y-auto rounded-lg bg-[#1f1f1f] p-4 pb-0 text-[#f5f5f5] shadow-2xl scrollbar-hide"
-          >
-            <div className="mb-4 flex flex-col gap-2 border-b border-[#333] pb-4 sm:flex-row sm:items-start sm:justify-between">
-              <div>
-                <h3 className="text-lg font-bold">
-                  {editingStockId ? "Ubah Stok" : "Tambah Stok"}
-                </h3>
-                <p className="mt-1 text-sm text-[#ababab]">
-                  Isi data bahan, satuan, stok, minimum, dan supplier.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={closeAddModal}
-                className="w-fit rounded-lg bg-[#333] px-4 py-2 text-sm font-bold text-[#f5f5f5]"
-              >
-                Tutup
-              </button>
-            </div>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <label className="text-sm font-semibold text-[#ababab]">
-                Bahan
-                <input
-                  value={stockForm.name}
-                  onChange={(event) => updateStockForm("name", event.target.value)}
-                  placeholder="Sirup vanila"
-                  className="mt-2 w-full rounded-lg bg-[#262626] px-4 py-3 text-sm text-[#f5f5f5] outline-none"
-                />
-              </label>
-              <label className="text-sm font-semibold text-[#ababab]">
-                Kategori
-                <input
-                  value={stockForm.category}
-                  onChange={(event) =>
-                    updateStockForm("category", event.target.value)
-                  }
-                  placeholder="Kopi"
-                  className="mt-2 w-full rounded-lg bg-[#262626] px-4 py-3 text-sm text-[#f5f5f5] outline-none"
-                />
-              </label>
-              <label className="text-sm font-semibold text-[#ababab]">
-                Satuan
-                <input
-                  value={stockForm.unit}
-                  onChange={(event) => updateStockForm("unit", event.target.value)}
-                  placeholder="kg"
-                  className="mt-2 w-full rounded-lg bg-[#262626] px-4 py-3 text-sm text-[#f5f5f5] outline-none"
-                />
-              </label>
-              <label className="text-sm font-semibold text-[#ababab]">
-                Stok
-                <input
-                  value={stockForm.stock}
-                  onChange={(event) => updateStockForm("stock", event.target.value)}
-                  type="number"
-                  min="0"
-                  step="0.1"
-                  className="mt-2 w-full rounded-lg bg-[#262626] px-4 py-3 text-sm text-[#f5f5f5] outline-none"
-                />
-              </label>
-              <label className="text-sm font-semibold text-[#ababab]">
-                Minimum
-                <input
-                  value={stockForm.minimumStock}
-                  onChange={(event) =>
-                    updateStockForm("minimumStock", event.target.value)
-                  }
-                  type="number"
-                  min="0"
-                  step="0.1"
-                  className="mt-2 w-full rounded-lg bg-[#262626] px-4 py-3 text-sm text-[#f5f5f5] outline-none"
-                />
-              </label>
-              <label className="text-sm font-semibold text-[#ababab]">
-                Supplier
-                <input
-                  value={stockForm.supplier}
-                  onChange={(event) =>
-                    updateStockForm("supplier", event.target.value)
-                  }
-                  placeholder="Toko bahan"
-                  className="mt-2 w-full rounded-lg bg-[#262626] px-4 py-3 text-sm text-[#f5f5f5] outline-none"
-                />
-              </label>
-              <label className="flex items-center gap-3 rounded-lg bg-[#262626] px-4 py-3 text-sm font-semibold text-[#ababab] sm:col-span-2">
-                <input
-                  checked={stockForm.isUnlimited}
-                  onChange={(event) =>
-                    updateStockForm("isUnlimited", event.target.checked)
-                  }
-                  type="checkbox"
-                  className="h-4 w-4 accent-[#a79981]"
-                />
-                Bebas Stok, tidak berkurang otomatis saat ada pesanan
-              </label>
-            </div>
-            <div className="sticky bottom-0 -mx-4 mt-5 flex gap-2 border-t border-[#333] bg-[#1f1f1f] px-4 py-4">
-              <button
-                type="submit"
-                disabled={
-                  stockItemAddMutation.isPending ||
-                  stockItemUpdateMutation.isPending
-                }
-                className="rounded-lg bg-[#a79981] px-4 py-2 text-sm font-bold text-[#101010] disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {stockItemAddMutation.isPending ||
-                stockItemUpdateMutation.isPending
-                  ? "Menyimpan..."
-                  : editingStockId
-                    ? "Simpan Perubahan"
-                    : "Tambah Stok"}
-              </button>
-              <button
-                type="button"
-                onClick={closeAddModal}
-                className="rounded-lg bg-[#333] px-4 py-2 text-sm font-bold text-[#f5f5f5]"
-              >
-                Batal
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
       {isAdmin && pendingDeleteItem && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
           <div

@@ -1,10 +1,21 @@
 /* eslint-disable react/prop-types */
 import { useEffect, useMemo, useRef, useState } from "react";
-import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  keepPreviousData,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { enqueueSnackbar } from "notistack";
 import { FiTrash2 } from "react-icons/fi";
 import CreatableSelect2 from "../shared/CreatableSelect2";
-import { getShoppingSuppliers, getPurchases, savePurchase } from "../../https";
+import {
+  deletePurchaseItem,
+  getShoppingSuppliers,
+  getPurchases,
+  savePurchase,
+  updatePurchaseItem,
+} from "../../https";
 
 const inputClass =
   "w-full rounded-lg border border-[#555] bg-[#262626] px-3 py-2 text-[#f5f5f5] outline-none focus:border-[#d6c7ae] disabled:opacity-60";
@@ -14,7 +25,7 @@ const paymentOptions = ["Cash", "Rekening Penjualan", "Transfer", "QRIS"].map((n
   id: name,
   text: name,
 }));
-const unitOptions = ["kg", "pcs", "liter", "botol", "pack", "dus"].map((unit) => ({
+const unitOptions = ["kg", "pcs", "liter"].map((unit) => ({
   id: unit,
   text: unit,
 }));
@@ -59,15 +70,7 @@ const costDisplay = (cost, unit) => {
 
   return `${currency(numericCost)} / ${unit || "unit"}`;
 };
-const assetUnitDisplay = (unit) => {
-  const normalizedUnit = String(unit || "").toLowerCase();
-
-  if (["gr", "g", "gram"].includes(normalizedUnit)) return "kg";
-  if (["ml", "milliliter", "mililiter"].includes(normalizedUnit)) return "liter";
-
-  return unit || "unit";
-};
-const assetDisplay = (value, unit) => `${assetUnitDisplay(unit)} / ${currency(value)}`;
+const assetDisplay = (value) => currency(value);
 const buildFallbackItemGroups = (purchases = [], stockItems = []) => {
   const stockById = new Map(stockItems.map((item) => [Number(item.id || item._id), item]));
   const groups = new Map();
@@ -93,10 +96,11 @@ const buildFallbackItemGroups = (purchases = [], stockItems = []) => {
 
       const group = groups.get(key);
       group.purchaseCount += 1;
-      group.histories.push({
-        id: item.id,
-        purchaseId: purchase.id,
-        purchaseDate: purchase.purchase_date,
+        group.histories.push({
+          id: item.id,
+          purchaseId: purchase.id,
+          itemName: item.item_name,
+          purchaseDate: purchase.purchase_date,
         supplierName: purchase.suplier_name,
         paymentMethod: purchase.payment_method,
         quantity: Number(item.quantity),
@@ -164,6 +168,13 @@ export default function ShoppingManagement({ stockItems, isAdmin }) {
   const [extraSuppliers, setExtraSuppliers] = useState([]);
   const [saving, setSaving] = useState(false);
   const [selectedHistoryGroup, setSelectedHistoryGroup] = useState(null);
+  const [historyDetailTab, setHistoryDetailTab] = useState("history");
+  const [editingHistoryItem, setEditingHistoryItem] = useState(null);
+  const [editHistoryForm, setEditHistoryForm] = useState({
+    quantity: "",
+    unit: "",
+    unitPrice: "",
+  });
   const lock = useRef(false);
   const submission = useRef(null);
   const [search, setSearch] = useState("");
@@ -216,7 +227,23 @@ export default function ShoppingManagement({ stockItems, isAdmin }) {
   }, [page, totalPages]);
 
   useEffect(() => {
-    if (!showForm && !selectedHistoryGroup) return undefined;
+    if (!selectedHistoryGroup) return;
+
+    const freshGroup = itemGroups.find(
+      (group) =>
+        String(group.stockItemId || group.itemName) ===
+        String(selectedHistoryGroup.stockItemId || selectedHistoryGroup.itemName)
+    );
+
+    if (freshGroup) {
+      setSelectedHistoryGroup(freshGroup);
+    } else if (!history.isFetching) {
+      setSelectedHistoryGroup(null);
+    }
+  }, [history.isFetching, itemGroups, selectedHistoryGroup]);
+
+  useEffect(() => {
+    if (!showForm && !selectedHistoryGroup && !editingHistoryItem) return undefined;
 
     const previous = document.body.style.overflow;
     document.body.style.overflow = "hidden";
@@ -224,13 +251,21 @@ export default function ShoppingManagement({ stockItems, isAdmin }) {
     return () => {
       document.body.style.overflow = previous;
     };
-  }, [showForm, selectedHistoryGroup]);
+  }, [showForm, selectedHistoryGroup, editingHistoryItem]);
 
   const updateRow = (key, patch) =>
     setRows((current) =>
       current.map((row) => (row.key === key ? { ...row, ...patch } : row))
     );
   const closeForm = () => setShowForm(false);
+  const openHistoryDetail = (group) => {
+    setSelectedHistoryGroup(group);
+    setHistoryDetailTab("history");
+  };
+  const closeHistoryDetail = () => {
+    setSelectedHistoryGroup(null);
+    setHistoryDetailTab("history");
+  };
   const resetForm = () => {
     setRows([blankRow()]);
     setForm({ date: today(), suplierId: "", paymentMethod: "Cash", note: "" });
@@ -281,7 +316,7 @@ export default function ShoppingManagement({ stockItems, isAdmin }) {
           row.unitPrice === ""
       )
     ) {
-      enqueueSnackbar("Lengkapi toko, barang, qty, satuan, dan harga satuan.", {
+      enqueueSnackbar("Lengkapi toko, barang, gramasi, satuan, dan harga satuan.", {
         variant: "error",
       });
       return;
@@ -335,6 +370,76 @@ export default function ShoppingManagement({ stockItems, isAdmin }) {
       setSaving(false);
     }
   };
+  const refreshAfterItemChange = async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["stock-items"] }),
+      queryClient.invalidateQueries({ queryKey: ["purchases"] }),
+    ]);
+  };
+  const updateItemMutation = useMutation({
+    mutationFn: updatePurchaseItem,
+    onSuccess: async () => {
+      enqueueSnackbar("Item belanja berhasil diubah.", { variant: "success" });
+      setEditingHistoryItem(null);
+      await refreshAfterItemChange();
+    },
+    onError: (error) => {
+      enqueueSnackbar(
+        error?.response?.data?.message || "Gagal mengubah item belanja.",
+        { variant: "error" }
+      );
+    },
+  });
+  const deleteItemMutation = useMutation({
+    mutationFn: deletePurchaseItem,
+    onSuccess: async () => {
+      enqueueSnackbar("Item belanja berhasil dihapus.", { variant: "success" });
+      await refreshAfterItemChange();
+    },
+    onError: (error) => {
+      enqueueSnackbar(
+        error?.response?.data?.message || "Gagal menghapus item belanja.",
+        { variant: "error" }
+      );
+    },
+  });
+  const openEditHistoryItem = (item) => {
+    setEditingHistoryItem(item);
+    setEditHistoryForm({
+      quantity: String(item.quantity ?? ""),
+      unit: item.unit || "",
+      unitPrice: String(item.unitPrice ?? ""),
+    });
+  };
+  const submitEditHistoryItem = (event) => {
+    event.preventDefault();
+    const quantity = parseShoppingQuantity(editHistoryForm.quantity);
+
+    if (
+      !editingHistoryItem ||
+      !Number.isFinite(quantity) ||
+      quantity <= 0 ||
+      !editHistoryForm.unit ||
+      editHistoryForm.unitPrice === ""
+    ) {
+      enqueueSnackbar("Lengkapi gramasi, satuan, dan harga satuan.", {
+        variant: "error",
+      });
+      return;
+    }
+
+    updateItemMutation.mutate({
+      id: editingHistoryItem.id,
+      quantity,
+      unit: editHistoryForm.unit,
+      unitPrice: Number(editHistoryForm.unitPrice),
+    });
+  };
+  const removeHistoryItem = (item) => {
+    if (!window.confirm(`Hapus belanja ${item.itemName || "barang"} ini?`)) return;
+
+    deleteItemMutation.mutate(item.id);
+  };
 
   return (
     <section className="mb-5 rounded-lg bg-[#1f1f1f] p-4 text-[#f5f5f5]">
@@ -384,107 +489,75 @@ export default function ShoppingManagement({ stockItems, isAdmin }) {
         </p>
       )}
 
-      <div className="space-y-4">
-        {itemGroups.map((group) => (
-          <article
-            key={group.stockItemId || group.itemName}
-            className="cursor-pointer rounded-lg border border-[#444] p-3 transition-colors hover:border-[#a79981]"
-            onClick={() => setSelectedHistoryGroup(group)}
-            role="button"
-            tabIndex={0}
-            onKeyDown={(event) => {
-              if (event.key === "Enter" || event.key === " ") {
-                event.preventDefault();
-                setSelectedHistoryGroup(group);
-              }
-            }}
-          >
-            <div className="mb-3 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-              <div>
-                <strong className="text-base">{group.itemName}</strong>
-                <p className="mt-1 text-sm text-[#ababab]">
-                  {group.purchaseCount} history pembelian
-                </p>
-                {group.purchaseCount > 1 && (
-                  <p className="mt-1 text-xs font-semibold text-[#d6c7ae]">
-                    Klik untuk lihat semua history
-                  </p>
-                )}
-              </div>
-              <div className="grid grid-cols-1 gap-2 text-sm sm:grid-cols-3 lg:min-w-[520px]">
-                <div className="rounded-lg bg-[#262626] p-3">
-                  <span className="block text-xs font-semibold text-[#ababab]">
-                    Stok Sekarang
-                  </span>
-                  <strong className="mt-1 block">
-                    {group.stock == null
-                      ? "-"
-                      : quantityDisplay(group.stock, group.stockUnit)}
-                  </strong>
-                </div>
-                <div className="rounded-lg bg-[#262626] p-3">
-                  <span className="block text-xs font-semibold text-[#ababab]">
-                    Nilai Asset
-                  </span>
-                  <strong className="mt-1 block">
-                    {assetDisplay(group.stockValue, group.stockUnit)}
-                  </strong>
-                </div>
-                <div className="rounded-lg bg-[#262626] p-3">
-                  <span className="block text-xs font-semibold text-[#ababab]">
-                    COGS Sekarang
-                  </span>
-                  <strong className="mt-1 block text-[#f6d365]">
-                    {costDisplay(group.averageCost, group.stockUnit)}
-                  </strong>
-                </div>
-              </div>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
-                <thead className="text-[#ababab]">
-                  <tr>
-                    <th className="p-2">Tanggal</th>
-                    <th className="p-2">Toko</th>
-                    <th className="p-2">Qty Beli</th>
-                    <th className="p-2 text-right">Harga Satuan</th>
-                    <th className="p-2 text-right">Jumlah</th>
-                    <th className="p-2 text-right">Masuk Stok</th>
-                    <th className="p-2 text-right">COGS Setelah</th>
+      {!history.isPending && !history.isError && itemGroups.length > 0 && (
+        <div className="overflow-x-auto rounded-lg border border-[#444]">
+          <table className="w-full text-left text-sm">
+            <thead className="bg-[#202020] text-[#ababab]">
+              <tr>
+                <th className="p-3">Barang</th>
+                <th className="p-3">Tanggal</th>
+                <th className="p-3">Toko</th>
+                <th className="p-3">Gramasi</th>
+                <th className="p-3 text-right">Harga Satuan</th>
+                <th className="p-3 text-right">Jumlah</th>
+                <th className="p-3 text-right">Masuk Stok</th>
+                <th className="p-3 text-right">COGS Setelah</th>
+              </tr>
+            </thead>
+            <tbody>
+              {itemGroups.map((group) => {
+                const item = group.histories[0];
+
+                if (!item) return null;
+
+                return (
+                  <tr
+                    key={group.stockItemId || group.itemName}
+                    className="cursor-pointer border-t border-[#444] transition-colors hover:bg-[#262626]"
+                    onClick={() => openHistoryDetail(group)}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        openHistoryDetail(group);
+                      }
+                    }}
+                  >
+                    <td className="p-3">
+                      <strong className="block font-bold">{group.itemName}</strong>
+                      <span className="mt-1 inline-flex rounded-md bg-[#262626] px-2 py-1 text-xs font-semibold text-[#ababab]">
+                        {group.purchaseCount} history
+                      </span>
+                    </td>
+                    <td className="whitespace-nowrap p-3">
+                      {String(item.purchaseDate).slice(0, 10)}
+                      <p className="text-xs text-[#ababab]">
+                        #{item.purchaseId} - {item.paymentMethod}
+                      </p>
+                    </td>
+                    <td className="p-3">{item.supplierName}</td>
+                    <td className="p-3">
+                      {quantityDisplay(item.quantity, item.unit)}
+                    </td>
+                    <td className="p-3 text-right">{currency(item.unitPrice)}</td>
+                    <td className="p-3 text-right">{currency(item.total)}</td>
+                    <td className="p-3 text-right">
+                      {quantityDisplay(item.stockQuantity, item.stockUnit)}
+                    </td>
+                    <td className="p-3 text-right">
+                      {costDisplay(item.stockAverageCost, item.stockUnit)}
+                      <p className="text-xs text-[#ababab]">
+                        Nilai: {currency(item.stockValueAfter)}
+                      </p>
+                    </td>
                   </tr>
-                </thead>
-                <tbody>
-                  {group.histories.slice(0, 1).map((item) => (
-                    <tr key={item.id} className="border-t border-[#444]">
-                      <td className="whitespace-nowrap p-2">
-                        {String(item.purchaseDate).slice(0, 10)}
-                        <p className="text-xs text-[#ababab]">
-                          #{item.purchaseId} - {item.paymentMethod}
-                        </p>
-                      </td>
-                      <td className="p-2">{item.supplierName}</td>
-                      <td className="p-2">
-                        {quantityDisplay(item.quantity, item.unit)}
-                      </td>
-                      <td className="p-2 text-right">{currency(item.unitPrice)}</td>
-                      <td className="p-2 text-right">{currency(item.total)}</td>
-                      <td className="p-2 text-right">
-                        {quantityDisplay(item.stockQuantity, item.stockUnit)}
-                      </td>
-                      <td className="p-2 text-right">
-                        {costDisplay(item.stockAverageCost, item.stockUnit)}
-                        <p className="text-xs text-[#ababab]">
-                          Nilai: {currency(item.stockValueAfter)}
-                        </p>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </article>
-        ))}
-      </div>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       <div className="mt-4 flex items-center justify-end gap-3 text-sm">
         <button
@@ -514,7 +587,7 @@ export default function ShoppingManagement({ stockItems, isAdmin }) {
           role="dialog"
           aria-modal="true"
           aria-labelledby="shopping-history-title"
-          onClick={() => setSelectedHistoryGroup(null)}
+          onClick={closeHistoryDetail}
         >
           <div
             className="max-h-[88vh] w-full max-w-6xl overflow-y-auto rounded-xl bg-[#1f1f1f] p-5 text-[#f5f5f5] shadow-xl"
@@ -523,7 +596,7 @@ export default function ShoppingManagement({ stockItems, isAdmin }) {
             <div className="mb-4 flex flex-col gap-3 border-b border-[#333] pb-4 sm:flex-row sm:items-start sm:justify-between">
               <div>
                 <h2 id="shopping-history-title" className="text-xl font-bold">
-                  History Belanja {selectedHistoryGroup.itemName}
+                  {selectedHistoryGroup.itemName}
                 </h2>
                 <p className="mt-1 text-sm text-[#ababab]">
                   {selectedHistoryGroup.purchaseCount} history pembelian
@@ -531,7 +604,7 @@ export default function ShoppingManagement({ stockItems, isAdmin }) {
               </div>
               <button
                 type="button"
-                onClick={() => setSelectedHistoryGroup(null)}
+                onClick={closeHistoryDetail}
                 className="w-fit rounded-lg bg-[#333] px-4 py-2 text-sm font-bold text-[#f5f5f5]"
               >
                 Tutup
@@ -574,51 +647,246 @@ export default function ShoppingManagement({ stockItems, isAdmin }) {
                 </strong>
               </div>
             </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
-                <thead className="text-[#ababab]">
-                  <tr>
-                    <th className="p-2">Tanggal</th>
-                    <th className="p-2">Toko</th>
-                    <th className="p-2">Qty Beli</th>
-                    <th className="p-2 text-right">Harga Satuan</th>
-                    <th className="p-2 text-right">Jumlah</th>
-                    <th className="p-2 text-right">Masuk Stok</th>
-                    <th className="p-2 text-right">COGS Setelah</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {selectedHistoryGroup.histories.map((item) => (
-                    <tr key={item.id} className="border-t border-[#444]">
-                      <td className="whitespace-nowrap p-2">
-                        {String(item.purchaseDate).slice(0, 10)}
-                        <p className="text-xs text-[#ababab]">
-                          #{item.purchaseId} - {item.paymentMethod}
-                        </p>
-                      </td>
-                      <td className="p-2">{item.supplierName}</td>
-                      <td className="p-2">
-                        {quantityDisplay(item.quantity, item.unit)}
-                      </td>
-                      <td className="p-2 text-right">
-                        {currency(item.unitPrice)}
-                      </td>
-                      <td className="p-2 text-right">{currency(item.total)}</td>
-                      <td className="p-2 text-right">
-                        {quantityDisplay(item.stockQuantity, item.stockUnit)}
-                      </td>
-                      <td className="p-2 text-right">
-                        {costDisplay(item.stockAverageCost, item.stockUnit)}
-                        <p className="text-xs text-[#ababab]">
-                          Nilai: {currency(item.stockValueAfter)}
-                        </p>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className="mb-4 flex w-fit rounded-lg bg-[#181818] p-1 text-sm font-semibold">
+              <button
+                type="button"
+                onClick={() => {
+                  setHistoryDetailTab("history");
+                }}
+                className={`rounded-md px-4 py-2 transition-colors ${
+                  historyDetailTab === "history"
+                    ? "bg-[#a79981] text-[#101010]"
+                    : "text-[#ababab] hover:bg-[#333] hover:text-white"
+                }`}
+              >
+                Riwayat
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setHistoryDetailTab("logs");
+                }}
+                className={`rounded-md px-4 py-2 transition-colors ${
+                  historyDetailTab === "logs"
+                    ? "bg-[#a79981] text-[#101010]"
+                    : "text-[#ababab] hover:bg-[#333] hover:text-white"
+                }`}
+              >
+                Log Aktivitas
+              </button>
             </div>
+
+            {historyDetailTab === "history" ? (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm">
+                  <thead className="text-[#ababab]">
+                    <tr>
+                      <th className="p-2">Tanggal</th>
+                      <th className="p-2">Toko</th>
+                      <th className="p-2">Gramasi</th>
+                      <th className="p-2 text-right">Harga Satuan</th>
+                      <th className="p-2 text-right">Jumlah</th>
+                      <th className="p-2 text-right">Masuk Stok</th>
+                      <th className="p-2 text-right">COGS Setelah</th>
+                      {isAdmin && <th className="p-2 text-right">Aksi</th>}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {selectedHistoryGroup.histories.map((item) => (
+                      <tr key={item.id} className="border-t border-[#444]">
+                        <td className="whitespace-nowrap p-2">
+                          {String(item.purchaseDate).slice(0, 10)}
+                          <p className="text-xs text-[#ababab]">
+                            #{item.purchaseId} - {item.paymentMethod}
+                          </p>
+                        </td>
+                        <td className="p-2">{item.supplierName}</td>
+                        <td className="p-2">
+                          {quantityDisplay(item.quantity, item.unit)}
+                        </td>
+                        <td className="p-2 text-right">
+                          {currency(item.unitPrice)}
+                        </td>
+                        <td className="p-2 text-right">{currency(item.total)}</td>
+                        <td className="p-2 text-right">
+                          {quantityDisplay(item.stockQuantity, item.stockUnit)}
+                        </td>
+                        <td className="p-2 text-right">
+                          {costDisplay(item.stockAverageCost, item.stockUnit)}
+                          <p className="text-xs text-[#ababab]">
+                            Nilai: {currency(item.stockValueAfter)}
+                          </p>
+                        </td>
+                        {isAdmin && (
+                          <td className="p-2 text-right">
+                            <div className="flex justify-end gap-2">
+                              <button
+                                type="button"
+                                onClick={() => openEditHistoryItem(item)}
+                                className="rounded-md bg-[#2b2b2b] px-3 py-1.5 text-sm font-semibold text-[#f5f5f5] hover:bg-[#3a3a3a]"
+                              >
+                                Update
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => removeHistoryItem(item)}
+                                disabled={deleteItemMutation.isPending}
+                                className="rounded-md bg-[#331f1f] px-3 py-1.5 text-sm font-semibold text-red-300 hover:bg-[#442424] disabled:opacity-50"
+                              >
+                                Delete
+                              </button>
+                            </div>
+                          </td>
+                        )}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm">
+                  <thead className="text-[#ababab]">
+                    <tr>
+                      <th className="p-2">Waktu</th>
+                      <th className="p-2">User</th>
+                      <th className="p-2">Aksi</th>
+                      <th className="p-2">Detail</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(selectedHistoryGroup.logs || []).map((log) => (
+                      <tr key={log.id} className="border-t border-[#444]">
+                        <td className="whitespace-nowrap p-2">
+                          {new Date(log.createdAt).toLocaleString("id-ID")}
+                        </td>
+                        <td className="p-2">{log.userName || "-"}</td>
+                        <td className="p-2 font-semibold">
+                          {log.action === "create"
+                            ? "Tambah"
+                            : log.action === "delete"
+                              ? "Hapus"
+                              : "Edit"}
+                        </td>
+                        <td className="p-2 text-[#ababab]">
+                          {log.action === "create"
+                            ? `${quantityDisplay(log.newData?.quantity, log.newData?.unit)} ditambahkan, harga ${currency(log.newData?.unitPrice)}`
+                            : log.action === "delete"
+                              ? `${quantityDisplay(log.oldData?.quantity, log.oldData?.unit)} dihapus`
+                              : `${quantityDisplay(log.oldData?.quantity, log.oldData?.unit)} -> ${quantityDisplay(log.newData?.quantity, log.newData?.unit)}, ${currency(log.oldData?.unitPrice)} -> ${currency(log.newData?.unitPrice)}`}
+                        </td>
+                      </tr>
+                    ))}
+                    {!(selectedHistoryGroup.logs || []).length && (
+                      <tr>
+                        <td className="p-3 text-center text-[#ababab]" colSpan={4}>
+                          Belum ada log aktivitas.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
+        </div>
+      )}
+
+      {editingHistoryItem && (
+        <div
+          className="fixed inset-0 z-[110] flex items-center justify-center bg-black/70 p-3"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="shopping-item-edit-title"
+        >
+          <form
+            onSubmit={submitEditHistoryItem}
+            className="w-full max-w-xl rounded-xl bg-[#1f1f1f] p-5 text-[#f5f5f5] shadow-xl"
+          >
+            <div className="mb-4 flex items-start justify-between gap-3 border-b border-[#333] pb-4">
+              <div>
+                <h2 id="shopping-item-edit-title" className="text-xl font-bold">
+                  Edit Belanja {editingHistoryItem.itemName || selectedHistoryGroup?.itemName}
+                </h2>
+                <p className="mt-1 text-sm text-[#ababab]">
+                  Perubahan akan tercatat di log aktivitas.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditingHistoryItem(null)}
+                className="rounded-lg bg-[#333] px-4 py-2 text-sm font-bold"
+              >
+                Tutup
+              </button>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <label>
+                <span className="mb-1 block text-sm">Gramasi</span>
+                <input
+                  value={editHistoryForm.quantity}
+                  onChange={(event) =>
+                    setEditHistoryForm((current) => ({
+                      ...current,
+                      quantity: event.target.value,
+                    }))
+                  }
+                  type="text"
+                  inputMode="decimal"
+                  className={inputClass}
+                />
+              </label>
+              <div>
+                <span className="mb-1 block text-sm">Satuan</span>
+                <CreatableSelect2
+                  options={unitOptions}
+                  value={editHistoryForm.unit}
+                  onSelect={(option) =>
+                    setEditHistoryForm((current) => ({
+                      ...current,
+                      unit: option?.id || "",
+                    }))
+                  }
+                  placeholder="Pilih satuan"
+                  label="Satuan"
+                  disabled={updateItemMutation.isPending}
+                />
+              </div>
+              <label>
+                <span className="mb-1 block text-sm">
+                  Harga Satuan{editHistoryForm.unit ? ` / ${editHistoryForm.unit}` : ""}
+                </span>
+                <input
+                  value={formatRupiahInput(editHistoryForm.unitPrice)}
+                  onChange={(event) =>
+                    setEditHistoryForm((current) => ({
+                      ...current,
+                      unitPrice: event.target.value.replace(/\D/g, ""),
+                    }))
+                  }
+                  type="text"
+                  inputMode="numeric"
+                  className={inputClass}
+                />
+              </label>
+            </div>
+            <div className="mt-5 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setEditingHistoryItem(null)}
+                className="px-4 py-2"
+              >
+                Batal
+              </button>
+              <button
+                type="submit"
+                disabled={updateItemMutation.isPending}
+                className={buttonClass}
+              >
+                {updateItemMutation.isPending ? "Menyimpan..." : "Simpan"}
+              </button>
+            </div>
+          </form>
         </div>
       )}
 
@@ -748,7 +1016,7 @@ export default function ShoppingManagement({ stockItems, isAdmin }) {
                           />
                         </div>
                         <label>
-                          <span className="mb-1 block text-sm">Qty</span>
+                          <span className="mb-1 block text-sm">Gramasi</span>
                           <input
                             required
                             type="text"
