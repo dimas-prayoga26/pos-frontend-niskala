@@ -25,7 +25,7 @@ const paymentOptions = ["Cash", "Rekening Penjualan", "Transfer", "QRIS"].map((n
   id: name,
   text: name,
 }));
-const unitOptions = ["kg", "pcs", "liter"].map((unit) => ({
+const unitOptions = ["gr", "pcs", "ml"].map((unit) => ({
   id: unit,
   text: unit,
 }));
@@ -61,11 +61,11 @@ const costDisplay = (cost, unit) => {
   const numericCost = Number(cost || 0);
 
   if (["gr", "g", "gram"].includes(normalizedUnit)) {
-    return `${currency(numericCost * 1000)} / kg`;
+    return `${currency(numericCost)} / gr`;
   }
 
   if (["ml", "milliliter", "mililiter"].includes(normalizedUnit)) {
-    return `${currency(numericCost * 1000)} / liter`;
+    return `${currency(numericCost)} / ml`;
   }
 
   return `${currency(numericCost)} / ${unit || "unit"}`;
@@ -141,13 +141,15 @@ const shoppingQuantity = (value) => {
 const purchaseUnitForStockUnit = (unit) => {
   const normalizedUnit = String(unit || "").trim().toLowerCase();
 
-  if (["gr", "g", "gram"].includes(normalizedUnit)) return "kg";
-  if (["ml", "milliliter", "mililiter"].includes(normalizedUnit)) return "liter";
+  if (["gr", "g", "gram"].includes(normalizedUnit)) return "gr";
+  if (["ml", "milliliter", "mililiter"].includes(normalizedUnit)) return "ml";
 
   return unit || "";
 };
 const lineTotal = (row) =>
-  Math.round(shoppingQuantity(row.quantity) * Number(row.unitPrice || 0) * 100) / 100;
+  Math.round(Number(row.unitPrice || 0) * 100) / 100;
+const unitPriceFromTotal = (quantity, total) =>
+  Math.round((Number(total || 0) / Math.max(Number(quantity || 0), 1)) * 100) / 100;
 const formatRupiahInput = (value) => {
   const digits = String(value ?? "").replace(/\D/g, "");
 
@@ -316,7 +318,7 @@ export default function ShoppingManagement({ stockItems, isAdmin }) {
           row.unitPrice === ""
       )
     ) {
-      enqueueSnackbar("Lengkapi toko, barang, gramasi, satuan, dan harga satuan.", {
+      enqueueSnackbar("Lengkapi toko, barang, gramasi, satuan, dan harga total.", {
         variant: "error",
       });
       return;
@@ -329,12 +331,13 @@ export default function ShoppingManagement({ stockItems, isAdmin }) {
       ...(supplierDraft ? { suplierName: supplierDraft.name } : { suplierId }),
       items: rows.map(({ stockItemId, quantity, unit, unitPrice }) => {
         const draft = extraItems.find((item) => item.id === stockItemId);
+        const parsedQuantity = parseShoppingQuantity(quantity);
 
         return {
           ...(draft ? { itemName: draft.name } : { stockItemId }),
-          quantity: parseShoppingQuantity(quantity),
+          quantity: parsedQuantity,
           unit,
-          unitPrice,
+          unitPrice: unitPriceFromTotal(parsedQuantity, unitPrice),
         };
       }),
     };
@@ -408,7 +411,7 @@ export default function ShoppingManagement({ stockItems, isAdmin }) {
     setEditHistoryForm({
       quantity: String(item.quantity ?? ""),
       unit: item.unit || "",
-      unitPrice: String(item.unitPrice ?? ""),
+      unitPrice: String(item.total ?? ""),
     });
   };
   const submitEditHistoryItem = (event) => {
@@ -422,7 +425,7 @@ export default function ShoppingManagement({ stockItems, isAdmin }) {
       !editHistoryForm.unit ||
       editHistoryForm.unitPrice === ""
     ) {
-      enqueueSnackbar("Lengkapi gramasi, satuan, dan harga satuan.", {
+      enqueueSnackbar("Lengkapi gramasi, satuan, dan harga total.", {
         variant: "error",
       });
       return;
@@ -432,7 +435,7 @@ export default function ShoppingManagement({ stockItems, isAdmin }) {
       id: editingHistoryItem.id,
       quantity,
       unit: editHistoryForm.unit,
-      unitPrice: Number(editHistoryForm.unitPrice),
+      unitPrice: unitPriceFromTotal(quantity, editHistoryForm.unitPrice),
     });
   };
   const removeHistoryItem = (item) => {
@@ -854,7 +857,7 @@ export default function ShoppingManagement({ stockItems, isAdmin }) {
               </div>
               <label>
                 <span className="mb-1 block text-sm">
-                  Harga Satuan{editHistoryForm.unit ? ` / ${editHistoryForm.unit}` : ""}
+                  Harga Total
                 </span>
                 <input
                   value={formatRupiahInput(editHistoryForm.unitPrice)}
@@ -1043,7 +1046,7 @@ export default function ShoppingManagement({ stockItems, isAdmin }) {
                         </div>
                         <label>
                           <span className="mb-1 block text-sm">
-                            Harga Satuan{row.unit ? ` / ${row.unit}` : ""}
+                            Harga Total
                           </span>
                           <input
                             required
@@ -1065,8 +1068,8 @@ export default function ShoppingManagement({ stockItems, isAdmin }) {
                       </div>
                       {selectedItem?.unit && (
                         <p className="mt-2 text-xs text-[#ababab]">
-                          Satuan stok: {selectedItem.unit}. Pembelian pakai kg untuk
-                          stok gr dan liter untuk stok ml; konversi stok dihitung
+                          Satuan stok: {selectedItem.unit}. Isi gramasi sesuai satuan
+                          stok; COGS dihitung otomatis dari harga total.
                           otomatis.
                         </p>
                       )}

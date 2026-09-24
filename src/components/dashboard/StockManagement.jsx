@@ -9,6 +9,7 @@ import { enqueueSnackbar } from "notistack";
 import {
   deleteStockItem,
   getStockItems,
+  updateStockCogs,
 } from "../../https";
 import { useSelector } from "react-redux";
 import ShoppingManagement from "./ShoppingManagement";
@@ -16,21 +17,50 @@ import ShoppingManagement from "./ShoppingManagement";
 const ITEMS_PER_PAGE = 10;
 const formatCurrency = (value) =>
   `Rp ${Number(value || 0).toLocaleString("id-ID", { maximumFractionDigits: 2 })}`;
+const formatRupiahInput = (value) => {
+  const digits = String(value ?? "").replace(/\D/g, "");
+
+  return digits ? Number(digits).toLocaleString("id-ID") : "";
+};
+const parseCostInput = (value) => {
+  const normalized = String(value ?? "").trim().replace(",", ".");
+
+  return normalized === "" ? NaN : Number(normalized);
+};
+const roundCurrency = (value) => Math.round((Number(value) || 0) * 100) / 100;
+const roundCost = (value) => Math.round((Number(value) || 0) * 10000) / 10000;
 const getCostDisplay = (item) => {
   const unit = String(item.unit || "").toLowerCase();
   const averageCost = Number(item.averageCost || 0);
 
   if (["gr", "g", "gram"].includes(unit)) {
-    return `${formatCurrency(averageCost * 1000)} / kg`;
+    return `${formatCurrency(averageCost)} / gr`;
   }
 
   if (["ml", "milliliter", "mililiter"].includes(unit)) {
-    return `${formatCurrency(averageCost * 1000)} / liter`;
+    return `${formatCurrency(averageCost)} / ml`;
   }
 
   return `${formatCurrency(averageCost)} / ${item.unit || "unit"}`;
 };
 const getAssetDisplay = (item) => formatCurrency(item.stockValue);
+const getStockQuantity = (item) => Math.max(Number(item?.stock || 0), 0);
+const getDisplayCostUnit = (unit) => {
+  const normalizedUnit = String(unit || "").toLowerCase();
+  if (["gr", "g", "gram"].includes(normalizedUnit)) return "gr";
+  if (["ml", "milliliter", "mililiter"].includes(normalizedUnit)) return "ml";
+  return unit || "unit";
+};
+const getPackageCostValue = (form) => {
+  const packageQuantity = parseCostInput(form.packageQuantity);
+  const packagePrice = Number(form.packagePrice || 0);
+
+  if (!Number.isFinite(packageQuantity) || packageQuantity <= 0) return 0;
+
+  return roundCost(packagePrice / packageQuantity);
+};
+const getAssetValueFromPackage = (item, form) =>
+  roundCurrency(getStockQuantity(item) * getPackageCostValue(form));
 
 const statusClassNames = {
   "BEBAS STOK": "bg-[#314259] text-blue-200",
@@ -52,6 +82,12 @@ const StockManagement = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [pendingDeleteItem, setPendingDeleteItem] = useState(null);
+  const [editingCogsItem, setEditingCogsItem] = useState(null);
+  const [cogsForm, setCogsForm] = useState({
+    packageQuantity: "",
+    packagePrice: "",
+    supplier: "",
+  });
 
   const { data: stockItemsRes, isError } = useQuery({
     queryKey: ["stock-items"],
@@ -69,7 +105,7 @@ const StockManagement = () => {
   };
 
   useEffect(() => {
-    if (!pendingDeleteItem) return undefined;
+    if (!pendingDeleteItem && !editingCogsItem) return undefined;
 
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
@@ -77,7 +113,7 @@ const StockManagement = () => {
     return () => {
       document.body.style.overflow = previousOverflow;
     };
-  }, [pendingDeleteItem]);
+  }, [pendingDeleteItem, editingCogsItem]);
 
   const stockItemDeleteMutation = useMutation({
     mutationFn: deleteStockItem,
@@ -88,6 +124,18 @@ const StockManagement = () => {
     },
     onError: () => {
       enqueueSnackbar("Gagal menghapus bahan.", { variant: "error" });
+    },
+  });
+  const stockItemCogsMutation = useMutation({
+    mutationFn: updateStockCogs,
+    onSuccess: () => {
+      refreshStockItems();
+      enqueueSnackbar("COGS awal berhasil diubah.", { variant: "success" });
+      setEditingCogsItem(null);
+      setCogsForm({ packageQuantity: "", packagePrice: "", supplier: "" });
+    },
+    onError: () => {
+      enqueueSnackbar("Gagal mengubah COGS awal.", { variant: "error" });
     },
   });
 
@@ -135,6 +183,35 @@ const StockManagement = () => {
 
   const handleDelete = (item) => {
     setPendingDeleteItem(item);
+  };
+  const handleEditCogs = (item) => {
+    setEditingCogsItem(item);
+    setCogsForm({
+      packageQuantity: String(getStockQuantity(item) || ""),
+      packagePrice: String(Number(item.stockValue || 0)),
+      supplier: item.supplier || "",
+    });
+  };
+  const submitCogsEdit = (event) => {
+    event.preventDefault();
+    if (!editingCogsItem) return;
+
+    const packageQuantity = parseCostInput(cogsForm.packageQuantity);
+    const packagePrice = Number(cogsForm.packagePrice || 0);
+    if (!Number.isFinite(packageQuantity) || packageQuantity <= 0) {
+      enqueueSnackbar("Gramasi kemasan tidak valid.", { variant: "error" });
+      return;
+    }
+    if (!Number.isFinite(packagePrice) || packagePrice < 0) {
+      enqueueSnackbar("Harga kemasan tidak valid.", { variant: "error" });
+      return;
+    }
+
+    stockItemCogsMutation.mutate({
+      stockItemId: editingCogsItem.id || editingCogsItem._id,
+      averageCost: getPackageCostValue(cogsForm),
+      supplier: cogsForm.supplier,
+    });
   };
 
   return (
@@ -249,7 +326,14 @@ const StockManagement = () => {
                   </td>
                   {isAdmin && (
                     <td className="p-4">
-                      <div className="flex items-center justify-center text-sm font-semibold">
+                      <div className="flex items-center justify-center gap-4 text-sm font-semibold">
+                        <button
+                          type="button"
+                          onClick={() => handleEditCogs(item)}
+                          className="text-[#d6c7ae] hover:text-[#f5f5f5]"
+                        >
+                          Ubah
+                        </button>
                         <button
                           type="button"
                           onClick={() => handleDelete(item)}
@@ -311,6 +395,135 @@ const StockManagement = () => {
           </div>
         </div>
       </div>}
+
+      {isAdmin && editingCogsItem && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+          <form
+            onSubmit={submitCogsEdit}
+            className="rounded-lg bg-[#262626] p-5 text-[#f5f5f5] shadow-2xl"
+            style={{ width: "min(92vw, 460px)" }}
+          >
+            <div className="mb-4 border-b border-[#333] pb-3">
+              <h3 className="text-lg font-bold">Ubah COGS Awal</h3>
+              <p className="mt-1 text-sm text-[#ababab]">
+                {editingCogsItem.name} · stok {editingCogsItem.stock}{" "}
+                {editingCogsItem.unit}
+              </p>
+            </div>
+
+            <div className="mb-3 grid gap-3 sm:grid-cols-2">
+              <label>
+                <span className="mb-1 block text-sm font-semibold">
+                  Gramasi Kemasan
+                </span>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={cogsForm.packageQuantity}
+                  onChange={(event) =>
+                    setCogsForm((current) => ({
+                      ...current,
+                      packageQuantity: event.target.value,
+                    }))
+                  }
+                  className="w-full rounded-lg border border-[#555] bg-[#1f1f1f] px-3 py-2 text-[#f5f5f5] outline-none focus:border-[#d6c7ae]"
+                  placeholder={`Contoh: 800 ${getDisplayCostUnit(editingCogsItem.unit)}`}
+                />
+              </label>
+              <label>
+                <span className="mb-1 block text-sm font-semibold">
+                  Harga Kemasan
+                </span>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={formatRupiahInput(cogsForm.packagePrice)}
+                  onChange={(event) =>
+                    setCogsForm((current) => ({
+                      ...current,
+                      packagePrice: event.target.value.replace(/\D/g, ""),
+                    }))
+                  }
+                  className="w-full rounded-lg border border-[#555] bg-[#1f1f1f] px-3 py-2 text-[#f5f5f5] outline-none focus:border-[#d6c7ae]"
+                  placeholder="Contoh: 169000"
+                />
+              </label>
+            </div>
+
+            <div className="mb-3 block">
+              <span className="mb-1 block text-sm font-semibold">
+                COGS Otomatis
+              </span>
+              <div className="w-full rounded-lg border border-[#444] bg-[#1f1f1f] px-3 py-2 font-semibold text-[#f5f5f5]">
+                {formatCurrency(getPackageCostValue(cogsForm))} /{" "}
+                {getDisplayCostUnit(editingCogsItem.unit)}
+              </div>
+              <span className="mt-1 block text-xs text-[#ababab]">
+                Hasil dari harga kemasan dibagi gramasi kemasan.
+              </span>
+            </div>
+
+            <div className="mb-3 block">
+              <span className="mb-1 block text-sm font-semibold">
+                Nilai Asset Otomatis
+              </span>
+              <div className="w-full rounded-lg border border-[#444] bg-[#1f1f1f] px-3 py-2 font-semibold text-[#f5f5f5]">
+                {formatCurrency(getAssetValueFromPackage(editingCogsItem, cogsForm))}
+              </div>
+              <span className="mt-1 block text-xs text-[#ababab]">
+                Hasil dari COGS otomatis dikali stok sekarang.
+              </span>
+            </div>
+
+            <label className="mb-4 block">
+              <span className="mb-1 block text-sm font-semibold">
+                Sumber / catatan
+              </span>
+              <input
+                type="text"
+                value={cogsForm.supplier}
+                onChange={(event) =>
+                  setCogsForm((current) => ({
+                    ...current,
+                    supplier: event.target.value,
+                  }))
+                }
+                className="w-full rounded-lg border border-[#555] bg-[#1f1f1f] px-3 py-2 text-[#f5f5f5] outline-none focus:border-[#d6c7ae]"
+                placeholder="Contoh: Setup COGS Awal"
+              />
+            </label>
+
+            <div className="mb-5 rounded-lg bg-[#1f1f1f] p-3 text-sm">
+              <span className="block text-[#ababab]">Ringkasan Setelah Ubah</span>
+              <strong className="mt-1 block text-base">
+                {formatCurrency(getAssetValueFromPackage(editingCogsItem, cogsForm))} -{" "}
+                {formatCurrency(getPackageCostValue(cogsForm))} /{" "}
+                {getDisplayCostUnit(editingCogsItem.unit)}
+              </strong>
+            </div>
+
+            <div className="flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setEditingCogsItem(null);
+                  setCogsForm({ packageQuantity: "", packagePrice: "", supplier: "" });
+                }}
+                className="rounded-lg bg-[#333] px-4 py-2 text-sm font-semibold text-[#f5f5f5]"
+              >
+                Batal
+              </button>
+              <button
+                type="submit"
+                disabled={stockItemCogsMutation.isPending}
+                className="rounded-lg bg-[#a79981] px-4 py-2 text-sm font-bold text-[#101010] disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {stockItemCogsMutation.isPending ? "Menyimpan..." : "Simpan"}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
 
       {isAdmin && pendingDeleteItem && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
