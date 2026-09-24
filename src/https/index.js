@@ -90,5 +90,7 @@ export const updateStockItem = ({ stockItemId, ...stockItemData }) =>
   axiosWrapper.put(`/api/stock-item/${stockItemId}`, stockItemData);
 export const updateStockQuantity = ({ stockItemId, stock }) =>
   axiosWrapper.patch(`/api/stock-item/${stockItemId}/stock`, { stock });
+export const updateStockCogs = ({ stockItemId, ...data }) =>
+  axiosWrapper.patch(`/api/stock-item/${stockItemId}/cogs`, data);
 export const deleteStockItem = (stockItemId) =>
   axiosWrapper.delete(`/api/stock-item/${stockItemId}`);

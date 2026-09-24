@@ -178,11 +178,11 @@ const getCogsDisplay = (stockItem) => {
   const averageCost = Number(stockItem.averageCost || 0);
 
   if (["gr", "g", "gram"].includes(unit)) {
-    return `COGS: ${formatCurrency(averageCost * 1000)} / kg`;
+    return `COGS: ${formatCurrency(averageCost)} / gr`;
   }
 
   if (["ml", "milliliter", "mililiter"].includes(unit)) {
-    return `COGS: ${formatCurrency(averageCost * 1000)} / liter`;
+    return `COGS: ${formatCurrency(averageCost)} / ml`;
   }
 
   return `COGS: ${formatCurrency(averageCost)} / ${stockItem.unit || "unit"}`;
@@ -208,11 +208,11 @@ const getIngredientCostDescription = (ingredient, stockItem, cost) => {
   const averageCost = Number(stockItem.averageCost || 0);
 
   if (["gr", "g", "gram"].includes(normalizedUnit)) {
-    return `${formatMoneyDisplay(averageCost * 1000)} : 1000 x ${quantity || 0} = ${formatMoneyDisplay(cost)}`;
+    return `${formatMoneyDisplay(averageCost)} x ${quantity || 0} = ${formatMoneyDisplay(cost)}`;
   }
 
   if (["ml", "milliliter", "mililiter"].includes(normalizedUnit)) {
-    return `${formatMoneyDisplay(averageCost * 1000)} : 1000 x ${quantity || 0} = ${formatMoneyDisplay(cost)}`;
+    return `${formatMoneyDisplay(averageCost)} x ${quantity || 0} = ${formatMoneyDisplay(cost)}`;
   }
 
   return `${formatMoneyDisplay(averageCost)} x ${quantity || 0} = ${formatMoneyDisplay(cost)}`;
