@@ -216,9 +216,12 @@ export default function ShoppingManagement({ stockItems, isAdmin }) {
     [stockItems, extraItems]
   );
   const historyData = history.data?.data?.data;
-  const itemGroups =
-    historyData?.itemGroups ||
-    buildFallbackItemGroups(historyData?.purchases || [], stockItems);
+  const itemGroups = useMemo(
+    () =>
+      historyData?.itemGroups ||
+      buildFallbackItemGroups(historyData?.purchases || [], stockItems),
+    [historyData, stockItems]
+  );
   const totalPages = Math.max(
     1,
     Math.ceil((historyData?.groupTotal || historyData?.total || 0) / 10)
@@ -266,8 +269,28 @@ export default function ShoppingManagement({ stockItems, isAdmin }) {
   };
   const closeHistoryDetail = () => {
     setSelectedHistoryGroup(null);
+    setEditingHistoryItem(null);
     setHistoryDetailTab("history");
   };
+  const handleCloseHistoryDetail = (event) => {
+    event?.preventDefault();
+    event?.stopPropagation();
+    closeHistoryDetail();
+  };
+
+  useEffect(() => {
+    if (!selectedHistoryGroup) return undefined;
+
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") closeHistoryDetail();
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [selectedHistoryGroup]);
   const resetForm = () => {
     setRows([blankRow()]);
     setForm({ date: today(), suplierId: "", paymentMethod: "Cash", note: "" });
@@ -590,7 +613,9 @@ export default function ShoppingManagement({ stockItems, isAdmin }) {
           role="dialog"
           aria-modal="true"
           aria-labelledby="shopping-history-title"
-          onClick={closeHistoryDetail}
+          onClick={(event) => {
+            if (event.target === event.currentTarget) closeHistoryDetail();
+          }}
         >
           <div
             className="max-h-[88vh] w-full max-w-6xl overflow-y-auto rounded-xl bg-[#1f1f1f] p-5 text-[#f5f5f5] shadow-xl"
@@ -607,7 +632,8 @@ export default function ShoppingManagement({ stockItems, isAdmin }) {
               </div>
               <button
                 type="button"
-                onClick={closeHistoryDetail}
+                onMouseDown={handleCloseHistoryDetail}
+                onClick={handleCloseHistoryDetail}
                 className="w-fit rounded-lg bg-[#333] px-4 py-2 text-sm font-bold text-[#f5f5f5]"
               >
                 Tutup
