@@ -16,7 +16,9 @@ import ShoppingManagement from "./ShoppingManagement";
 
 const ITEMS_PER_PAGE = 10;
 const formatCurrency = (value) =>
-  `Rp ${Number(value || 0).toLocaleString("id-ID", { maximumFractionDigits: 2 })}`;
+  `Rp ${Math.round(Number(value || 0)).toLocaleString("id-ID", {
+    maximumFractionDigits: 0,
+  })}`;
 const formatRupiahInput = (value) => {
   const digits = String(value ?? "").replace(/\D/g, "");
 
