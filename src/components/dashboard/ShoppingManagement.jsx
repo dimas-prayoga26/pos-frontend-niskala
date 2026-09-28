@@ -51,7 +51,9 @@ const blankRow = () => ({
   unitPrice: "",
 });
 const currency = (n) =>
-  `Rp ${Number(n || 0).toLocaleString("id-ID", { maximumFractionDigits: 2 })}`;
+  `Rp ${Math.round(Number(n || 0)).toLocaleString("id-ID", {
+    maximumFractionDigits: 0,
+  })}`;
 const quantityDisplay = (quantity, unit) =>
   `${Number(quantity || 0).toLocaleString("id-ID", {
     maximumFractionDigits: 2,
