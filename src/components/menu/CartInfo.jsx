@@ -35,16 +35,16 @@ const CartInfo = () => {
   };
 
   return (
-    <div className="min-h-0 px-4 py-2 xl:flex xl:flex-1 xl:flex-col">
+    <div className="px-4 py-3">
       <h1 className="text-lg text-[#e4e4e4] font-semibold tracking-wide">
         Order Details
       </h1>
       <div
-        className="mt-4 overflow-y-auto scrollbar-hide max-h-[320px] xl:min-h-[220px] xl:flex-1"
+        className="mt-4 max-h-[280px] overflow-y-auto scrollbar-hide"
         ref={scrollRef}
       >
         {cartData.length === 0 ? (
-          <p className="text-[#ababab] text-sm flex justify-center items-center min-h-[220px] xl:h-full">
+          <p className="text-[#ababab] text-sm flex justify-center items-center min-h-[180px] text-center">
             Your cart is empty. Start adding items!
           </p>
         ) : (
@@ -54,9 +54,9 @@ const CartInfo = () => {
                 key={item.id}
                 className="bg-[#1f1f1f] rounded-lg px-4 py-4 mb-2"
               >
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h1 className="text-[#ababab] font-semibold tracking-wide text-md">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <h1 className="truncate text-[#ababab] font-semibold tracking-wide text-md">
                       {item.name}
                     </h1>
                     {item.addOns?.length > 0 && (
@@ -70,13 +70,13 @@ const CartInfo = () => {
                       </p>
                     )}
                   </div>
-                  <p className="text-[#ababab] font-semibold">
+                  <p className="shrink-0 text-[#ababab] font-semibold">
                     x{item.quantity}
                   </p>
                 </div>
 
-                <div className="flex items-center justify-between mt-3">
-                  <div className="flex items-center gap-2">
+                <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex shrink-0 items-center gap-2">
                     <button
                       onClick={() => handleIncreaseQuantity(item)}
                       className="grid h-8 w-8 place-items-center rounded-lg bg-[#252525] text-[#ababab] transition hover:text-[#a79981]"
@@ -92,7 +92,7 @@ const CartInfo = () => {
                       <FaMinus size={14} />
                     </button>
                   </div>
-                  <p className="text-[#f5f5f5] text-md font-bold">
+                  <p className="ml-auto min-w-0 max-w-full text-right text-[#f5f5f5] text-md font-bold [overflow-wrap:anywhere]">
                     {formatCurrency(item.price)}
                   </p>
                 </div>

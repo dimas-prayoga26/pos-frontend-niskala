@@ -5,6 +5,7 @@ import { getOrders } from "../../https/index";
 import {
   formatCurrency,
   formatDateAndTime,
+  getDisplayOrderCode,
   getJakartaDateKey,
 } from "../../utils";
 
@@ -53,10 +54,7 @@ const RecentOrders = () => {
     const searchedOrders = !keyword
       ? ordersByDate
       : ordersByDate.filter((order) => {
-          const orderCode =
-            order.orderId ||
-            order.orderCode ||
-            `ORD-${String(order.id).padStart(6, "0")}`;
+          const orderCode = getDisplayOrderCode(order);
           const itemCount = order.items?.length || 0;
           const searchableText = [
             orderCode,
@@ -146,7 +144,7 @@ const RecentOrders = () => {
                 className="border-b border-gray-600 hover:bg-[#333]"
               >
                 <td className="p-4">
-                  #{order.orderId || order.orderCode || `ORD-${String(order.id).padStart(6, "0")}`}
+                  {getDisplayOrderCode(order)}
                 </td>
                 <td className="p-4">{order.customerDetails?.name || "-"}</td>
                 <td className="p-4">{formatDateAndTime(order.orderDate)}</td>

@@ -129,6 +129,7 @@ const Bill = () => {
       guests: customerData.guests || 1,
     },
     orderType,
+    orderDate: orderType === "Online" ? customerData.orderDate || "" : undefined,
     orderPlatformId: customerData.orderPlatformId || null,
     orderPlatform: customerData.orderPlatform || "",
     platformTax: platformFee,
@@ -179,6 +180,13 @@ const Bill = () => {
 
     if (orderType === "Online" && !customerData.orderPlatform) {
       enqueueSnackbar("Please select online order platform!", {
+        variant: "warning",
+      });
+      return;
+    }
+
+    if (orderType === "Online" && !customerData.orderDate) {
+      enqueueSnackbar("Pilih tanggal order online terlebih dahulu.", {
         variant: "warning",
       });
       return;
