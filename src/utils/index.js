@@ -159,7 +159,7 @@ export const getDisplayOrderCode = (order) => {
 
   if (!parts) return sequence;
 
-  return `${sequence}-${parts.month}-${parts.year.slice(-2)}`;
+  return `${parts.year.slice(-2)}${parts.month}-${sequence}`;
 };
 
 export const getOrderReceivedAmount = (order) => {
