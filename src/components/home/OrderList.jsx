@@ -1,9 +1,12 @@
 import React from "react";
-import { formatJakartaDateTime, getAvatarName } from "../../utils/index";
+import {
+  formatJakartaDateTime,
+  getAvatarName,
+  getDisplayOrderCode,
+} from "../../utils/index";
 
 const OrderList = ({ order }) => {
-  const orderCode =
-    order.orderId || order.orderCode || `ORD-${String(order.id).padStart(6, "0")}`;
+  const orderCode = getDisplayOrderCode(order);
   const avatarName = getAvatarName(order.customerDetails.name).slice(0, 2);
   const formattedOrderDate = formatJakartaDateTime(order.orderDate);
 
@@ -21,7 +24,7 @@ const OrderList = ({ order }) => {
       </div>
 
       <p className="col-span-2 w-fit rounded-lg border border-[#a79981] px-2 py-1 text-sm font-semibold text-[#a79981] sm:col-span-1">
-        Order ID: #{orderCode}
+        Order ID: {orderCode}
       </p>
 
       <p className="col-span-2 px-3 py-2 text-sm font-semibold text-[#f5f5f5] sm:col-span-1 sm:justify-self-end">

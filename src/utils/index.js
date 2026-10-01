@@ -149,6 +149,19 @@ export const formatJakartaReceiptDate = (value) => {
   return `${parts.day}/${parts.month}/${parts.year}`;
 };
 
+export const getDisplayOrderCode = (order) => {
+  const orderCode = order?.orderId || order?.orderCode;
+
+  if (orderCode) return orderCode;
+
+  const parts = getJakartaParts(order?.orderDate);
+  const sequence = String(order?.id || order?._id || 0).padStart(4, "0");
+
+  if (!parts) return sequence;
+
+  return `${sequence}-${parts.month}-${parts.year.slice(-2)}`;
+};
+
 export const getOrderReceivedAmount = (order) => {
   const totalWithTax = Number(order?.bills?.totalWithTax) || 0;
 

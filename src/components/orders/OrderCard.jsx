@@ -10,6 +10,7 @@ import { printOrderReceipt } from "../invoice/Invoice";
 import {
   formatCurrency,
   formatDateAndTime,
+  getDisplayOrderCode,
   formatJakartaReceiptDate,
 } from "../../utils/index";
 
@@ -36,7 +37,7 @@ const OrderCard = ({
   const [isActionMenuOpen, setIsActionMenuOpen] = useState(false);
   const [isPrintingReceipt, setIsPrintingReceipt] = useState(false);
   const [paymentAmount, setPaymentAmount] = useState("");
-  const orderCode = order.orderId || order.orderCode || `ORD-${String(order.id).padStart(6, "0")}`;
+  const orderCode = getDisplayOrderCode(order);
   const cateringDetails = order.cateringDetails;
   const isCatering = Boolean(cateringDetails);
   const isOnlineOrder =
@@ -121,7 +122,7 @@ const OrderCard = ({
                 )}
               </div>
               <p className="text-[#ababab] text-sm">
-                Order ID: #{orderCode}
+                Order ID: {orderCode}
               </p>
             </div>
             <div className="relative flex flex-col sm:items-end gap-2">
@@ -218,7 +219,7 @@ const OrderCard = ({
               <div className="mb-4 grid grid-cols-1 gap-2 text-sm text-[#ababab] sm:grid-cols-2">
                 <p>
                   <span className="text-[#f5f5f5]">Order ID:</span>{" "}
-                  #{orderCode}
+                  {orderCode}
                 </p>
                 {isCatering && (
                   <p>
@@ -432,7 +433,7 @@ const OrderCard = ({
                 <div className="min-w-0">
                   <h2 className="text-lg font-bold">Hapus Pesanan?</h2>
                   <p className="mt-1 text-sm text-[#ababab]">
-                    Pesanan #{orderCode} akan dihapus permanen dari sistem.
+                    Pesanan {orderCode} akan dihapus permanen dari sistem.
                   </p>
                 </div>
               </div>

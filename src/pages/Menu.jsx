@@ -64,7 +64,7 @@ const Menu = () => {
         <MenuContainer />
       </div>
       {/* Right Div */}
-      <div className="flex-[1] bg-[#1a1a1a] mx-4 xl:mx-0 xl:mt-4 xl:mr-3 rounded-lg pt-2 overflow-hidden xl:sticky xl:top-4 xl:self-start xl:max-h-[calc(100vh-2rem)] xl:flex xl:flex-col">
+      <div className="bg-[#1a1a1a] mx-4 xl:mx-0 xl:mt-4 xl:mr-3 rounded-lg pt-2 overflow-hidden xl:sticky xl:top-4 xl:self-start xl:max-h-[calc(100vh-7rem)] xl:w-[470px] xl:flex-none xl:overflow-y-auto xl:scrollbar-hide">
         {/* Customer Info */}
         <CustomerInfo />
         <hr className="shrink-0 border-[#2a2a2a] border-t-2" />

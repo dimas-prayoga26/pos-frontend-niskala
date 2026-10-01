@@ -33,6 +33,7 @@ import {
 } from "../../https";
 import {
   formatCurrency,
+  getDisplayOrderCode,
   getOrderItemHpp,
   getOrderReceivedAmount,
   getOrdersHppTotal,
@@ -120,8 +121,7 @@ const formatDateTime = (value) => {
   });
 };
 
-const getOrderCode = (order) =>
-  order.orderId || order.orderCode || `ORD-${String(order.id).padStart(6, "0")}`;
+const getOrderCode = (order) => getDisplayOrderCode(order);
 
 const getOrderTypeLabel = (order) => {
   const isCatering =

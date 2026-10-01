@@ -10,6 +10,7 @@ const initialState = {
     orderPlatformId: null,
     orderPlatform: "",
     platformTax: 0,
+    orderDate: getToday(),
     selectedCategoryName: "",
     note: "",
     catering: {
@@ -37,6 +38,7 @@ const customerSlice = createSlice({
                 orderPlatformId,
                 orderPlatform,
                 platformTax,
+                orderDate,
                 selectedCategoryName,
                 note,
                 catering
@@ -49,6 +51,10 @@ const customerSlice = createSlice({
             }
             state.orderPlatform = orderPlatform ?? state.orderPlatform;
             state.platformTax = platformTax ?? state.platformTax;
+            state.orderDate = orderDate ?? state.orderDate;
+            if (orderType === "Online" && !state.orderDate) {
+                state.orderDate = getToday();
+            }
             state.selectedCategoryName = selectedCategoryName ?? state.selectedCategoryName;
             state.note = note ?? state.note;
             state.catering = catering
@@ -63,6 +69,7 @@ const customerSlice = createSlice({
             state.orderPlatformId = null;
             state.orderPlatform = "";
             state.platformTax = 0;
+            state.orderDate = getToday();
             state.note = "";
             state.catering = {
                 paymentPlan: "Full",

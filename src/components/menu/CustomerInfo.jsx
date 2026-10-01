@@ -4,6 +4,7 @@ import { setCustomer } from "../../redux/slices/customerSlice";
 import {
   formatDate,
   formatNominalInput,
+  getJakartaDateKey,
   getAvatarName,
   normalizeNominalInput,
 } from "../../utils";
@@ -26,6 +27,10 @@ const CustomerInfo = () => {
   const showCateringForm =
     customerData.selectedCategoryName === "Catering" ||
     cartData.some((item) => item.categoryName === "Catering");
+  const isOnlineOrder = customerData.orderType === "Online";
+  const todayKey = getJakartaDateKey();
+  const displayOrderDate =
+    isOnlineOrder && customerData.orderDate ? customerData.orderDate : new Date();
 
   const updateCustomer = (field, value) => {
     dispatch(
@@ -59,6 +64,9 @@ const CustomerInfo = () => {
   };
   const updatePlatformTax = (value) => {
     dispatch(setCustomer({ platformTax: normalizeNominalInput(value) }));
+  };
+  const updateOrderDate = (value) => {
+    dispatch(setCustomer({ orderDate: value }));
   };
 
   const cateringFields = [
@@ -103,7 +111,7 @@ const CustomerInfo = () => {
             {customerData.orderPlatform ? ` / ${customerData.orderPlatform}` : ""}
           </p>
           <p className="text-xs text-[#ababab] font-medium mt-2">
-            {formatDate(new Date())}
+            {formatDate(displayOrderDate)}
           </p>
         </div>
         <button className="bg-[#a79981] p-3 text-xl font-bold rounded-lg shrink-0 text-[#101010]">
@@ -125,78 +133,93 @@ const CustomerInfo = () => {
           />
         </div>
 
-        {customerData.orderType === "Online" && (
-          <div className="relative">
-            <label className="block text-[#ababab] mb-2 text-xs font-medium">
-              Platform
-            </label>
-            <button
-              type="button"
-              onClick={() => setIsPlatformOpen((current) => !current)}
-              className="flex w-full items-center justify-between rounded-lg bg-[#1f1f1f] px-4 py-3 text-left text-sm font-semibold text-white outline-none ring-1 ring-transparent transition hover:bg-[#242424] focus:ring-[#a79981]/50"
-            >
-              <span
-                className={`flex min-w-0 items-center gap-3 ${
-                  customerData.orderPlatform ? "text-white" : "text-[#ababab]"
-                }`}
-              >
-                <span className="truncate">
-                  {customerData.orderPlatform || "Pilih platform"}
-                </span>
-              </span>
-              <MdKeyboardArrowDown
-                size={20}
-                className={`shrink-0 text-[#ababab] transition-transform ${
-                  isPlatformOpen ? "rotate-180" : ""
-                }`}
-              />
-            </button>
-
-            {isPlatformOpen && (
-              <div className="absolute left-0 right-0 top-[calc(100%+8px)] z-50 overflow-hidden rounded-lg border border-[#333] bg-[#1a1a1a] shadow-2xl shadow-black/40">
-                <button
-                  type="button"
-                  onClick={() => updateOrderPlatform()}
-                  className="block w-full px-4 py-3 text-left text-sm font-semibold text-[#ababab] hover:bg-[#262626] hover:text-white"
-                >
-                  Pilih platform
-                </button>
-                {orderPlatforms.map((platform) => (
-                  <button
-                    key={platform.id || platform._id}
-                    type="button"
-                    onClick={() => updateOrderPlatform(platform)}
-                    className={`block w-full px-4 py-3 text-left text-sm font-semibold hover:bg-[#262626] ${
-                      customerData.orderPlatform === platform.name
-                        ? "bg-[#a79981] text-[#101010]"
-                        : "text-white"
-                    }`}
-                  >
-                    {platform.name}
-                  </button>
-                ))}
-              </div>
-            )}
-
-            {customerData.orderPlatform && (
-              <label className="mt-3 block text-[#ababab] text-xs font-medium">
-                Biaya Platform
-                <div className="mt-2 flex overflow-hidden rounded-lg bg-[#1f1f1f] ring-1 ring-transparent transition focus-within:ring-[#a79981]/50">
-                  <span className="flex shrink-0 items-center px-4 text-sm font-bold text-[#a79981]">
-                    Rp
-                  </span>
-                  <input
-                    value={formatNominalInput(customerData.platformTax)}
-                    onChange={(event) => updatePlatformTax(event.target.value)}
-                    type="text"
-                    inputMode="numeric"
-                    placeholder="0"
-                    className="min-w-0 w-full bg-transparent py-3 pr-4 text-sm text-white outline-none"
-                  />
-                </div>
+        {isOnlineOrder && (
+          <>
+            <div>
+              <label className="block text-[#ababab] mb-2 text-xs font-medium">
+                Tanggal Order
               </label>
-            )}
-          </div>
+              <input
+                value={customerData.orderDate || todayKey}
+                onChange={(event) => updateOrderDate(event.target.value)}
+                type="date"
+                max={todayKey}
+                className="w-full rounded-lg bg-[#1f1f1f] px-4 py-3 text-sm text-white outline-none [color-scheme:dark]"
+              />
+            </div>
+
+            <div className="relative">
+              <label className="block text-[#ababab] mb-2 text-xs font-medium">
+                Platform
+              </label>
+              <button
+                type="button"
+                onClick={() => setIsPlatformOpen((current) => !current)}
+                className="flex w-full items-center justify-between rounded-lg bg-[#1f1f1f] px-4 py-3 text-left text-sm font-semibold text-white outline-none ring-1 ring-transparent transition hover:bg-[#242424] focus:ring-[#a79981]/50"
+              >
+                <span
+                  className={`flex min-w-0 items-center gap-3 ${
+                    customerData.orderPlatform ? "text-white" : "text-[#ababab]"
+                  }`}
+                >
+                  <span className="truncate">
+                    {customerData.orderPlatform || "Pilih platform"}
+                  </span>
+                </span>
+                <MdKeyboardArrowDown
+                  size={20}
+                  className={`shrink-0 text-[#ababab] transition-transform ${
+                    isPlatformOpen ? "rotate-180" : ""
+                  }`}
+                />
+              </button>
+
+              {isPlatformOpen && (
+                <div className="absolute left-0 right-0 top-[calc(100%+8px)] z-50 overflow-hidden rounded-lg border border-[#333] bg-[#1a1a1a] shadow-2xl shadow-black/40">
+                  <button
+                    type="button"
+                    onClick={() => updateOrderPlatform()}
+                    className="block w-full px-4 py-3 text-left text-sm font-semibold text-[#ababab] hover:bg-[#262626] hover:text-white"
+                  >
+                    Pilih platform
+                  </button>
+                  {orderPlatforms.map((platform) => (
+                    <button
+                      key={platform.id || platform._id}
+                      type="button"
+                      onClick={() => updateOrderPlatform(platform)}
+                      className={`block w-full px-4 py-3 text-left text-sm font-semibold hover:bg-[#262626] ${
+                        customerData.orderPlatform === platform.name
+                          ? "bg-[#a79981] text-[#101010]"
+                          : "text-white"
+                      }`}
+                    >
+                      {platform.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {customerData.orderPlatform && (
+                <label className="mt-3 block text-[#ababab] text-xs font-medium">
+                  Biaya Platform
+                  <div className="mt-2 flex overflow-hidden rounded-lg bg-[#1f1f1f] ring-1 ring-transparent transition focus-within:ring-[#a79981]/50">
+                    <span className="flex shrink-0 items-center px-4 text-sm font-bold text-[#a79981]">
+                      Rp
+                    </span>
+                    <input
+                      value={formatNominalInput(customerData.platformTax)}
+                      onChange={(event) => updatePlatformTax(event.target.value)}
+                      type="text"
+                      inputMode="numeric"
+                      placeholder="0"
+                      className="min-w-0 w-full bg-transparent py-3 pr-4 text-sm text-white outline-none"
+                    />
+                  </div>
+                </label>
+              )}
+            </div>
+          </>
         )}
 
         {showCateringForm && (

@@ -4,7 +4,11 @@ import OrderList from "./OrderList";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { enqueueSnackbar } from "notistack";
 import { getOrders } from "../../https/index";
-import { formatJakartaDateTime, getJakartaDateKey } from "../../utils";
+import {
+  formatJakartaDateTime,
+  getDisplayOrderCode,
+  getJakartaDateKey,
+} from "../../utils";
 
 const RecentOrders = () => {
   const [searchQuery, setSearchQuery] = useState("");
@@ -33,10 +37,7 @@ const RecentOrders = () => {
     if (!keyword) return todayOrders;
 
     return todayOrders.filter((order) => {
-      const orderCode =
-        order.orderId ||
-        order.orderCode ||
-        `ORD-${String(order.id).padStart(6, "0")}`;
+      const orderCode = getDisplayOrderCode(order);
       const formattedOrderDate = formatJakartaDateTime(order.orderDate);
 
       const searchableText = [
