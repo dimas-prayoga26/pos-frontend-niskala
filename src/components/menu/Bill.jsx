@@ -126,6 +126,7 @@ const Bill = () => {
   const buildOrderData = (paymentData, selectedPaymentMethod = paymentMethod) => ({
     customerDetails: {
       name: getCustomerName(),
+      phone: orderType === "Offline" ? customerData.customerPhone?.trim() || "" : "",
       guests: customerData.guests || 1,
     },
     orderType,
@@ -542,6 +543,11 @@ const Bill = () => {
               <p class="receipt-title">Order Receipt</p>
               <div class="meta">
                 <div class="meta-row"><span>Customer</span><strong>${escapeHtml(getCustomerName())}</strong></div>
+                ${
+                  orderType === "Offline" && customerData.customerPhone?.trim()
+                    ? `<div class="meta-row"><span>Telepon</span><strong>${escapeHtml(customerData.customerPhone.trim())}</strong></div>`
+                    : ""
+                }
                 <div class="meta-row"><span>Date</span><strong>${formatJakartaReceiptDateTime()}</strong></div>
                 <div class="meta-row"><span>Payment</span><strong>${escapeHtml(paymentMethod || "-")}</strong></div>
                 ${

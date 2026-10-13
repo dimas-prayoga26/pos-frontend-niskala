@@ -115,6 +115,7 @@ const emptyMenuForm = {
 
 const ITEMS_PER_PAGE = 10;
 const MENU_SIZES_ENABLED = false;
+const HIDE_AUTO_HPP_FIELD = true;
 
 const resolveMenuImageUrl = (imagePath) => {
   if (!imagePath) return "";
@@ -1700,22 +1701,24 @@ const MenuManagement = () => {
                     )}
                   </div>
                 </div>
-                <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
-                  <label className="block text-sm font-semibold text-amber-200">
-                    HPP <span className="text-xs text-[#777]">(Auto +30%)</span>
-                    <div className="mt-2 flex overflow-hidden rounded-lg border border-amber-500/30 bg-amber-500/10">
-                      <span className="flex shrink-0 items-center px-4 text-sm font-bold text-amber-200">
-                        Rp
-                      </span>
-                      <input
-                        value={formatMoneyDisplay(autoHppCost)}
-                        disabled
-                        type="text"
-                        placeholder="0"
-                        className="min-w-0 w-full bg-transparent py-3 pr-4 text-sm text-[#f5f5f5] outline-none disabled:opacity-100"
-                      />
-                    </div>
-                  </label>
+                <div className="mt-4 grid grid-cols-1 gap-2">
+                  {!HIDE_AUTO_HPP_FIELD && (
+                    <label className="block text-sm font-semibold text-amber-200">
+                      HPP <span className="text-xs text-[#777]">(Auto +30%)</span>
+                      <div className="mt-2 flex overflow-hidden rounded-lg border border-amber-500/30 bg-amber-500/10">
+                        <span className="flex shrink-0 items-center px-4 text-sm font-bold text-amber-200">
+                          Rp
+                        </span>
+                        <input
+                          value={formatMoneyDisplay(autoHppCost)}
+                          disabled
+                          type="text"
+                          placeholder="0"
+                          className="min-w-0 w-full bg-transparent py-3 pr-4 text-sm text-[#f5f5f5] outline-none disabled:opacity-100"
+                        />
+                      </div>
+                    </label>
+                  )}
                   <label className="block text-sm font-semibold text-emerald-200">
                     Gross Profit <span className="text-xs text-[#777]">(Auto)</span>
                     <div className="mt-2 flex overflow-hidden rounded-lg border border-emerald-500/30 bg-emerald-500/10">

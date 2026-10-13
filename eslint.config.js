@@ -29,10 +29,18 @@ export default [
       ...react.configs['jsx-runtime'].rules,
       ...reactHooks.configs.recommended.rules,
       'react/jsx-no-target-blank': 'off',
+      // The project does not use PropTypes (not installed; removed in React 19).
+      'react/prop-types': 'off',
       'react-refresh/only-export-components': [
         'warn',
         { allowConstantExport: true },
       ],
     },
+  },
+  {
+    // Test helpers export render utilities next to components; fast refresh
+    // does not apply to them.
+    files: ['tests/**/*.{js,jsx}', 'src/**/*.test.{js,jsx}'],
+    rules: { 'react-refresh/only-export-components': 'off' },
   },
 ]

@@ -39,12 +39,6 @@ export const updateMenuItem = ({ menuItemId, ...menuItemData }) =>
 export const deleteMenuItem = (menuItemId) =>
   axiosWrapper.delete(`/api/menu-item/${menuItemId}`);
 
-// Payment Endpoints
-export const createMidtransTransaction = (data) =>
-  axiosWrapper.post("/api/payment/create-order", data);
-export const verifyMidtransPayment = (data) =>
-  axiosWrapper.post("/api/payment/verify-payment", data);
-
 // Order Endpoints
 export const addOrder = (data) => axiosWrapper.post("/api/order/", data);
 export const createThermalPrintUrl = ({ orderId, payload }) =>

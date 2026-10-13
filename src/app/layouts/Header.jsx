@@ -1,0 +1,92 @@
+import React from "react";
+import { FaSearch } from "react-icons/fa";
+import { FaUserCircle } from "react-icons/fa";
+import { FaBell } from "react-icons/fa";
+import logo from "../../../../assets/logo2.png";
+import { useSelector } from "react-redux";
+import { IoLogOut } from "react-icons/io5";
+import { useLocation, useNavigate } from "react-router-dom";
+import { useLogout } from "../../features/auth";
+import { MdDashboard, MdRestaurantMenu } from "react-icons/md";
+
+const Header = () => {
+  const userData = useSelector((state) => state.user);
+  const navigate = useNavigate();
+  const handleLogout = useLogout();
+  const location = useLocation();
+  const isDashboardPage = location.pathname === "/dashboard";
+  const canOpenDashboard = ["admin", "cashier"].includes(
+    userData.role?.toLowerCase()
+  );
+  const displayRole = ["admin", "cashier"].includes(
+    userData.role?.toLowerCase()
+  )
+    ? userData.role
+    : "Cashier";
+  const displayName =
+    userData.name?.toLowerCase() === "waiter"
+      ? displayRole
+      : userData.name || displayRole;
+
+  return (
+    <header className="flex flex-wrap justify-between items-center gap-3 py-3 px-4 md:px-8 bg-[#1a1a1a]">
+      {/* LOGO */}
+      <div onClick={() => navigate("/")} className="flex items-center gap-2 cursor-pointer shrink-0">
+        <img
+          src={logo}
+          className="h-9 w-32 object-contain md:h-10 md:w-40"
+          alt="Niskala Coffee logo"
+        />
+      </div>
+
+      {/* SEARCH */}
+      <div className="order-3 md:order-none flex items-center gap-3 bg-[#1f1f1f] rounded-[15px] px-4 py-2 w-full md:w-[420px] lg:w-[500px]">
+        <FaSearch className="text-[#f5f5f5]" />
+        <input
+          type="text"
+          placeholder="Search"
+          className="bg-[#1f1f1f] outline-none text-[#f5f5f5] w-full"
+        />
+      </div>
+
+      {/* LOGGED USER DETAILS */}
+      <div className="flex items-center gap-2 md:gap-4 shrink-0">
+        {canOpenDashboard && (
+          <button
+            type="button"
+            onClick={() => navigate(isDashboardPage ? "/menu" : "/dashboard")}
+            title={isDashboardPage ? "Kembali ke menu" : "Buka dashboard"}
+            className="bg-[#1f1f1f] rounded-[15px] p-2 md:p-3 cursor-pointer"
+          >
+            {isDashboardPage ? (
+              <MdRestaurantMenu className="text-[#f5f5f5] text-xl md:text-2xl" />
+            ) : (
+              <MdDashboard className="text-[#f5f5f5] text-xl md:text-2xl" />
+            )}
+          </button>
+        )}
+        <div className="bg-[#1f1f1f] rounded-[15px] p-2 md:p-3 cursor-pointer">
+          <FaBell className="text-[#f5f5f5] text-xl md:text-2xl" />
+        </div>
+        <div className="flex items-center gap-2 md:gap-3 cursor-pointer">
+          <FaUserCircle className="text-[#f5f5f5] text-3xl md:text-4xl" />
+          <div className="hidden sm:flex flex-col items-start">
+            <h1 className="text-md text-[#f5f5f5] font-semibold tracking-wide">
+              {displayName}
+            </h1>
+            <p className="text-xs text-[#ababab] font-medium">
+              {displayRole}
+            </p>
+          </div>
+          <IoLogOut
+            onClick={handleLogout}
+            className="text-[#f5f5f5] ml-2"
+            size={32}
+          />
+        </div>
+      </div>
+    </header>
+  );
+};
+
+export default Header;
