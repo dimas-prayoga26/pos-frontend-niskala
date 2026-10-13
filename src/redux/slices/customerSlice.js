@@ -5,6 +5,7 @@ const getToday = () => getJakartaDateKey();
 
 const initialState = {
     customerName: "",
+    customerPhone: "",
     guests: 1,
     orderType: "Offline",
     orderPlatformId: null,
@@ -33,6 +34,7 @@ const customerSlice = createSlice({
         setCustomer: (state, action) => {
             const {
                 name,
+                phone,
                 guests,
                 orderType,
                 orderPlatformId,
@@ -44,6 +46,7 @@ const customerSlice = createSlice({
                 catering
             } = action.payload;
             state.customerName = name ?? state.customerName;
+            state.customerPhone = phone ?? state.customerPhone;
             state.guests = guests ?? state.guests;
             state.orderType = orderType ?? state.orderType;
             if (Object.prototype.hasOwnProperty.call(action.payload, "orderPlatformId")) {
@@ -64,6 +67,7 @@ const customerSlice = createSlice({
 
         removeCustomer: (state) => {
             state.customerName = "";
+            state.customerPhone = "";
             state.guests = 1;
             state.orderType = "Offline";
             state.orderPlatformId = null;

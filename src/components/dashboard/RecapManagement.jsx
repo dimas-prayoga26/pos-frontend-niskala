@@ -14,6 +14,11 @@ import {
   getRecaps,
   getUsers,
 } from "../../https";
+import OrderDateRangeFilter from "../../features/orders/components/OrderDateRangeFilter";
+import {
+  filterOrdersByDateRange,
+  getSummaryDateRangeLabel,
+} from "../../features/orders/utils/orderFilters";
 import CreatableSelect2 from "../shared/CreatableSelect2";
 import {
   formatCurrency,
@@ -27,6 +32,9 @@ const recapTabs = [
   { key: "weekly", label: "Mingguan" },
   { key: "monthly", label: "Bulanan" },
 ];
+
+const SHOW_HPP_FIELDS = true;
+const QRIS_FEE_RATE = 0.007;
 
 const getLocalDate = (value) => {
   const date = value ? new Date(value) : new Date();
@@ -122,6 +130,50 @@ const getPlatformLabel = (order) => {
   return "Offline";
 };
 
+const normalizeComparableText = (value) =>
+  String(value || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "");
+
+const isCashPayment = (paymentMethod) => {
+  const normalized = normalizeComparableText(paymentMethod);
+
+  return normalized === "tunai" || normalized === "cash";
+};
+
+const isQrPayment = (paymentMethod) => {
+  const normalized = normalizeComparableText(paymentMethod);
+
+  return normalized.includes("qr") || normalized.includes("qris");
+};
+
+const isPlatformMatch = (order, platformName) =>
+  normalizeComparableText(order.orderPlatform).includes(platformName);
+
+const getOrderPlatformDeduction = (order) =>
+  order.orderType === "Online"
+    ? Math.max(Number(order.platformTax) || 0, 0)
+    : 0;
+
+const getOrderGrossRevenue = (order) =>
+  getOrderReceivedAmount(order) + getOrderPlatformDeduction(order);
+
+const getOrderQrisDeduction = (order, grossRevenue = getOrderGrossRevenue(order)) =>
+  isQrPayment(order.paymentMethod)
+    ? Math.max(grossRevenue * QRIS_FEE_RATE, 0)
+    : 0;
+
+const getOrderIncomeDeduction = (order, grossRevenue = getOrderGrossRevenue(order)) =>
+  getOrderPlatformDeduction(order) + getOrderQrisDeduction(order, grossRevenue);
+
+const getOrderNetRevenue = (order, grossRevenue = getOrderGrossRevenue(order)) =>
+  Math.max(grossRevenue - getOrderIncomeDeduction(order, grossRevenue), 0);
+
+const getNewRecapPaymentLabel = (order) =>
+  order.orderType === "Online"
+    ? order.orderPlatform || "Online"
+    : order.paymentMethod || "-";
+
 const createEmptyGroup = ({ key, label, sortValue }) => ({
   key,
   label,
@@ -182,6 +234,50 @@ const formatMonthLabel = (value) => {
   });
 };
 
+const getMonthDateRange = (value = getMonthInputValue()) => {
+  const [year, month] = String(value || "").split("-").map(Number);
+
+  if (!year || !month) {
+    return {
+      startDate: "",
+      endDate: "",
+    };
+  }
+
+  const monthKey = `${year}-${String(month).padStart(2, "0")}`;
+  const lastDate = String(new Date(year, month, 0).getDate()).padStart(2, "0");
+
+  return {
+    startDate: `${monthKey}-01`,
+    endDate: `${monthKey}-${lastDate}`,
+  };
+};
+
+const getMonthWeekInfo = (value) => {
+  const date = getLocalDate(value);
+
+  if (!date) {
+    return {
+      key: "unknown",
+      label: "Minggu",
+    };
+  }
+
+  const monthStart = new Date(date.getFullYear(), date.getMonth(), 1);
+  const firstWeekStart = getWeekStart(monthStart);
+  const currentWeekStart = getWeekStart(date);
+  const weekIndex =
+    Math.floor(
+      (currentWeekStart.getTime() - firstWeekStart.getTime()) /
+        (7 * 24 * 60 * 60 * 1000)
+    ) + 1;
+
+  return {
+    key: getDateKey(currentWeekStart),
+    label: `Minggu-${weekIndex}`,
+  };
+};
+
 const normalizeNominalInput = (value) => {
   const digitsOnly = String(value).replace(/\D/g, "");
 
@@ -206,6 +302,10 @@ const recapFormFields = [
   { id: "qrisIn", label: "QRIS masuk (Rp)", type: "text", currency: true },
   { id: "transferIn", label: "Transfer masuk (Rp)", type: "text", currency: true },
 ];
+
+const visibleRecapFormFields = SHOW_HPP_FIELDS
+  ? recapFormFields
+  : recapFormFields.filter((field) => field.id !== "hppTotal");
 
 const createEmptyRecapForm = () => ({
   date: getTodayInputValue(),
@@ -485,7 +585,11 @@ const RecapManagement = () => {
   const queryClient = useQueryClient();
   const currentUser = useSelector((state) => state.user);
   const isAdmin = currentUser.role?.toLowerCase() === "admin";
+  const [recapVersion, setRecapVersion] = useState("old");
   const [activeTab, setActiveTab] = useState("daily");
+  const [newRecapDateRange, setNewRecapDateRange] = useState(() =>
+    getMonthDateRange()
+  );
   const [isRecapModalOpen, setIsRecapModalOpen] = useState(false);
   const [pendingDailyRecapPayload, setPendingDailyRecapPayload] = useState(null);
   const [recapForm, setRecapForm] = useState(createEmptyRecapForm);
@@ -630,9 +734,154 @@ const RecapManagement = () => {
         menuItems,
         orders,
         periodMonth: monthlyRecapForm.periodMonth,
-      }),
+    }),
     [dailyRecapsSource, menuItems, monthlyRecapForm.periodMonth, orders]
   );
+  const newRecapRangeLabel = getSummaryDateRangeLabel(newRecapDateRange);
+  const newRecapPeriodLabel = `Periode ${newRecapRangeLabel}`;
+  const newRecapMonthOrders = useMemo(
+    () => filterOrdersByDateRange(orders, newRecapDateRange),
+    [newRecapDateRange, orders]
+  );
+  const newRecapTotals = useMemo(
+    () =>
+      newRecapMonthOrders.reduce(
+      (summary, order) => {
+        const grossAmount = getOrderGrossRevenue(order);
+        const netAmount = getOrderNetRevenue(order, grossAmount);
+        const incomeDeduction = getOrderIncomeDeduction(order, grossAmount);
+
+        summary.grossSales += grossAmount;
+        summary.netSales += netAmount;
+        summary.discounts += incomeDeduction;
+
+        if (isCashPayment(order.paymentMethod)) {
+          summary.cashSales += netAmount;
+        }
+
+        if (isQrPayment(order.paymentMethod)) {
+          summary.qrSales += netAmount;
+        }
+
+        if (order.orderType === "Online" && isPlatformMatch(order, "shopeefood")) {
+          summary.shopeeFoodSales += netAmount;
+        }
+
+        if (order.orderType === "Online" && isPlatformMatch(order, "gofood")) {
+          summary.goFoodSales += netAmount;
+        }
+
+        return summary;
+      },
+      {
+        grossSales: 0,
+        netSales: 0,
+        discounts: 0,
+        cashSales: 0,
+        qrSales: 0,
+        shopeeFoodSales: 0,
+        goFoodSales: 0,
+      }
+      ),
+    [newRecapMonthOrders]
+  );
+  const newRecapTableRows = useMemo(
+    () =>
+      newRecapMonthOrders.flatMap((order) => {
+        const items = Array.isArray(order.items) ? order.items : [];
+        const grossRevenue = getOrderGrossRevenue(order);
+        const incomeDeductionTotal = getOrderIncomeDeduction(order, grossRevenue);
+        const orderDate = getLocalDate(order.orderDate);
+        const weekInfo = getMonthWeekInfo(order.orderDate);
+        const itemsTotal =
+          items.reduce((total, item) => {
+            const quantity = Number(item.quantity) || 0;
+            const unitPrice = Number(item.pricePerQuantity ?? item.price) || 0;
+
+            return total + quantity * unitPrice;
+          }, 0) || grossRevenue;
+
+        return items.map((item, index) => {
+          const quantity = Number(item.quantity) || 0;
+          const unitPrice = Number(item.pricePerQuantity ?? item.price) || 0;
+          const totalPrice = quantity * unitPrice;
+          const revenueShare =
+            itemsTotal > 0
+              ? totalPrice / itemsTotal
+              : items.length
+                ? 1 / items.length
+                : 0;
+          const totalIncome = grossRevenue * revenueShare;
+          const incomeDeduction = incomeDeductionTotal * revenueShare;
+          const netIncome = Math.max(totalIncome - incomeDeduction, 0);
+          const variant = String(
+            item.sizeName || item.sizeVariant || item.variant || ""
+          ).trim();
+          const menuName =
+            variant && variant !== item.name ? `${item.name} - ${variant}` : item.name;
+
+          return {
+            id: `${order.id || order._id || order.orderId}-${item.id || index}`,
+            orderCode: order.orderId || order.orderCode || order.id || "-",
+            date: order.orderDate,
+            isFirstOrderItem: index === 0,
+            orderItemCount: Math.max(items.length, 1),
+            orderTotalIncome: grossRevenue,
+            orderIncomeDeduction: incomeDeductionTotal,
+            orderNetIncome: Math.max(grossRevenue - incomeDeductionTotal, 0),
+            sortValue: orderDate ? orderDate.getTime() : 0,
+            weekKey: weekInfo.key,
+            weekLabel: weekInfo.label,
+            menu: menuName || "-",
+            quantity,
+            unitPrice,
+            totalPrice,
+            totalIncome,
+            paymentMethod: getNewRecapPaymentLabel(order),
+            incomeDeduction,
+            netIncome,
+          };
+        });
+      }).sort((first, second) => first.sortValue - second.sortValue),
+    [newRecapMonthOrders]
+  );
+  const newRecapDisplayRows = useMemo(() => {
+    const displayRows = [];
+    let currentWeekKey = "";
+    let currentWeekLabel = "";
+    let weeklyTotalIncome = 0;
+    let weeklyNetIncome = 0;
+
+    const pushWeeklySummary = () => {
+      if (!currentWeekKey) return;
+
+      displayRows.push({
+        id: `summary-${currentWeekKey}`,
+        type: "week-summary",
+        weekLabel: currentWeekLabel,
+        totalIncome: weeklyTotalIncome,
+        netIncome: weeklyNetIncome,
+      });
+    };
+
+    newRecapTableRows.forEach((row) => {
+      if (currentWeekKey && row.weekKey !== currentWeekKey) {
+        pushWeeklySummary();
+        weeklyTotalIncome = 0;
+        weeklyNetIncome = 0;
+      }
+
+      currentWeekKey = row.weekKey;
+      currentWeekLabel = row.weekLabel;
+      weeklyTotalIncome += row.totalIncome;
+      weeklyNetIncome += row.netIncome;
+      displayRows.push(row);
+    });
+
+    pushWeeklySummary();
+
+    return displayRows;
+  }, [newRecapTableRows]);
   const dailyRecapDateKeys = useMemo(
     () =>
       new Set(
@@ -843,41 +1092,14 @@ const RecapManagement = () => {
   const grossProfit = totals.invoiceTotal - hppTotal;
   const estimatedNetProfit = grossProfit - dailyExpenseTotal;
 
-  const summaryCards =
+  const oldSummaryCards =
     activeTab === "weekly"
-      ? [
-          {
-            title: "Total omzet",
-            value: formatCurrency(totals.invoiceTotal),
-            color: "#025cca",
-          },
-          {
-            title: "Laba kotor",
-            value: formatCurrency(grossProfit),
-            color: "#02a05a",
-          },
-          {
-            title: "Offline",
-            value: formatCurrency(totals.offlineTotal),
-            color: "#b58105",
-          },
-          {
-            title: "Online",
-            value: formatCurrency(totals.onlineTotal),
-            color: "#be3e3f",
-          },
-        ]
-      : activeTab === "monthly"
+      ? SHOW_HPP_FIELDS
         ? [
             {
-              title: "Omzet",
+              title: "Total omzet",
               value: formatCurrency(totals.invoiceTotal),
               color: "#025cca",
-            },
-            {
-              title: "HPP",
-              value: formatCurrency(hppTotal),
-              color: "#735f32",
             },
             {
               title: "Laba kotor",
@@ -885,22 +1107,105 @@ const RecapManagement = () => {
               color: "#02a05a",
             },
             {
-              title: "Estimasi laba bersih",
-              value: formatCurrency(estimatedNetProfit),
+              title: "Offline",
+              value: formatCurrency(totals.offlineTotal),
+              color: "#b58105",
+            },
+            {
+              title: "Online",
+              value: formatCurrency(totals.onlineTotal),
+              color: "#be3e3f",
+            },
+          ]
+        : [
+            {
+              title: "Total omzet",
+              value: formatCurrency(totals.invoiceTotal),
+              color: "#025cca",
+            },
+            {
+              title: "Offline",
+              value: formatCurrency(totals.offlineTotal),
+              color: "#b58105",
+            },
+            {
+              title: "Online",
+              value: formatCurrency(totals.onlineTotal),
+              color: "#be3e3f",
+            },
+            {
+              title: "Catering",
+              value: formatCurrency(totals.cateringTotal),
               color: "#7f167f",
             },
           ]
+      : activeTab === "monthly"
+        ? SHOW_HPP_FIELDS
+          ? [
+              {
+                title: "Omzet",
+                value: formatCurrency(totals.invoiceTotal),
+                color: "#025cca",
+              },
+              {
+                title: "HPP",
+                value: formatCurrency(hppTotal),
+                color: "#735f32",
+              },
+              {
+                title: "Laba kotor",
+                value: formatCurrency(grossProfit),
+                color: "#02a05a",
+              },
+              {
+                title: "Estimasi laba bersih",
+                value: formatCurrency(estimatedNetProfit),
+                color: "#7f167f",
+              },
+            ]
+          : [
+              {
+                title: "Omzet",
+                value: formatCurrency(totals.invoiceTotal),
+                color: "#025cca",
+              },
+              {
+                title: "Kas masuk tercatat",
+                value: formatCurrency(cashReceivedTotal),
+                color: "#b58105",
+              },
+              {
+                title: "Pengeluaran",
+                value: formatCurrency(dailyExpenseTotal),
+                color: "#be3e3f",
+              },
+              {
+                title: "Kas bersih",
+                value: formatCurrency(netCashTotal),
+                color: netCashTotal < 0 ? "#be3e3f" : "#7f167f",
+              },
+            ]
       : [
           {
             title: "Total omzet",
             value: formatCurrency(totals.invoiceTotal),
             color: "#025cca",
           },
-          {
-            title: "Laba kotor",
-            value: formatCurrency(grossProfit),
-            color: "#02a05a",
-          },
+          ...(SHOW_HPP_FIELDS
+            ? [
+                {
+                  title: "Laba kotor",
+                  value: formatCurrency(grossProfit),
+                  color: "#02a05a",
+                },
+              ]
+            : [
+                {
+                  title: "Pengeluaran",
+                  value: formatCurrency(dailyExpenseTotal),
+                  color: "#be3e3f",
+                },
+              ]),
           {
             title: "Kas masuk tercatat",
             value: formatCurrency(cashReceivedTotal),
@@ -912,6 +1217,52 @@ const RecapManagement = () => {
             color: netCashTotal < 0 ? "#be3e3f" : "#7f167f",
           },
         ];
+  const newSummaryCards = [
+    {
+      title: `Total Penjualan ${newRecapRangeLabel}`,
+      value: formatCurrency(newRecapTotals.grossSales),
+      color: "#025cca",
+    },
+    {
+      title: `Total Penjualan Bersih ${newRecapRangeLabel}`,
+      value: formatCurrency(newRecapTotals.netSales),
+      color: "#02a05a",
+    },
+    {
+      title: "Total Potongan",
+      value: formatCurrency(newRecapTotals.discounts),
+      color: "#b58105",
+    },
+    {
+      title: "Total Penjualan dengan Tunai",
+      value: formatCurrency(newRecapTotals.cashSales),
+      color: "#7f167f",
+    },
+    {
+      title: "Total Penjualan dengan QR",
+      value: formatCurrency(newRecapTotals.qrSales),
+      color: "#0f766e",
+    },
+    {
+      title: "Total Penjualan ShopeeFood",
+      value: formatCurrency(newRecapTotals.shopeeFoodSales),
+      color: "#d95f02",
+    },
+    {
+      title: "Total Penjualan GoFood",
+      value: formatCurrency(newRecapTotals.goFoodSales),
+      color: "#178a4c",
+    },
+  ];
+  const summaryCards = recapVersion === "new" ? newSummaryCards : oldSummaryCards;
+  const summaryCardsContainerClass =
+    recapVersion === "new"
+      ? "flex snap-x snap-mandatory gap-4 overflow-x-auto pb-2 scrollbar-hide"
+      : "flex snap-x snap-mandatory gap-4 overflow-x-auto pb-2 scrollbar-hide sm:grid sm:grid-cols-2 sm:overflow-visible sm:pb-0 xl:grid-cols-4";
+  const summaryCardClass =
+    recapVersion === "new"
+      ? "min-h-[96px] min-w-full shrink-0 snap-start rounded-lg p-4 shadow-sm sm:min-w-[calc((100%-1rem)/2)] lg:min-w-[calc((100%-3rem)/4)]"
+      : "min-h-[96px] min-w-full snap-start rounded-lg p-4 shadow-sm sm:min-w-0";
   const activeRecapTab = recapTabs.find((tab) => tab.key === activeTab);
   const activeRecapTitle = `Rekap ${activeRecapTab?.label || ""}`.trim();
   const activeRecapDescription =
@@ -1134,38 +1485,73 @@ const RecapManagement = () => {
     <div className="container mx-auto rounded-lg bg-[#262626] p-4">
       <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div>
-          <h2 className="text-xl font-semibold text-[#f5f5f5]">Rekap</h2>
+          <div className="flex flex-wrap items-center gap-3">
+            <h2 className="text-xl font-semibold text-[#f5f5f5]">Rekap</h2>
+            <div className="flex rounded-lg bg-[#1f1f1f] p-1">
+              {[
+                { key: "old", label: "Old" },
+                { key: "new", label: "New" },
+              ].map((version) => (
+                <button
+                  key={version.key}
+                  type="button"
+                  onClick={() => setRecapVersion(version.key)}
+                  className={`rounded-md px-3 py-1 text-xs font-bold transition ${
+                    recapVersion === version.key
+                      ? "bg-[#a79981] text-[#101010]"
+                      : "text-[#ababab] hover:text-[#f5f5f5]"
+                  }`}
+                >
+                  {version.label}
+                </button>
+              ))}
+            </div>
+          </div>
           <p className="mt-1 text-sm text-[#ababab]">
             Rekap transaksi berdasarkan periode harian, mingguan, dan bulanan.
           </p>
         </div>
-        <div className="flex rounded-lg bg-[#1f1f1f] p-1">
-          {recapTabs.map((tab) => (
-            <button
-              key={tab.key}
-              type="button"
-              onClick={() => setActiveTab(tab.key)}
-              className={`rounded-md px-4 py-2 text-sm font-bold ${
-                activeTab === tab.key
-                  ? "bg-[#a79981] text-[#101010]"
-                  : "text-[#ababab]"
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
+        {recapVersion === "old" && (
+          <div className="flex rounded-lg bg-[#1f1f1f] p-1">
+            {recapTabs.map((tab) => (
+              <button
+                key={tab.key}
+                type="button"
+                onClick={() => setActiveTab(tab.key)}
+                className={`rounded-md px-4 py-2 text-sm font-bold ${
+                  activeTab === tab.key
+                    ? "bg-[#a79981] text-[#101010]"
+                    : "text-[#ababab]"
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+        )}
+        {recapVersion === "new" && (
+          <OrderDateRangeFilter
+            dateRange={newRecapDateRange}
+            onChange={setNewRecapDateRange}
+          />
+        )}
       </div>
 
-      <div className="flex snap-x snap-mandatory gap-4 overflow-x-auto pb-2 scrollbar-hide sm:grid sm:grid-cols-2 sm:overflow-visible sm:pb-0 xl:grid-cols-4">
+      <div className={summaryCardsContainerClass}>
         {summaryCards.map((card) => (
           <div
             key={card.title}
-            className="min-h-[96px] min-w-full snap-start rounded-lg p-4 shadow-sm sm:min-w-0"
+            className={summaryCardClass}
             style={{ backgroundColor: card.color }}
           >
-            <p className="text-xs font-medium text-[#f5f5f5]">{card.title}</p>
-            <p className="mt-2 text-2xl font-semibold text-[#f5f5f5]">
+            <p className="text-xs font-medium leading-snug text-[#f5f5f5]">
+              {card.title}
+            </p>
+            <p
+              className={`mt-2 font-semibold text-[#f5f5f5] ${
+                recapVersion === "new" ? "text-xl" : "text-2xl"
+              }`}
+            >
               {isLoading ? "..." : card.value}
             </p>
           </div>
@@ -1176,24 +1562,50 @@ const RecapManagement = () => {
         <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h3 className="text-lg font-bold text-[#f5f5f5]">
-              {activeRecapTitle}
+              {recapVersion === "new" ? newRecapPeriodLabel : activeRecapTitle}
             </h3>
-            <p className="mt-1 text-sm text-[#ababab]">
-              {activeRecapDescription}
-            </p>
+            {recapVersion === "old" && (
+              <p className="mt-1 text-sm text-[#ababab]">
+                {activeRecapDescription}
+              </p>
+            )}
           </div>
-          <button
-            type="button"
-            onClick={openRecapModal}
-            className="rounded-lg bg-[#a79981] px-4 py-2 text-sm font-bold text-[#101010] hover:bg-[#b7aa94]"
-          >
-            Tambah Rekap
-          </button>
+          {recapVersion === "old" && (
+            <button
+              type="button"
+              onClick={openRecapModal}
+              className="rounded-lg bg-[#a79981] px-4 py-2 text-sm font-bold text-[#101010] hover:bg-[#b7aa94]"
+            >
+              Tambah Rekap
+            </button>
+          )}
         </div>
         <div className="overflow-x-auto rounded-lg border border-[#303030] scrollbar-hide">
-        <table className="w-full min-w-[1380px] border-collapse text-left text-[#f5f5f5]">
+        <table
+          className={`w-full border-collapse text-left text-[#f5f5f5] ${
+            recapVersion === "new" ? "min-w-[1220px]" : "min-w-[1380px]"
+          }`}
+        >
           <thead className="bg-[#2b2b2b] text-[#ababab]">
-            {activeTab === "daily" ? (
+            {recapVersion === "new" ? (
+              <tr>
+                <th className={`${dailyHeadClass} text-left`}>Tanggal</th>
+                <th className={`${dailyHeadClass} text-left`}>Menu</th>
+                <th className={`${dailyHeadClass} text-center`}>Qty</th>
+                <th className={`${dailyHeadClass} text-right`}>Harga</th>
+                <th className={`${dailyHeadClass} text-right`}>Total harga</th>
+                <th className={`${dailyHeadClass} text-right`}>
+                  Total pendapatan
+                </th>
+                <th className={`${dailyHeadClass} text-left`}>Payment</th>
+                <th className={`${dailyHeadClass} text-right`}>
+                  Potongan pendapatan
+                </th>
+                <th className={`${dailyHeadClass} text-right`}>
+                  Pendapatan bersih
+                </th>
+              </tr>
+            ) : activeTab === "daily" ? (
               <tr>
                 <th className={`${dailyHeadClass} text-left`}>Tanggal</th>
                 <th className={`${dailyHeadClass} text-left`}>Petugas</th>
@@ -1202,8 +1614,14 @@ const RecapManagement = () => {
                 <th className={`${dailyHeadClass} text-right`}>Online</th>
                 <th className={`${dailyHeadClass} text-right`}>Catering</th>
                 <th className={`${dailyHeadClass} text-right`}>Omzet</th>
-                <th className={`${dailyHeadClass} text-right`}>HPP</th>
-                <th className={`${dailyHeadClass} text-right`}>Untung kotor</th>
+                {SHOW_HPP_FIELDS && (
+                  <th className={`${dailyHeadClass} text-right`}>HPP</th>
+                )}
+                {SHOW_HPP_FIELDS && (
+                  <th className={`${dailyHeadClass} text-right`}>
+                    Untung kotor
+                  </th>
+                )}
                 <th className={`${dailyHeadClass} text-right`}>Pengeluaran</th>
                 <th className={`${dailyHeadClass} text-right`}>Kas bersih</th>
                 <th className={`${dailyHeadClass} text-right`}>Selisih kas</th>
@@ -1217,7 +1635,7 @@ const RecapManagement = () => {
                 <th className="p-3">Online</th>
                 <th className="p-3">Catering</th>
                 <th className="p-3">Total</th>
-                <th className="p-3">Laba kotor</th>
+                {SHOW_HPP_FIELDS && <th className="p-3">Laba kotor</th>}
                 <th className="p-3">Order cat.</th>
                 <th className="p-3">Channel</th>
                 <th className="p-3">Action plan</th>
@@ -1226,16 +1644,117 @@ const RecapManagement = () => {
               <tr>
                 <th className="p-3">Bulan</th>
                 <th className="p-3">Omzet</th>
-                <th className="p-3">HPP</th>
-                <th className="p-3">Laba kotor</th>
-                <th className="p-3">Laba bersih</th>
+                {SHOW_HPP_FIELDS && <th className="p-3">HPP</th>}
+                {SHOW_HPP_FIELDS && <th className="p-3">Laba kotor</th>}
+                {SHOW_HPP_FIELDS && <th className="p-3">Laba bersih</th>}
                 <th className="p-3">Order cat.</th>
                 <th className="p-3">Strategi bulan depan</th>
               </tr>
             )}
           </thead>
           <tbody>
-            {activeTab === "daily" ? (
+            {recapVersion === "new" ? (
+              <>
+                {newRecapDisplayRows.map((row) =>
+                  row.type === "week-summary" ? (
+                    <tr key={row.id} className="bg-[#d8bc72] text-[#101010]">
+                      <td
+                        className="px-4 py-3 text-center text-sm font-extrabold"
+                        colSpan={5}
+                      >
+                        {row.weekLabel}
+                      </td>
+                      <td className="px-4 py-3 text-right text-sm font-extrabold">
+                        {formatCurrency(row.totalIncome)}
+                      </td>
+                      <td className="px-4 py-3" colSpan={2}></td>
+                      <td className="px-4 py-3 text-right text-sm font-extrabold">
+                        {formatCurrency(row.netIncome)}
+                      </td>
+                    </tr>
+                  ) : (
+                    <tr
+                      key={row.id}
+                      className="border-b border-[#303030] bg-[#1f1f1f] transition-colors last:border-0 hover:bg-[#272727]"
+                    >
+                      {row.isFirstOrderItem && (
+                        <td
+                          className="min-w-[130px] border-r border-[#303030] px-4 py-4 align-middle"
+                          rowSpan={row.orderItemCount}
+                        >
+                          <span className="block whitespace-nowrap text-sm font-bold text-[#f5f5f5]">
+                            {formatRecapDateLabel(row.date)}
+                          </span>
+                          <span className="mt-1 block text-xs font-semibold text-[#7f7f7f]">
+                            {row.orderItemCount} menu
+                          </span>
+                        </td>
+                      )}
+                      <td className="min-w-[220px] px-4 py-4 align-middle">
+                        <span className="block max-w-[240px] truncate text-sm font-semibold text-[#f5f5f5]">
+                          {row.menu}
+                        </span>
+                      </td>
+                      <td className="px-4 py-4 text-center align-middle">
+                        <span className="inline-flex min-w-[44px] justify-center rounded-md bg-[#303030] px-2.5 py-1 text-sm font-bold text-[#f5f5f5]">
+                          {row.quantity}
+                        </span>
+                      </td>
+                      {renderDailyAmountCell(row.unitPrice, "muted")}
+                      {renderDailyAmountCell(row.totalPrice)}
+                      {row.isFirstOrderItem && (
+                        <td
+                          className="border-l border-[#303030] px-4 py-4 align-middle"
+                          rowSpan={row.orderItemCount}
+                        >
+                          <span className="block whitespace-nowrap text-right text-sm font-bold text-[#f5f5f5]">
+                            {formatCurrency(row.orderTotalIncome)}
+                          </span>
+                        </td>
+                      )}
+                      {row.isFirstOrderItem && (
+                        <td
+                          className="min-w-[140px] px-4 py-4 align-middle"
+                          rowSpan={row.orderItemCount}
+                        >
+                          <span className="block max-w-[160px] truncate text-sm font-semibold text-[#f5f5f5]">
+                            {row.paymentMethod}
+                          </span>
+                        </td>
+                      )}
+                      {row.isFirstOrderItem && (
+                        <td className="px-4 py-4 align-middle" rowSpan={row.orderItemCount}>
+                          <span className="block whitespace-nowrap text-right text-sm font-bold text-[#ff7b7b]">
+                            {formatCurrency(row.orderIncomeDeduction)}
+                          </span>
+                        </td>
+                      )}
+                      {row.isFirstOrderItem && (
+                        <td className="px-4 py-4 align-middle" rowSpan={row.orderItemCount}>
+                          <span className="block whitespace-nowrap text-right text-sm font-bold text-[#7ee0a1]">
+                            {formatCurrency(row.orderNetIncome)}
+                          </span>
+                        </td>
+                      )}
+                    </tr>
+                  )
+                )}
+                {!isLoading && newRecapTableRows.length === 0 && (
+                  <tr>
+                    <td className="p-4 text-[#ababab]" colSpan={9}>
+                      Belum ada transaksi pada {newRecapRangeLabel}.
+                    </td>
+                  </tr>
+                )}
+                {isLoading && (
+                  <tr>
+                    <td className="p-4 text-center text-[#ababab]" colSpan={9}>
+                      Loading recap...
+                    </td>
+                  </tr>
+                )}
+              </>
+            ) : activeTab === "daily" ? (
               <>
                 {dailyTableRows.map((row) => (
                   <tr
@@ -1264,8 +1783,9 @@ const RecapManagement = () => {
                     {renderDailyAmountCell(row.onlineRevenue, "muted")}
                     {renderDailyAmountCell(row.cateringRevenue, "muted")}
                     {renderDailyAmountCell(row.totalRevenue)}
-                    {renderDailyAmountCell(row.hppTotal, "cost")}
-                    {renderDailyAmountCell(row.grossProfit, "profit")}
+                    {SHOW_HPP_FIELDS && renderDailyAmountCell(row.hppTotal, "cost")}
+                    {SHOW_HPP_FIELDS &&
+                      renderDailyAmountCell(row.grossProfit, "profit")}
                     {renderDailyAmountCell(row.dailyExpense, "danger")}
                     {renderDailyAmountCell(
                       row.netCash,
@@ -1293,14 +1813,20 @@ const RecapManagement = () => {
                 ))}
                 {!isSavedRecapsLoading && savedRecaps.length === 0 && (
                   <tr>
-                    <td className="p-4 text-[#ababab]" colSpan={14}>
+                    <td
+                      className="p-4 text-[#ababab]"
+                      colSpan={SHOW_HPP_FIELDS ? 14 : 12}
+                    >
                       Belum ada laporan - isi form di atas saat closing hari ini.
                     </td>
                   </tr>
                 )}
                 {isSavedRecapsLoading && (
                   <tr>
-                    <td className="p-4 text-center text-[#ababab]" colSpan={14}>
+                    <td
+                      className="p-4 text-center text-[#ababab]"
+                      colSpan={SHOW_HPP_FIELDS ? 14 : 12}
+                    >
                       Loading recap...
                     </td>
                   </tr>
@@ -1321,7 +1847,9 @@ const RecapManagement = () => {
                     <td className="p-4">{formatCurrency(row.onlineRevenue)}</td>
                     <td className="p-4">{formatCurrency(row.cateringRevenue)}</td>
                     <td className="p-4">{formatCurrency(row.totalOmzet)}</td>
-                    <td className="p-4">{formatCurrency(row.grossProfit)}</td>
+                    {SHOW_HPP_FIELDS && (
+                      <td className="p-4">{formatCurrency(row.grossProfit)}</td>
+                    )}
                     <td className="p-4">{row.cateringOrderCount || 0}</td>
                     <td className="p-4">{row.topChannel || "-"}</td>
                     <td className="p-4 min-w-[240px]">
@@ -1331,14 +1859,20 @@ const RecapManagement = () => {
                 ))}
                 {!isSavedRecapsLoading && savedRecaps.length === 0 && (
                   <tr>
-                    <td className="p-4 text-[#ababab]" colSpan={9}>
+                    <td
+                      className="p-4 text-[#ababab]"
+                      colSpan={SHOW_HPP_FIELDS ? 9 : 8}
+                    >
                       Belum ada laporan mingguan - isi form evaluasi minggu ini.
                     </td>
                   </tr>
                 )}
                 {isSavedRecapsLoading && (
                   <tr>
-                    <td className="p-4 text-center text-[#ababab]" colSpan={9}>
+                    <td
+                      className="p-4 text-center text-[#ababab]"
+                      colSpan={SHOW_HPP_FIELDS ? 9 : 8}
+                    >
                       Loading recap...
                     </td>
                   </tr>
@@ -1355,11 +1889,17 @@ const RecapManagement = () => {
                       {formatMonthLabel(row.periodMonth)}
                     </td>
                     <td className="p-4">{formatCurrency(row.omzet)}</td>
-                    <td className="p-4">{formatCurrency(row.hppTotal)}</td>
-                    <td className="p-4">{formatCurrency(row.grossProfit)}</td>
-                    <td className="p-4">
-                      {formatCurrency(row.estimatedNetProfit)}
-                    </td>
+                    {SHOW_HPP_FIELDS && (
+                      <td className="p-4">{formatCurrency(row.hppTotal)}</td>
+                    )}
+                    {SHOW_HPP_FIELDS && (
+                      <td className="p-4">{formatCurrency(row.grossProfit)}</td>
+                    )}
+                    {SHOW_HPP_FIELDS && (
+                      <td className="p-4">
+                        {formatCurrency(row.estimatedNetProfit)}
+                      </td>
+                    )}
                     <td className="p-4">{row.cateringOrderCount || 0}</td>
                     <td className="p-4 min-w-[240px]">
                       {row.nextMonthStrategy || "-"}
@@ -1368,14 +1908,20 @@ const RecapManagement = () => {
                 ))}
                 {!isSavedRecapsLoading && savedRecaps.length === 0 && (
                   <tr>
-                    <td className="p-4 text-[#ababab]" colSpan={7}>
+                    <td
+                      className="p-4 text-[#ababab]"
+                      colSpan={SHOW_HPP_FIELDS ? 7 : 4}
+                    >
                       Belum ada laporan bulanan - isi form strategi bulan ini.
                     </td>
                   </tr>
                 )}
                 {isSavedRecapsLoading && (
                   <tr>
-                    <td className="p-4 text-center text-[#ababab]" colSpan={7}>
+                    <td
+                      className="p-4 text-center text-[#ababab]"
+                      colSpan={SHOW_HPP_FIELDS ? 7 : 4}
+                    >
                       Loading recap...
                     </td>
                   </tr>
@@ -1663,7 +2209,7 @@ const RecapManagement = () => {
               }}
             >
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
-                {recapFormFields.map((field) => (
+                {visibleRecapFormFields.map((field) => (
                   <React.Fragment key={field.id}>
                     <label className="block text-sm font-semibold text-[#ababab]">
                       {field.label}
@@ -1838,12 +2384,14 @@ const RecapManagement = () => {
                   )}
                 </p>
               </div>
-              <div className="rounded-lg border border-[#4a390b] bg-[#26210f] p-3">
-                <p className="text-xs font-semibold text-[#f6d365]">HPP</p>
-                <p className="mt-1 text-sm font-bold text-[#f6d365]">
-                  {formatCurrency(pendingDailyRecapPayload.hppTotal)}
-                </p>
-              </div>
+              {SHOW_HPP_FIELDS && (
+                <div className="rounded-lg border border-[#4a390b] bg-[#26210f] p-3">
+                  <p className="text-xs font-semibold text-[#f6d365]">HPP</p>
+                  <p className="mt-1 text-sm font-bold text-[#f6d365]">
+                    {formatCurrency(pendingDailyRecapPayload.hppTotal)}
+                  </p>
+                </div>
+              )}
             </div>
 
             <div className="mt-4 rounded-lg border border-[#5d4b24] bg-[#2f2413] p-4">

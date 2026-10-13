@@ -39,6 +39,10 @@ const CustomerInfo = () => {
           field === "name"
             ? value
             : customerData.customerName || "",
+        phone:
+          field === "phone"
+            ? value
+            : customerData.customerPhone || "",
       })
     );
   };
@@ -132,6 +136,22 @@ const CustomerInfo = () => {
             className="w-full rounded-lg bg-[#1f1f1f] px-4 py-3 text-sm text-white outline-none"
           />
         </div>
+
+        {!isOnlineOrder && (
+          <div>
+            <label className="block text-[#ababab] mb-2 text-xs font-medium">
+              Nomor Telepon
+            </label>
+            <input
+              value={customerData.customerPhone}
+              onChange={(event) => updateCustomer("phone", event.target.value)}
+              type="tel"
+              inputMode="tel"
+              placeholder="0812-xxxx-xxxx"
+              className="w-full rounded-lg bg-[#1f1f1f] px-4 py-3 text-sm text-white outline-none"
+            />
+          </div>
+        )}
 
         {isOnlineOrder && (
           <>

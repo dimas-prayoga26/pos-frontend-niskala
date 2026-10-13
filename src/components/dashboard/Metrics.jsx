@@ -179,6 +179,8 @@ const PERIOD_OPTIONS = [
   { value: "custom", label: "Select Date", badge: "Select date" },
 ];
 
+const SHOW_HPP_FIELDS = true;
+
 const rupiahExcelFormat = '"Rp" #,##0;[Red]-"Rp" #,##0;"Rp" 0';
 
 const excelStyles = {
@@ -487,26 +489,34 @@ const ProfitFlow = ({ revenue, cost, grossProfit, netProfit, isLoading }) => {
       value: isLoading ? "..." : formatCurrency(revenue),
       tone: "sales",
     },
-    {
-      label: "HPP",
-      value: isLoading ? "..." : formatCurrency(cost),
-      tone: "cost",
-    },
-    {
-      label: "Untung Kotor",
-      value: isLoading ? "..." : formatCurrency(grossProfit),
-      tone: "profit",
-    },
-    {
-      label: "Untung Bersih",
-      value: isLoading ? "..." : formatCurrency(netProfit),
-      tone: "net",
-    },
+    ...(SHOW_HPP_FIELDS
+      ? [
+          {
+            label: "HPP",
+            value: isLoading ? "..." : formatCurrency(cost),
+            tone: "cost",
+          },
+          {
+            label: "Untung Kotor",
+            value: isLoading ? "..." : formatCurrency(grossProfit),
+            tone: "profit",
+          },
+          {
+            label: "Untung Bersih",
+            value: isLoading ? "..." : formatCurrency(netProfit),
+            tone: "net",
+          },
+        ]
+      : []),
   ];
 
   return (
     <div className="mt-5 rounded-lg border border-[#333] bg-[#202020] p-4">
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
+      <div
+        className={`grid grid-cols-1 gap-3 ${
+          SHOW_HPP_FIELDS ? "md:grid-cols-4" : "md:grid-cols-1"
+        }`}
+      >
         {steps.map((step, index) => {
           const tone = cardToneStyles[step.tone] || cardToneStyles.neutral;
 
@@ -774,6 +784,7 @@ const Metrics = () => {
   const recappedMaterialSpendTotal = getOrdersHppTotal(recappedOrders, menuItems);
   const grossProfitTotal = recappedRevenueTotal - recappedMaterialSpendTotal;
   const netProfitTotal = grossProfitTotal - dailyExpenseTotal;
+  const netCashTotal = cashRecordedTotal - dailyExpenseTotal;
 
   const isLoading =
     isOrdersLoading ||
@@ -866,40 +877,67 @@ const Metrics = () => {
     },
   ];
 
-  const financialMetrics = [
-    {
-      title: "Uang Masuk Tercatat",
-      value: isFinancialLoading ? "..." : formatCurrency(cashRecordedTotal),
-      badge: activePeriod.badge,
-      description: "Cash, QRIS, dan transfer dari rekap harian.",
-      icon: FiCreditCard,
-      tone: "cash",
-    },
-    {
-      title: "HPP",
-      value: isFinancialLoading ? "..." : formatCurrency(materialSpendTotal),
-      badge: activePeriod.badge,
-      description: "Perkiraan biaya bahan dari rekap.",
-      icon: FiPackage,
-      tone: "cost",
-    },
-    {
-      title: "Untung Kotor",
-      value: isFinancialLoading ? "..." : formatCurrency(grossProfitTotal),
-      badge: activePeriod.badge,
-      description: "Penjualan dikurangi modal bahan.",
-      icon: FiTrendingUp,
-      tone: "profit",
-    },
-    {
-      title: "Untung Bersih",
-      value: isFinancialLoading ? "..." : formatCurrency(netProfitTotal),
-      badge: activePeriod.badge,
-      description: "Untung setelah pengeluaran harian.",
-      icon: FiDollarSign,
-      tone: "net",
-    },
-  ];
+  const financialMetrics = SHOW_HPP_FIELDS
+    ? [
+        {
+          title: "Uang Masuk Tercatat",
+          value: isFinancialLoading ? "..." : formatCurrency(cashRecordedTotal),
+          badge: activePeriod.badge,
+          description: "Cash, QRIS, dan transfer dari rekap harian.",
+          icon: FiCreditCard,
+          tone: "cash",
+        },
+        {
+          title: "HPP",
+          value: isFinancialLoading ? "..." : formatCurrency(materialSpendTotal),
+          badge: activePeriod.badge,
+          description: "Perkiraan biaya bahan dari rekap.",
+          icon: FiPackage,
+          tone: "cost",
+        },
+        {
+          title: "Untung Kotor",
+          value: isFinancialLoading ? "..." : formatCurrency(grossProfitTotal),
+          badge: activePeriod.badge,
+          description: "Penjualan dikurangi modal bahan.",
+          icon: FiTrendingUp,
+          tone: "profit",
+        },
+        {
+          title: "Untung Bersih",
+          value: isFinancialLoading ? "..." : formatCurrency(netProfitTotal),
+          badge: activePeriod.badge,
+          description: "Untung setelah pengeluaran harian.",
+          icon: FiDollarSign,
+          tone: "net",
+        },
+      ]
+    : [
+        {
+          title: "Uang Masuk Tercatat",
+          value: isFinancialLoading ? "..." : formatCurrency(cashRecordedTotal),
+          badge: activePeriod.badge,
+          description: "Cash, QRIS, dan transfer dari rekap harian.",
+          icon: FiCreditCard,
+          tone: "cash",
+        },
+        {
+          title: "Pengeluaran",
+          value: isFinancialLoading ? "..." : formatCurrency(dailyExpenseTotal),
+          badge: activePeriod.badge,
+          description: "Pengeluaran dari rekap harian.",
+          icon: FiShoppingBag,
+          tone: "cost",
+        },
+        {
+          title: "Kas Bersih",
+          value: isFinancialLoading ? "..." : formatCurrency(netCashTotal),
+          badge: activePeriod.badge,
+          description: "Uang masuk tercatat dikurangi pengeluaran.",
+          icon: FiDollarSign,
+          tone: netCashTotal < 0 ? "cost" : "net",
+        },
+      ];
 
   const openKasModal = () => {
     if (!dailyRecapOptions.length) {
@@ -963,8 +1001,7 @@ const Metrics = () => {
       " Platform ",
       " Biaya Platform ",
       " Pendapatan Bersih ",
-      " HPP ",
-      " Keuntungan ",
+      ...(SHOW_HPP_FIELDS ? [" HPP ", " Keuntungan "] : []),
     ];
     const sortedOrders = [...filteredOrders].sort(
       (firstOrder, secondOrder) =>
@@ -996,7 +1033,9 @@ const Metrics = () => {
             ? (totalPrice / orderItemsTotal) * platformFeeTotal
             : 0;
         const netRevenue = totalPrice - platformFee;
-        const hpp = getOrderItemHpp(item, menuItems) * quantity;
+        const hpp = SHOW_HPP_FIELDS
+          ? getOrderItemHpp(item, menuItems) * quantity
+          : 0;
 
         reportRows.push([
           rowNumber,
@@ -1009,8 +1048,7 @@ const Metrics = () => {
           platformName,
           platformFee,
           netRevenue,
-          hpp,
-          netRevenue - hpp,
+          ...(SHOW_HPP_FIELDS ? [hpp, netRevenue - hpp] : []),
         ]);
         rowNumber += 1;
       });
@@ -1024,14 +1062,12 @@ const Metrics = () => {
       (total, row) => total + toNumber(row[8]),
       0
     );
-    const totalHpp = reportRows.reduce(
-      (total, row) => total + toNumber(row[10]),
-      0
-    );
-    const totalProfit = reportRows.reduce(
-      (total, row) => total + toNumber(row[11]),
-      0
-    );
+    const totalHpp = SHOW_HPP_FIELDS
+      ? reportRows.reduce((total, row) => total + toNumber(row[10]), 0)
+      : 0;
+    const totalProfit = SHOW_HPP_FIELDS
+      ? reportRows.reduce((total, row) => total + toNumber(row[11]), 0)
+      : 0;
 
     reportRows.push([
       "",
@@ -1043,8 +1079,7 @@ const Metrics = () => {
       "TOTAL",
       totalPlatformFee,
       totalNetRevenue,
-      totalHpp,
-      totalProfit,
+      ...(SHOW_HPP_FIELDS ? [totalHpp, totalProfit] : []),
     ]);
 
     const periodLabel =
@@ -1073,8 +1108,7 @@ const Metrics = () => {
       { wch: 16 },
       { wch: 18 },
       { wch: 20 },
-      { wch: 14 },
-      { wch: 16 },
+      ...(SHOW_HPP_FIELDS ? [{ wch: 14 }, { wch: 16 }] : []),
     ];
     worksheet["!rows"] = worksheetRows.map((_, rowIndex) => ({
       hpt: rowIndex === 0 ? 28 : rowIndex === 1 ? 24 : 21,
@@ -1137,7 +1171,14 @@ const Metrics = () => {
           isTotalRow ? totalRowStyle : baseDataStyle
         );
 
-        if ([0, 3, 4, 5, 8, 9, 10, 11].includes(columnIndex)) {
+        const rightAlignedColumns = SHOW_HPP_FIELDS
+          ? [0, 3, 4, 5, 8, 9, 10, 11]
+          : [0, 3, 4, 5, 8, 9];
+        const currencyColumns = SHOW_HPP_FIELDS
+          ? [4, 5, 8, 9, 10, 11]
+          : [4, 5, 8, 9];
+
+        if (rightAlignedColumns.includes(columnIndex)) {
           worksheet[address].s = {
             ...(worksheet[address].s || {}),
             alignment: {
@@ -1163,7 +1204,7 @@ const Metrics = () => {
           worksheet[address].z = "#,##0";
         }
 
-        if ([4, 5, 8, 9, 10, 11].includes(columnIndex)) {
+        if (currencyColumns.includes(columnIndex)) {
           worksheet[address].z = rupiahExcelFormat;
         }
       }
@@ -1296,19 +1337,23 @@ const Metrics = () => {
 
       <div className="flex flex-col justify-between mt-12">
         <div>
-          <h2 className="font-semibold text-[#f5f5f5] text-xl">Keuntungan</h2>
+          <h2 className="font-semibold text-[#f5f5f5] text-xl">
+            {SHOW_HPP_FIELDS ? "Keuntungan" : "Kas & Operasional"}
+          </h2>
           <p className="text-sm text-[#ababab]">
             Dihitung dari hari yang sudah masuk rekap harian.
           </p>
         </div>
 
-        <ProfitFlow
-          revenue={recappedRevenueTotal}
-          cost={recappedMaterialSpendTotal}
-          grossProfit={grossProfitTotal}
-          netProfit={netProfitTotal}
-          isLoading={isLoading || isFinancialLoading}
-        />
+        {SHOW_HPP_FIELDS && (
+          <ProfitFlow
+            revenue={recappedRevenueTotal}
+            cost={recappedMaterialSpendTotal}
+            grossProfit={grossProfitTotal}
+            netProfit={netProfitTotal}
+            isLoading={isLoading || isFinancialLoading}
+          />
+        )}
 
         <MetricCardSlider
           items={financialMetrics}

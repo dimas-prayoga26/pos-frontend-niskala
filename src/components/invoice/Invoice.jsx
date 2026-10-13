@@ -221,6 +221,11 @@ const buildReceiptHtml = (orderInfo, { logoSrc = receiptMark } = {}) => {
       <div class="meta">
         <div class="meta-row"><span>Order ID</span><strong>${escapeHtml(orderCode)}</strong></div>
         <div class="meta-row"><span>Customer</span><strong>${escapeHtml(orderInfo.customerDetails.name)}</strong></div>
+        ${
+          orderInfo.orderType === "Offline" && orderInfo.customerDetails.phone
+            ? `<div class="meta-row"><span>Telepon</span><strong>${escapeHtml(orderInfo.customerDetails.phone)}</strong></div>`
+            : ""
+        }
         <div class="meta-row"><span>Date</span><strong>${formatJakartaReceiptDateTime(orderInfo.orderDate)}</strong></div>
         <div class="meta-row"><span>Payment</span><strong>${escapeHtml(orderInfo.paymentMethod || "-")}</strong></div>
         ${
