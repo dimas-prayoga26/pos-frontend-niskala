@@ -264,8 +264,15 @@ const getMonthWeekInfo = (value) => {
   }
 
   const monthStart = new Date(date.getFullYear(), date.getMonth(), 1);
-  const firstWeekStart = getWeekStart(monthStart);
-  const currentWeekStart = getWeekStart(date);
+  const getSundayWeekStart = (currentDate) => {
+    const start = new Date(currentDate);
+    start.setDate(start.getDate() - start.getDay());
+    start.setHours(0, 0, 0, 0);
+
+    return start;
+  };
+  const firstWeekStart = getSundayWeekStart(monthStart);
+  const currentWeekStart = getSundayWeekStart(date);
   const weekIndex =
     Math.floor(
       (currentWeekStart.getTime() - firstWeekStart.getTime()) /
