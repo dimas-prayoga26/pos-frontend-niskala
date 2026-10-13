@@ -218,6 +218,12 @@ const OrderCard = ({
                   <span className="text-[#f5f5f5]">Order ID:</span>{" "}
                   {orderCode}
                 </p>
+                {order.customerDetails?.phone && (
+                  <p>
+                    <span className="text-[#f5f5f5]">No. HP:</span>{" "}
+                    {order.customerDetails.phone}
+                  </p>
+                )}
                 {isCatering && (
                   <p>
                     <span className="text-[#f5f5f5]">Jenis Order:</span>{" "}
