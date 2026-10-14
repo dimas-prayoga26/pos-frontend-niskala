@@ -2,6 +2,10 @@
 // money actually received, and HPP (cost of goods) per item/order.
 import { getJakartaParts } from "../../../shared/lib/dates";
 
+export const QRIS_FEE_RATE = 0.007;
+
+const toPositiveNumber = (value) => Math.max(Number(value) || 0, 0);
+
 export const getDisplayOrderCode = (order) => {
   const orderCode = order?.orderId || order?.orderCode;
 
@@ -27,6 +31,58 @@ export const getOrderReceivedAmount = (order) => {
 
   return Number(order.cateringDetails.dp ?? order.bills?.dp ?? 0) || 0;
 };
+
+const normalizeComparableText = (value) =>
+  String(value || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "");
+
+export const isCashPayment = (paymentMethod) => {
+  const normalized = normalizeComparableText(paymentMethod);
+
+  return normalized === "tunai" || normalized === "cash";
+};
+
+export const isQrPayment = (paymentMethod) => {
+  const normalized = normalizeComparableText(paymentMethod);
+
+  return normalized.includes("qr") || normalized.includes("qris");
+};
+
+export const isOrderPlatformMatch = (order, platformName) =>
+  normalizeComparableText(order?.orderPlatform).includes(
+    normalizeComparableText(platformName)
+  );
+
+export const getOrderPlatformDeduction = (order) =>
+  order?.orderType === "Online" ? toPositiveNumber(order.platformTax) : 0;
+
+export const getOrderGrossRevenue = (order) =>
+  getOrderReceivedAmount(order) + getOrderPlatformDeduction(order);
+
+export const getOrderQrisDeduction = (
+  order,
+  grossRevenue = getOrderGrossRevenue(order)
+) =>
+  isQrPayment(order?.paymentMethod)
+    ? Math.max(grossRevenue * QRIS_FEE_RATE, 0)
+    : 0;
+
+export const getOrderIncomeDeduction = (
+  order,
+  grossRevenue = getOrderGrossRevenue(order)
+) => getOrderPlatformDeduction(order) + getOrderQrisDeduction(order, grossRevenue);
+
+export const getOrderNetRevenue = (
+  order,
+  grossRevenue = getOrderGrossRevenue(order)
+) => Math.max(grossRevenue - getOrderIncomeDeduction(order, grossRevenue), 0);
+
+export const getOrdersGrossRevenueTotal = (orders = []) =>
+  orders.reduce((total, order) => total + getOrderGrossRevenue(order), 0);
+
+export const getOrdersNetRevenueTotal = (orders = []) =>
+  orders.reduce((total, order) => total + getOrderNetRevenue(order), 0);
 
 const normalizeText = (value) => String(value || "").trim().toLowerCase();
 

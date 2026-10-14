@@ -1,10 +1,18 @@
 import { describe, expect, it } from "vitest";
 import {
   getDisplayOrderCode,
+  getOrderGrossRevenue,
   getOrderHppTotal,
+  getOrderIncomeDeduction,
   getOrderItemHpp,
+  getOrderNetRevenue,
+  getOrdersGrossRevenueTotal,
   getOrderReceivedAmount,
+  getOrdersNetRevenueTotal,
   getOrdersHppTotal,
+  isCashPayment,
+  isOrderPlatformMatch,
+  isQrPayment,
 } from "./orderMetrics";
 
 const menuItems = [
@@ -37,6 +45,37 @@ describe("received amount", () => {
     ).toBe(200000);
     expect(getOrderReceivedAmount({ bills, cateringDetails: { paymentPlan: "DP" } })).toBe(150000);
     expect(getOrderReceivedAmount(null)).toBe(0);
+  });
+});
+
+describe("revenue breakdown", () => {
+  it("rebuilds gross and net revenue from platform and QRIS deductions", () => {
+    const onlineQrisOrder = {
+      orderType: "Online",
+      orderPlatform: "ShopeeFood",
+      platformTax: 10000,
+      paymentMethod: "QRIS",
+      bills: { totalWithTax: 90000 },
+    };
+    const cashOrder = {
+      orderType: "Offline",
+      paymentMethod: "Tunai",
+      bills: { totalWithTax: 50000 },
+    };
+
+    expect(getOrderGrossRevenue(onlineQrisOrder)).toBe(100000);
+    expect(getOrderIncomeDeduction(onlineQrisOrder)).toBe(10700);
+    expect(getOrderNetRevenue(onlineQrisOrder)).toBe(89300);
+    expect(getOrdersGrossRevenueTotal([onlineQrisOrder, cashOrder])).toBe(150000);
+    expect(getOrdersNetRevenueTotal([onlineQrisOrder, cashOrder])).toBe(139300);
+  });
+
+  it("normalizes payment and platform labels for reporting", () => {
+    expect(isCashPayment("Tunai")).toBe(true);
+    expect(isCashPayment("cash")).toBe(true);
+    expect(isQrPayment("QRIS")).toBe(true);
+    expect(isQrPayment("Manual QR Payment")).toBe(true);
+    expect(isOrderPlatformMatch({ orderPlatform: "Shopee Food" }, "shopeefood")).toBe(true);
   });
 });
 

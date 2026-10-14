@@ -23,7 +23,18 @@ export {
 export {
   getDisplayOrderCode,
   getOrderHppTotal,
+  getOrderGrossRevenue,
+  getOrderIncomeDeduction,
   getOrderItemHpp,
+  getOrderNetRevenue,
+  getOrderPlatformDeduction,
+  getOrderQrisDeduction,
   getOrderReceivedAmount,
+  getOrdersGrossRevenueTotal,
   getOrdersHppTotal,
+  getOrdersNetRevenueTotal,
+  isCashPayment,
+  isOrderPlatformMatch,
+  isQrPayment,
+  QRIS_FEE_RATE,
 } from "../features/orders/utils/orderMetrics";

@@ -34,9 +34,13 @@ import {
 import {
   formatCurrency,
   getDisplayOrderCode,
+  getOrderGrossRevenue,
+  getOrderIncomeDeduction,
   getOrderItemHpp,
-  getOrderReceivedAmount,
+  getOrderNetRevenue,
+  getOrdersGrossRevenueTotal,
   getOrdersHppTotal,
+  getOrdersNetRevenueTotal,
 } from "../../utils";
 import CreatableSelect2 from "../shared/CreatableSelect2";
 
@@ -66,6 +70,12 @@ const getDateKey = (value = new Date()) => {
 const getMonthKey = (value = new Date()) => getDateKey(value).slice(0, 7);
 
 const getCurrentMonthStartKey = () => `${getMonthKey()}-01`;
+const getCurrentMonthEndKey = () => {
+  const date = new Date();
+  const monthEnd = new Date(date.getFullYear(), date.getMonth() + 1, 0);
+
+  return getDateKey(monthEnd);
+};
 
 const formatRangeBadge = (startKey, endKey) => {
   if (!startKey && !endKey) return "Select date";
@@ -485,7 +495,7 @@ const MetricCardSlider = ({ items, renderItem }) => {
 const ProfitFlow = ({ revenue, cost, grossProfit, netProfit, isLoading }) => {
   const steps = [
     {
-      label: "Penjualan",
+      label: "Penjualan Bersih",
       value: isLoading ? "..." : formatCurrency(revenue),
       tone: "sales",
     },
@@ -549,7 +559,7 @@ const Metrics = () => {
   const [selectedPeriod, setSelectedPeriod] = useState("last-month");
   const [customDateRange, setCustomDateRange] = useState(() => ({
     startDate: getCurrentMonthStartKey(),
-    endDate: getDateKey(),
+    endDate: getCurrentMonthEndKey(),
   }));
   const [isPeriodOpen, setIsPeriodOpen] = useState(false);
   const [isKasModalOpen, setIsKasModalOpen] = useState(false);
@@ -640,7 +650,7 @@ const Metrics = () => {
 
     if (selectedPeriod === "last-month") {
       date.setDate(1);
-      return { startKey: getDateKey(date), endKey: todayKey };
+      return { startKey: getDateKey(date), endKey: getCurrentMonthEndKey() };
     }
 
     if (selectedPeriod === "custom") {
@@ -654,7 +664,7 @@ const Metrics = () => {
       return { startKey, endKey };
     }
 
-    return { startKey: getCurrentMonthStartKey(), endKey: todayKey };
+    return { startKey: getCurrentMonthStartKey(), endKey: getCurrentMonthEndKey() };
   }, [customDateRange.endDate, customDateRange.startDate, selectedPeriod]);
   const activePeriod = useMemo(() => {
     const period =
@@ -736,10 +746,7 @@ const Metrics = () => {
       ),
     [filteredOrders, recappedDateKeys]
   );
-  const periodRevenue = filteredOrders.reduce(
-    (total, order) => total + getOrderReceivedAmount(order),
-    0
-  );
+  const periodRevenue = getOrdersGrossRevenueTotal(filteredOrders);
   const isCateringOrder = (order) => {
     return (
       Boolean(order.cateringDetails) ||
@@ -750,17 +757,17 @@ const Metrics = () => {
   const cateringRevenue = filteredOrders.reduce((total, order) => {
     if (!isCateringOrder(order)) return total;
 
-    return total + getOrderReceivedAmount(order);
+    return total + getOrderGrossRevenue(order);
   }, 0);
   const offlineRevenue = filteredOrders.reduce((total, order) => {
     if (order.orderType === "Online" || isCateringOrder(order)) return total;
 
-    return total + getOrderReceivedAmount(order);
+    return total + getOrderGrossRevenue(order);
   }, 0);
   const onlineRevenue = filteredOrders.reduce((total, order) => {
     if (order.orderType !== "Online" || isCateringOrder(order)) return total;
 
-    return total + getOrderReceivedAmount(order);
+    return total + getOrderGrossRevenue(order);
   }, 0);
   const stockNeedsOrder = stockItems.filter(
     (item) => item.status === "HARUS ORDER"
@@ -776,11 +783,7 @@ const Metrics = () => {
 
     return total + cashIn + qrisIn + transferIn;
   }, 0);
-  const recappedRevenueTotal = recappedOrders.reduce(
-    (total, order) => total + getOrderReceivedAmount(order),
-    0
-  );
-  const materialSpendTotal = getOrdersHppTotal(filteredOrders, menuItems);
+  const recappedRevenueTotal = getOrdersNetRevenueTotal(recappedOrders);
   const recappedMaterialSpendTotal = getOrdersHppTotal(recappedOrders, menuItems);
   const grossProfitTotal = recappedRevenueTotal - recappedMaterialSpendTotal;
   const netProfitTotal = grossProfitTotal - dailyExpenseTotal;
@@ -812,7 +815,7 @@ const Metrics = () => {
       title: "Total Penjualan",
       value: isLoading ? "..." : formatCurrency(periodRevenue),
       badge: activePeriod.badge,
-      description: "Semua uang masuk dari order.",
+      description: "Total order sebelum potongan platform dan QRIS.",
       icon: FiDollarSign,
       tone: "sales",
     },
@@ -889,9 +892,11 @@ const Metrics = () => {
         },
         {
           title: "HPP",
-          value: isFinancialLoading ? "..." : formatCurrency(materialSpendTotal),
+          value: isFinancialLoading
+            ? "..."
+            : formatCurrency(recappedMaterialSpendTotal),
           badge: activePeriod.badge,
-          description: "Perkiraan biaya bahan dari rekap.",
+          description: "Biaya bahan dari order yang sudah direkap.",
           icon: FiPackage,
           tone: "cost",
         },
@@ -899,7 +904,7 @@ const Metrics = () => {
           title: "Untung Kotor",
           value: isFinancialLoading ? "..." : formatCurrency(grossProfitTotal),
           badge: activePeriod.badge,
-          description: "Penjualan dikurangi modal bahan.",
+          description: "Penjualan bersih dikurangi modal bahan.",
           icon: FiTrendingUp,
           tone: "profit",
         },
@@ -999,7 +1004,7 @@ const Metrics = () => {
       " Total Harga ",
       "Jenis Pembayaran",
       " Platform ",
-      " Biaya Platform ",
+      " Potongan Pendapatan ",
       " Pendapatan Bersih ",
       ...(SHOW_HPP_FIELDS ? [" HPP ", " Keuntungan "] : []),
     ];
@@ -1019,10 +1024,8 @@ const Metrics = () => {
         (total, item) => total + getExportItemTotal(item),
         0
       );
-      const platformFeeTotal =
-        order.orderType === "Online" && order.orderPlatform
-          ? Math.min(Math.max(toNumber(order.platformTax), 0), orderItemsTotal)
-          : 0;
+      const grossRevenue = getOrderGrossRevenue(order);
+      const incomeDeductionTotal = getOrderIncomeDeduction(order, grossRevenue);
 
       orderItems.forEach((item) => {
         const quantity = Math.max(Number(item.quantity) || 0, 0);
@@ -1030,9 +1033,13 @@ const Metrics = () => {
         const totalPrice = price * quantity;
         const platformFee =
           orderItemsTotal > 0
-            ? (totalPrice / orderItemsTotal) * platformFeeTotal
+            ? (totalPrice / orderItemsTotal) * incomeDeductionTotal
             : 0;
-        const netRevenue = totalPrice - platformFee;
+        const netRevenue =
+          orderItemsTotal > 0
+            ? getOrderNetRevenue(order, grossRevenue) *
+              (totalPrice / orderItemsTotal)
+            : 0;
         const hpp = SHOW_HPP_FIELDS
           ? getOrderItemHpp(item, menuItems) * quantity
           : 0;

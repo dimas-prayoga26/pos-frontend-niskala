@@ -22,9 +22,15 @@ import {
 import CreatableSelect2 from "../shared/CreatableSelect2";
 import {
   formatCurrency,
+  getOrderGrossRevenue,
   getOrderHppTotal,
-  getOrderReceivedAmount,
+  getOrderIncomeDeduction,
+  getOrderNetRevenue,
+  getOrdersGrossRevenueTotal,
   getOrdersHppTotal,
+  isCashPayment,
+  isOrderPlatformMatch,
+  isQrPayment,
 } from "../../utils";
 
 const recapTabs = [
@@ -34,7 +40,6 @@ const recapTabs = [
 ];
 
 const SHOW_HPP_FIELDS = true;
-const QRIS_FEE_RATE = 0.007;
 
 const getLocalDate = (value) => {
   const date = value ? new Date(value) : new Date();
@@ -129,45 +134,6 @@ const getPlatformLabel = (order) => {
 
   return "Offline";
 };
-
-const normalizeComparableText = (value) =>
-  String(value || "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]/g, "");
-
-const isCashPayment = (paymentMethod) => {
-  const normalized = normalizeComparableText(paymentMethod);
-
-  return normalized === "tunai" || normalized === "cash";
-};
-
-const isQrPayment = (paymentMethod) => {
-  const normalized = normalizeComparableText(paymentMethod);
-
-  return normalized.includes("qr") || normalized.includes("qris");
-};
-
-const isPlatformMatch = (order, platformName) =>
-  normalizeComparableText(order.orderPlatform).includes(platformName);
-
-const getOrderPlatformDeduction = (order) =>
-  order.orderType === "Online"
-    ? Math.max(Number(order.platformTax) || 0, 0)
-    : 0;
-
-const getOrderGrossRevenue = (order) =>
-  getOrderReceivedAmount(order) + getOrderPlatformDeduction(order);
-
-const getOrderQrisDeduction = (order, grossRevenue = getOrderGrossRevenue(order)) =>
-  isQrPayment(order.paymentMethod)
-    ? Math.max(grossRevenue * QRIS_FEE_RATE, 0)
-    : 0;
-
-const getOrderIncomeDeduction = (order, grossRevenue = getOrderGrossRevenue(order)) =>
-  getOrderPlatformDeduction(order) + getOrderQrisDeduction(order, grossRevenue);
-
-const getOrderNetRevenue = (order, grossRevenue = getOrderGrossRevenue(order)) =>
-  Math.max(grossRevenue - getOrderIncomeDeduction(order, grossRevenue), 0);
 
 const getNewRecapPaymentLabel = (order) =>
   order.orderType === "Online"
@@ -378,15 +344,15 @@ const createRecapFormFromOrders = (
 
   const summary = dailyOrders.reduce(
     (current, order) => {
-      const receivedAmount = getOrderReceivedAmount(order);
+      const grossRevenue = getOrderGrossRevenue(order);
       const isCatering = isCateringOrder(order);
 
       if (isCatering) {
-        current.cateringRevenue += receivedAmount;
+        current.cateringRevenue += grossRevenue;
       } else if (order.orderType === "Online") {
-        current.onlineRevenue += receivedAmount;
+        current.onlineRevenue += grossRevenue;
       } else {
-        current.offlineRevenue += receivedAmount;
+        current.offlineRevenue += grossRevenue;
       }
 
       return current;
@@ -770,11 +736,17 @@ const RecapManagement = () => {
           summary.qrSales += netAmount;
         }
 
-        if (order.orderType === "Online" && isPlatformMatch(order, "shopeefood")) {
+        if (
+          order.orderType === "Online" &&
+          isOrderPlatformMatch(order, "shopeefood")
+        ) {
           summary.shopeeFoodSales += netAmount;
         }
 
-        if (order.orderType === "Online" && isPlatformMatch(order, "gofood")) {
+        if (
+          order.orderType === "Online" &&
+          isOrderPlatformMatch(order, "gofood")
+        ) {
           summary.goFoodSales += netAmount;
         }
 
@@ -913,25 +885,25 @@ const RecapManagement = () => {
       const groupInfo = getGroupInfo(orderDate, activeTab);
       const currentGroup =
         groups.get(groupInfo.key) || createEmptyGroup(groupInfo);
-      const receivedAmount = getOrderReceivedAmount(order);
-      const invoiceAmount = Number(order.bills?.totalWithTax) || 0;
+      const grossRevenue = getOrderGrossRevenue(order);
+      const netRevenue = getOrderNetRevenue(order, grossRevenue);
       const subtotalAmount = Number(order.bills?.total) || 0;
       const hppAmount = getOrderHppTotal(order, menuItems);
       const cateringDetails = order.cateringDetails;
       const remainingBalance = Number(order.bills?.remainingBalance) || 0;
 
       currentGroup.orderCount += 1;
-      currentGroup.receivedRevenue += receivedAmount;
-      currentGroup.invoiceTotal += invoiceAmount;
+      currentGroup.receivedRevenue += netRevenue;
+      currentGroup.invoiceTotal += grossRevenue;
       currentGroup.subtotalTotal += subtotalAmount;
       currentGroup.hppTotal += hppAmount;
 
       if (isCateringOrder(order)) {
-        currentGroup.cateringTotal += receivedAmount;
+        currentGroup.cateringTotal += grossRevenue;
       } else if (order.orderType === "Online") {
-        currentGroup.onlineTotal += receivedAmount;
+        currentGroup.onlineTotal += grossRevenue;
       } else {
-        currentGroup.offlineTotal += receivedAmount;
+        currentGroup.offlineTotal += grossRevenue;
       }
 
       if (cateringDetails?.paymentPlan === "DP") {
@@ -945,12 +917,12 @@ const RecapManagement = () => {
       addBreakdownAmount(
         currentGroup.paymentMethods,
         getPaymentLabel(order.paymentMethod),
-        receivedAmount
+        netRevenue
       );
       addBreakdownAmount(
         currentGroup.platforms,
         getPlatformLabel(order),
-        receivedAmount
+        netRevenue
       );
 
       groups.set(groupInfo.key, currentGroup);
@@ -1004,10 +976,7 @@ const RecapManagement = () => {
       endDate.setHours(23, 59, 59, 999);
       const periodOrders = getOrdersInRange(orders, startDate, endDate);
       const periodRevenue =
-        periodOrders.reduce(
-          (total, order) => total + getOrderReceivedAmount(order),
-          0
-        ) || Number(recap.totalOmzet) || 0;
+        getOrdersGrossRevenueTotal(periodOrders) || Number(recap.totalOmzet) || 0;
 
       return {
         ...recap,
@@ -1027,10 +996,7 @@ const RecapManagement = () => {
       const monthEnd = new Date(year, month, 0, 23, 59, 59, 999);
       const monthOrders = getOrdersInRange(orders, monthStart, monthEnd);
       const monthRevenue =
-        monthOrders.reduce(
-          (total, order) => total + getOrderReceivedAmount(order),
-          0
-        ) || Number(recap.omzet) || 0;
+        getOrdersGrossRevenueTotal(monthOrders) || Number(recap.omzet) || 0;
       const monthHpp = getOrdersHppTotal(monthOrders, menuItems);
       const monthGrossProfit = monthRevenue - monthHpp;
       const monthExpense = dailyRecapsSource
