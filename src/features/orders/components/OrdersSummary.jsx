@@ -1,4 +1,5 @@
 import { BsCashCoin } from "react-icons/bs";
+import { FiTrendingUp } from "react-icons/fi";
 import { MdOutlineReceiptLong } from "react-icons/md";
 import { formatCurrency } from "../../../shared/lib/format";
 
@@ -16,14 +17,19 @@ const SummaryCard = ({ title, icon, iconClassName, value }) => (
   </div>
 );
 
-// Revenue counts money actually received (DP only for unpaid DP catering).
-const OrdersSummary = ({ rangeLabel, revenue, orderCount }) => (
-  <div className="grid grid-cols-1 gap-3 px-4 pb-2 md:grid-cols-2 md:px-10 xl:px-16">
+const OrdersSummary = ({ rangeLabel, grossRevenue, netRevenue, orderCount }) => (
+  <div className="grid grid-cols-1 gap-3 px-4 pb-2 md:grid-cols-3 md:px-10 xl:px-16">
     <SummaryCard
-      title={`Total Pendapatan ${rangeLabel}`}
+      title={`Total Penjualan ${rangeLabel}`}
       icon={<BsCashCoin />}
+      iconClassName="bg-[#025cca]"
+      value={formatCurrency(grossRevenue)}
+    />
+    <SummaryCard
+      title={`Penjualan Bersih ${rangeLabel}`}
+      icon={<FiTrendingUp />}
       iconClassName="bg-[#02ca3a]"
-      value={formatCurrency(revenue)}
+      value={formatCurrency(netRevenue)}
     />
     <SummaryCard
       title={`Total Orderan ${rangeLabel}`}

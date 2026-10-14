@@ -190,6 +190,7 @@ const PERIOD_OPTIONS = [
 ];
 
 const SHOW_HPP_FIELDS = true;
+const SHOW_FINANCIAL_CARDS = false;
 
 const rupiahExcelFormat = '"Rp" #,##0;[Red]-"Rp" #,##0;"Rp" 0';
 
@@ -503,7 +504,7 @@ const ProfitFlow = ({ revenue, cost, grossProfit, netProfit, isLoading }) => {
       ? [
           {
             label: "HPP",
-            value: isLoading ? "..." : formatCurrency(cost),
+            value: isLoading ? "..." : cost === null ? "-" : formatCurrency(cost),
             tone: "cost",
           },
           {
@@ -784,8 +785,8 @@ const Metrics = () => {
     return total + cashIn + qrisIn + transferIn;
   }, 0);
   const recappedRevenueTotal = getOrdersNetRevenueTotal(recappedOrders);
-  const recappedMaterialSpendTotal = getOrdersHppTotal(recappedOrders, menuItems);
-  const grossProfitTotal = recappedRevenueTotal - recappedMaterialSpendTotal;
+  const recappedMaterialSpendTotal = null;
+  const grossProfitTotal = recappedRevenueTotal;
   const netProfitTotal = grossProfitTotal - dailyExpenseTotal;
   const netCashTotal = cashRecordedTotal - dailyExpenseTotal;
 
@@ -892,11 +893,9 @@ const Metrics = () => {
         },
         {
           title: "HPP",
-          value: isFinancialLoading
-            ? "..."
-            : formatCurrency(recappedMaterialSpendTotal),
+          value: isFinancialLoading ? "..." : "-",
           badge: activePeriod.badge,
-          description: "Biaya bahan dari order yang sudah direkap.",
+          description: "Belum dipakai dalam hitungan keuntungan.",
           icon: FiPackage,
           tone: "cost",
         },
@@ -904,7 +903,7 @@ const Metrics = () => {
           title: "Untung Kotor",
           value: isFinancialLoading ? "..." : formatCurrency(grossProfitTotal),
           badge: activePeriod.badge,
-          description: "Penjualan bersih dikurangi modal bahan.",
+          description: "Penjualan bersih setelah potongan QRIS dan platform.",
           icon: FiTrendingUp,
           tone: "profit",
         },
@@ -1362,16 +1361,18 @@ const Metrics = () => {
           />
         )}
 
-        <MetricCardSlider
-          items={financialMetrics}
-          renderItem={(item, index) => (
-            <FinancialCard
-              key={index}
-              item={item}
-              className="min-w-full snap-start sm:min-w-0"
-            />
-          )}
-        />
+        {SHOW_FINANCIAL_CARDS && (
+          <MetricCardSlider
+            items={financialMetrics}
+            renderItem={(item, index) => (
+              <FinancialCard
+                key={index}
+                item={item}
+                className="min-w-full snap-start sm:min-w-0"
+              />
+            )}
+          />
+        )}
       </div>
 
       <div className="flex flex-col justify-between mt-12">
