@@ -16,7 +16,6 @@ import {
 } from "../utils/orderFilters";
 import {
   getOrdersGrossRevenueTotal,
-  getOrdersNetRevenueTotal,
 } from "../utils/orderMetrics";
 
 const OrdersPage = () => {
@@ -52,10 +51,6 @@ const OrdersPage = () => {
     () => getOrdersGrossRevenueTotal(filteredOrders),
     [filteredOrders]
   );
-  const filteredNetRevenue = useMemo(
-    () => getOrdersNetRevenueTotal(filteredOrders),
-    [filteredOrders]
-  );
   const groupedOrders = useMemo(() => groupOrdersByDay(filteredOrders), [filteredOrders]);
 
   return (
@@ -73,7 +68,6 @@ const OrdersPage = () => {
       <OrdersSummary
         rangeLabel={getSummaryDateRangeLabel(dateRange)}
         grossRevenue={filteredGrossRevenue}
-        netRevenue={filteredNetRevenue}
         orderCount={filteredOrders.length}
       />
 
