@@ -770,17 +770,6 @@ const Metrics = () => {
       );
     });
   }, [orders, periodRange]);
-  const recappedDateKeys = useMemo(
-    () => new Set(filteredRecaps.map((recap) => getDateKey(recap.recapDate))),
-    [filteredRecaps]
-  );
-  const recappedOrders = useMemo(
-    () =>
-      filteredOrders.filter((order) =>
-        recappedDateKeys.has(getDateKey(order.orderDate))
-      ),
-    [filteredOrders, recappedDateKeys]
-  );
   const isCateringOrder = (order) => {
     return (
       Boolean(order.cateringDetails) ||
@@ -818,9 +807,10 @@ const Metrics = () => {
 
     return total + cashIn + qrisIn + transferIn;
   }, 0);
-  const recappedRevenueTotal = getOrdersNetRevenueTotal(recappedOrders);
-  const recappedMaterialSpendTotal = getOrdersHppTotal(recappedOrders, menuItems);
-  const grossProfitTotal = recappedRevenueTotal - recappedMaterialSpendTotal;
+  // Same source as Rekap New: every order in the period, recapped or not.
+  const netRevenueTotal = getOrdersNetRevenueTotal(filteredOrders);
+  const materialSpendTotal = getOrdersHppTotal(filteredOrders, menuItems);
+  const grossProfitTotal = netRevenueTotal - materialSpendTotal;
   const netProfitTotal = grossProfitTotal - dailyExpenseTotal;
   const netCashTotal = cashRecordedTotal - dailyExpenseTotal;
 
@@ -929,7 +919,7 @@ const Metrics = () => {
           title: "HPP",
           value: isFinancialLoading
             ? "..."
-            : formatCurrency(recappedMaterialSpendTotal),
+            : formatCurrency(materialSpendTotal),
           badge: activePeriod.badge,
           description: "Modal bahan dari resep menu.",
           icon: FiPackage,
@@ -1383,14 +1373,14 @@ const Metrics = () => {
             {SHOW_HPP_FIELDS ? "Keuntungan" : "Kas & Operasional"}
           </h2>
           <p className="text-sm text-[#ababab]">
-            Dihitung dari hari yang sudah masuk rekap harian.
+            Dihitung dari semua pesanan di periode ini, sama seperti Rekap New.
           </p>
         </div>
 
         {SHOW_HPP_FIELDS && (
           <ProfitFlow
-            revenue={recappedRevenueTotal}
-            cost={recappedMaterialSpendTotal}
+            revenue={netRevenueTotal}
+            cost={materialSpendTotal}
             grossProfit={grossProfitTotal}
             netProfit={netProfitTotal}
             isLoading={isLoading || isFinancialLoading}
