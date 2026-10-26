@@ -769,17 +769,17 @@ const Metrics = () => {
   const cateringRevenue = filteredOrders.reduce((total, order) => {
     if (!isCateringOrder(order)) return total;
 
-    return total + getOrderNetRevenue(order);
+    return total + getOrderGrossRevenue(order);
   }, 0);
   const offlineRevenue = filteredOrders.reduce((total, order) => {
     if (order.orderType === "Online" || isCateringOrder(order)) return total;
 
-    return total + getOrderNetRevenue(order);
+    return total + getOrderGrossRevenue(order);
   }, 0);
   const onlineRevenue = filteredOrders.reduce((total, order) => {
     if (order.orderType !== "Online" || isCateringOrder(order)) return total;
 
-    return total + getOrderNetRevenue(order);
+    return total + getOrderGrossRevenue(order);
   }, 0);
   const periodRevenue = cateringRevenue + offlineRevenue + onlineRevenue;
   const stockNeedsOrder = stockItems.filter(
@@ -828,7 +828,7 @@ const Metrics = () => {
       title: "Total Penjualan",
       value: isLoading ? "..." : formatCurrency(periodRevenue),
       badge: activePeriod.badge,
-      description: "Include potongan QRIS 0,7% dan platform.",
+      description: "Belum dipotong QRIS 0,7% dan biaya platform.",
       icon: FiDollarSign,
       tone: "sales",
     },
@@ -836,7 +836,7 @@ const Metrics = () => {
       title: "Penjualan Catering",
       value: isLoading ? "..." : formatCurrency(cateringRevenue),
       badge: activePeriod.badge,
-      description: "Order paket dan acara. Include potongan QRIS 0,7%.",
+      description: "Order paket dan acara. Belum dipotong QRIS 0,7%.",
       icon: FiTruck,
       tone: "catering",
     },
@@ -844,7 +844,7 @@ const Metrics = () => {
       title: "Penjualan Offline",
       value: isLoading ? "..." : formatCurrency(offlineRevenue),
       badge: activePeriod.badge,
-      description: "Include potongan QRIS 0,7%.",
+      description: "Belum dipotong QRIS 0,7%.",
       icon: FiShoppingBag,
       tone: "offline",
     },
@@ -852,7 +852,7 @@ const Metrics = () => {
       title: "Penjualan Online",
       value: isLoading ? "..." : formatCurrency(onlineRevenue),
       badge: activePeriod.badge,
-      description: "Include potongan platform.",
+      description: "Belum dipotong biaya platform.",
       icon: FiMonitor,
       tone: "online",
     },
