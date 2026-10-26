@@ -65,5 +65,9 @@ describe("dashboard metrics", () => {
     // Catering: 200.000 QRIS - 0,7%.
     expect(cardOf("Penjualan Catering")).toHaveTextContent(/Rp\s198\.600$/);
     expect(cardOf("Total Penjualan")).toHaveTextContent(/Rp\s437\.900$/);
+    // Keuntungan follows Rekap New, so it counts days without a daily recap too.
+    expect(
+      screen.getByText("Penjualan Bersih").closest(".min-w-0")
+    ).toHaveTextContent(/Rp\s437\.900$/);
   });
 });
