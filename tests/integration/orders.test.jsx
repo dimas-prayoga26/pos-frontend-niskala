@@ -49,7 +49,7 @@ describe("orders page", () => {
     renderWithProviders(<OrdersPage />, { route: "/orders" });
 
     await waitFor(() => expect(cardIds()).toEqual([3, 4, 2]));
-    const revenueCard = screen.getByText(/^Total Pendapatan/).closest("div").parentElement;
+    const revenueCard = screen.getByText(/^Total Penjualan/).closest("div").parentElement;
     // DP catering counts only the down payment: 30.000 + 200.000 + 25.000.
     expect(revenueCard).toHaveTextContent(/Rp\s255\.000$/);
     const countCard = screen.getByText(/^Total Orderan/).closest("div").parentElement;
@@ -63,7 +63,7 @@ describe("orders page", () => {
     fireEvent.click(screen.getByRole("button", { name: "Reset" }));
 
     expect(cardIds()).toEqual([3, 4, 2, 1]);
-    expect(screen.getByText("Total Pendapatan Semua Tanggal")).toBeInTheDocument();
+    expect(screen.getByText("Total Penjualan Semua Tanggal")).toBeInTheDocument();
     expect(screen.getByText("January 05, 2026")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Reset" })).not.toBeInTheDocument();
   });

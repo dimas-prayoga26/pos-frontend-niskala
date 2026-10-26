@@ -31,6 +31,22 @@ describe("order filters", () => {
     expect(sumReceivedAmount(sorted)).toBe(60000);
   });
 
+  it("sums online orders after the platform fee without a QRIS fee", () => {
+    const onlineQrisOrder = {
+      orderType: "Online",
+      platformTax: 12960,
+      paymentMethod: "QRIS",
+      bills: { totalWithTax: 41040 },
+    };
+    const offlineQrisOrder = {
+      orderType: "Offline",
+      paymentMethod: "QRIS",
+      bills: { totalWithTax: 20000 },
+    };
+
+    expect(sumReceivedAmount([onlineQrisOrder, offlineQrisOrder])).toBe(61040);
+  });
+
   it("labels ranges for the filter input and summary cards", () => {
     expect(getDateRangeLabel({ startDate: "", endDate: "" })).toBe("Semua tanggal");
     expect(getDateRangeLabel({ startDate: "2026-01-05", endDate: "2026-01-05" })).toBe("January 05, 2026");

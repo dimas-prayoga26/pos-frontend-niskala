@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   keepPreviousData,
   useMutation,
@@ -6,6 +6,7 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import { enqueueSnackbar } from "notistack";
+import { MdChevronLeft, MdChevronRight } from "react-icons/md";
 import { useSelector } from "react-redux";
 import {
   addRecap,
@@ -560,6 +561,11 @@ const RecapManagement = () => {
   const isAdmin = currentUser.role?.toLowerCase() === "admin";
   const [recapVersion, setRecapVersion] = useState("old");
   const [activeTab, setActiveTab] = useState("daily");
+  const summaryCardsRef = useRef(null);
+  const [summaryScrollState, setSummaryScrollState] = useState({
+    canScrollLeft: false,
+    canScrollRight: false,
+  });
   const [newRecapDateRange, setNewRecapDateRange] = useState(() =>
     getMonthDateRange()
   );
@@ -1236,6 +1242,42 @@ const RecapManagement = () => {
     recapVersion === "new"
       ? "min-h-[96px] min-w-full shrink-0 snap-start rounded-lg p-4 shadow-sm sm:min-w-[calc((100%-1rem)/2)] lg:min-w-[calc((100%-3rem)/4)]"
       : "min-h-[96px] min-w-full snap-start rounded-lg p-4 shadow-sm sm:min-w-0";
+  const updateSummaryScrollState = useCallback(() => {
+    const container = summaryCardsRef.current;
+
+    if (!container) return;
+
+    setSummaryScrollState({
+      canScrollLeft: container.scrollLeft > 4,
+      canScrollRight:
+        container.scrollLeft + container.clientWidth < container.scrollWidth - 4,
+    });
+  }, []);
+
+  useEffect(() => {
+    updateSummaryScrollState();
+    window.addEventListener("resize", updateSummaryScrollState);
+
+    return () => window.removeEventListener("resize", updateSummaryScrollState);
+  }, [updateSummaryScrollState, recapVersion, summaryCards.length]);
+
+  const scrollSummaryCards = (direction) => {
+    const container = summaryCardsRef.current;
+
+    if (!container) return;
+
+    const firstCard = container.firstElementChild;
+    const cardGap = 16;
+    const step = firstCard
+      ? firstCard.getBoundingClientRect().width + cardGap
+      : container.clientWidth;
+
+    container.scrollBy({ left: direction * step, behavior: "smooth" });
+  };
+  const isSummaryScrollable =
+    summaryScrollState.canScrollLeft || summaryScrollState.canScrollRight;
+  const summaryScrollButtonClass =
+    "mb-2 flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-[#444] bg-[#262626] text-[#f5f5f5] transition hover:bg-[#333] disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-[#262626]";
   const activeRecapTab = recapTabs.find((tab) => tab.key === activeTab);
   const activeRecapTitle = `Rekap ${activeRecapTab?.label || ""}`.trim();
   const activeRecapDescription =
@@ -1510,25 +1552,53 @@ const RecapManagement = () => {
         )}
       </div>
 
-      <div className={summaryCardsContainerClass}>
-        {summaryCards.map((card) => (
-          <div
-            key={card.title}
-            className={summaryCardClass}
-            style={{ backgroundColor: card.color }}
+      <div className="flex items-center gap-2">
+        {isSummaryScrollable && (
+          <button
+            type="button"
+            onClick={() => scrollSummaryCards(-1)}
+            disabled={!summaryScrollState.canScrollLeft}
+            className={summaryScrollButtonClass}
+            aria-label="Geser kartu ke kiri"
           >
-            <p className="text-xs font-medium leading-snug text-[#f5f5f5]">
-              {card.title}
-            </p>
-            <p
-              className={`mt-2 font-semibold text-[#f5f5f5] ${
-                recapVersion === "new" ? "text-xl" : "text-2xl"
-              }`}
+            <MdChevronLeft size={22} />
+          </button>
+        )}
+        <div
+          ref={summaryCardsRef}
+          onScroll={updateSummaryScrollState}
+          className={`min-w-0 flex-1 ${summaryCardsContainerClass}`}
+        >
+          {summaryCards.map((card) => (
+            <div
+              key={card.title}
+              className={summaryCardClass}
+              style={{ backgroundColor: card.color }}
             >
-              {isLoading ? "..." : card.value}
-            </p>
-          </div>
-        ))}
+              <p className="text-xs font-medium leading-snug text-[#f5f5f5]">
+                {card.title}
+              </p>
+              <p
+                className={`mt-2 font-semibold text-[#f5f5f5] ${
+                  recapVersion === "new" ? "text-xl" : "text-2xl"
+                }`}
+              >
+                {isLoading ? "..." : card.value}
+              </p>
+            </div>
+          ))}
+        </div>
+        {isSummaryScrollable && (
+          <button
+            type="button"
+            onClick={() => scrollSummaryCards(1)}
+            disabled={!summaryScrollState.canScrollRight}
+            className={summaryScrollButtonClass}
+            aria-label="Geser kartu ke kanan"
+          >
+            <MdChevronRight size={22} />
+          </button>
+        )}
       </div>
 
       <div className="mt-6 rounded-lg bg-[#1f1f1f] p-4">
