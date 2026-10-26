@@ -190,6 +190,7 @@ const PERIOD_OPTIONS = [
 ];
 
 const SHOW_HPP_FIELDS = true;
+const SHOW_NET_PROFIT = false;
 const SHOW_FINANCIAL_CARDS = false;
 
 const rupiahExcelFormat = '"Rp" #,##0;[Red]-"Rp" #,##0;"Rp" 0';
@@ -432,6 +433,24 @@ const cardToneStyles = {
   },
 };
 
+const InfoTooltip = ({ label, text, size = 16 }) => (
+  <span className="group relative inline-flex shrink-0">
+    <button
+      type="button"
+      className="inline-flex h-5 w-5 items-center justify-center rounded-full text-[#ababab] outline-none transition hover:text-[#f5f5f5] focus-visible:text-[#f5f5f5]"
+      aria-label={`Keterangan ${label}`}
+    >
+      <MdErrorOutline size={size} />
+    </button>
+    <span
+      role="tooltip"
+      className="pointer-events-none absolute left-1/2 top-[calc(100%+8px)] z-20 hidden w-56 -translate-x-1/2 rounded-lg border border-[#444] bg-[#151515] px-3 py-2 text-xs font-semibold leading-relaxed text-[#f5f5f5] shadow-xl group-hover:block group-focus-within:block"
+    >
+      {text}
+    </span>
+  </span>
+);
+
 const MetricCard = ({ item, className = "" }) => {
   const Icon = item.icon;
   const tone = cardToneStyles[item.tone] || cardToneStyles.neutral;
@@ -454,21 +473,7 @@ const MetricCard = ({ item, className = "" }) => {
               {item.title}
             </p>
             {item.description && (
-              <span className="group relative inline-flex shrink-0">
-                <button
-                  type="button"
-                  className="inline-flex h-5 w-5 items-center justify-center rounded-full text-[#ababab] outline-none transition hover:text-[#f5f5f5] focus-visible:text-[#f5f5f5]"
-                  aria-label={`Keterangan ${item.title}`}
-                >
-                  <MdErrorOutline size={16} />
-                </button>
-                <span
-                  role="tooltip"
-                  className="pointer-events-none absolute left-1/2 top-[calc(100%+8px)] z-20 hidden w-56 -translate-x-1/2 rounded-lg border border-[#444] bg-[#151515] px-3 py-2 text-xs font-semibold leading-relaxed text-[#f5f5f5] shadow-xl group-hover:block group-focus-within:block"
-                >
-                  {item.description}
-                </span>
-              </span>
+              <InfoTooltip label={item.title} text={item.description} />
             )}
           </div>
         </div>
@@ -511,6 +516,7 @@ const ProfitFlow = ({ revenue, cost, grossProfit, netProfit, isLoading }) => {
       label: "Penjualan Bersih",
       value: isLoading ? "..." : formatCurrency(revenue),
       tone: "sales",
+      description: "Penjualan dikurangi biaya platform dan QRIS 0,7%.",
     },
     ...(SHOW_HPP_FIELDS
       ? [
@@ -518,28 +524,37 @@ const ProfitFlow = ({ revenue, cost, grossProfit, netProfit, isLoading }) => {
             label: "HPP",
             value: isLoading ? "..." : cost === null ? "-" : formatCurrency(cost),
             tone: "cost",
+            description:
+              "Modal bahan dari resep menu × jumlah menu yang terjual.",
           },
           {
             label: "Untung Kotor",
             value: isLoading ? "..." : formatCurrency(grossProfit),
             tone: "profit",
+            description: "Penjualan Bersih dikurangi HPP.",
           },
-          {
-            label: "Untung Bersih",
-            value: isLoading ? "..." : formatCurrency(netProfit),
-            tone: "net",
-          },
+          ...(SHOW_NET_PROFIT
+            ? [
+                {
+                  label: "Untung Bersih",
+                  value: isLoading ? "..." : formatCurrency(netProfit),
+                  tone: "net",
+                  description:
+                    "Untung Kotor dikurangi pengeluaran harian di rekap.",
+                },
+              ]
+            : []),
         ]
       : []),
   ];
+  const gridColumnsClass =
+    { 1: "md:grid-cols-1", 3: "md:grid-cols-3", 4: "md:grid-cols-4" }[
+      steps.length
+    ] || "md:grid-cols-1";
 
   return (
     <div className="mt-5 rounded-lg border border-[#333] bg-[#202020] p-4">
-      <div
-        className={`grid grid-cols-1 gap-3 ${
-          SHOW_HPP_FIELDS ? "md:grid-cols-4" : "md:grid-cols-1"
-        }`}
-      >
+      <div className={`grid grid-cols-1 gap-3 ${gridColumnsClass}`}>
         {steps.map((step, index) => {
           const tone = cardToneStyles[step.tone] || cardToneStyles.neutral;
 
@@ -547,9 +562,16 @@ const ProfitFlow = ({ revenue, cost, grossProfit, netProfit, isLoading }) => {
             <div key={step.label} className="flex items-center gap-3">
               <div className={`h-2 w-2 rounded-full ${tone.icon}`} />
               <div className="min-w-0">
-                <p className="text-xs font-semibold text-[#ababab]">
-                  {step.label}
-                </p>
+                <div className="flex items-center gap-1">
+                  <p className="text-xs font-semibold text-[#ababab]">
+                    {step.label}
+                  </p>
+                  <InfoTooltip
+                    label={step.label}
+                    text={step.description}
+                    size={14}
+                  />
+                </div>
                 <p className="truncate text-sm font-bold text-[#f5f5f5]">
                   {step.value}
                 </p>

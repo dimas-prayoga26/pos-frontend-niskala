@@ -728,11 +728,11 @@ const RecapManagement = () => {
         summary.netSales += netAmount;
         summary.discounts += incomeDeduction;
 
-        if (isCashPayment(order.paymentMethod)) {
+        if (order.orderType !== "Online" && isCashPayment(order.paymentMethod)) {
           summary.cashSales += netAmount;
         }
 
-        if (isQrPayment(order.paymentMethod)) {
+        if (order.orderType !== "Online" && isQrPayment(order.paymentMethod)) {
           summary.qrSales += netAmount;
         }
 
