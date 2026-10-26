@@ -13,10 +13,8 @@ import {
   filterOrdersByDateRange,
   getSummaryDateRangeLabel,
   groupOrdersByDay,
+  sumReceivedAmount,
 } from "../utils/orderFilters";
-import {
-  getOrdersGrossRevenueTotal,
-} from "../utils/orderMetrics";
 
 const OrdersPage = () => {
   const todayKey = getJakartaDateKey();
@@ -47,8 +45,8 @@ const OrdersPage = () => {
     () => filterOrdersByDateRange(orders, dateRange),
     [orders, dateRange]
   );
-  const filteredGrossRevenue = useMemo(
-    () => getOrdersGrossRevenueTotal(filteredOrders),
+  const filteredRevenue = useMemo(
+    () => sumReceivedAmount(filteredOrders),
     [filteredOrders]
   );
   const groupedOrders = useMemo(() => groupOrdersByDay(filteredOrders), [filteredOrders]);
@@ -67,7 +65,7 @@ const OrdersPage = () => {
 
       <OrdersSummary
         rangeLabel={getSummaryDateRangeLabel(dateRange)}
-        grossRevenue={filteredGrossRevenue}
+        revenue={filteredRevenue}
         orderCount={filteredOrders.length}
       />
 
