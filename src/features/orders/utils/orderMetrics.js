@@ -60,11 +60,12 @@ export const getOrderPlatformDeduction = (order) =>
 export const getOrderGrossRevenue = (order) =>
   getOrderReceivedAmount(order) + getOrderPlatformDeduction(order);
 
+// Online orders are settled by the platform, so only in-store QR payments pay the QRIS fee.
 export const getOrderQrisDeduction = (
   order,
   grossRevenue = getOrderGrossRevenue(order)
 ) =>
-  isQrPayment(order?.paymentMethod)
+  order?.orderType !== "Online" && isQrPayment(order?.paymentMethod)
     ? Math.max(grossRevenue * QRIS_FEE_RATE, 0)
     : 0;
 

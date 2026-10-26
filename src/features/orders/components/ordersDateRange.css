@@ -27,6 +27,11 @@
   padding: 4px 22px 4px 8px;
 }
 
+.orders-date-range-picker .rdrYearPicker,
+.orders-date-range-picker .rdrMonthName {
+  display: none;
+}
+
 .orders-date-range-picker .rdrMonth {
   width: 100%;
   max-width: calc(100vw - 2rem);
