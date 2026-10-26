@@ -22,6 +22,7 @@ import {
   FiTrendingUp,
   FiTruck,
 } from "react-icons/fi";
+import { MdErrorOutline } from "react-icons/md";
 import * as XLSX from "xlsx-js-style";
 import {
   addDailyCash,
@@ -38,7 +39,6 @@ import {
   getOrderIncomeDeduction,
   getOrderItemHpp,
   getOrderNetRevenue,
-  getOrdersGrossRevenueTotal,
   getOrdersHppTotal,
   getOrdersNetRevenueTotal,
 } from "../../utils";
@@ -449,14 +449,26 @@ const MetricCard = ({ item, className = "" }) => {
               <Icon className="text-lg" />
             </span>
           )}
-          <div className="min-w-0">
+          <div className="flex min-w-0 items-center gap-1.5">
             <p className="truncate text-sm font-bold text-[#f5f5f5]">
               {item.title}
             </p>
             {item.description && (
-              <p className="mt-1 text-xs leading-4 text-[#ababab]">
-                {item.description}
-              </p>
+              <span className="group relative inline-flex shrink-0">
+                <button
+                  type="button"
+                  className="inline-flex h-5 w-5 items-center justify-center rounded-full text-[#ababab] outline-none transition hover:text-[#f5f5f5] focus-visible:text-[#f5f5f5]"
+                  aria-label={`Keterangan ${item.title}`}
+                >
+                  <MdErrorOutline size={16} />
+                </button>
+                <span
+                  role="tooltip"
+                  className="pointer-events-none absolute left-1/2 top-[calc(100%+8px)] z-20 hidden w-56 -translate-x-1/2 rounded-lg border border-[#444] bg-[#151515] px-3 py-2 text-xs font-semibold leading-relaxed text-[#f5f5f5] shadow-xl group-hover:block group-focus-within:block"
+                >
+                  {item.description}
+                </span>
+              </span>
             )}
           </div>
         </div>
@@ -747,7 +759,6 @@ const Metrics = () => {
       ),
     [filteredOrders, recappedDateKeys]
   );
-  const periodRevenue = getOrdersGrossRevenueTotal(filteredOrders);
   const isCateringOrder = (order) => {
     return (
       Boolean(order.cateringDetails) ||
@@ -758,18 +769,19 @@ const Metrics = () => {
   const cateringRevenue = filteredOrders.reduce((total, order) => {
     if (!isCateringOrder(order)) return total;
 
-    return total + getOrderGrossRevenue(order);
+    return total + getOrderNetRevenue(order);
   }, 0);
   const offlineRevenue = filteredOrders.reduce((total, order) => {
     if (order.orderType === "Online" || isCateringOrder(order)) return total;
 
-    return total + getOrderGrossRevenue(order);
+    return total + getOrderNetRevenue(order);
   }, 0);
   const onlineRevenue = filteredOrders.reduce((total, order) => {
     if (order.orderType !== "Online" || isCateringOrder(order)) return total;
 
-    return total + getOrderGrossRevenue(order);
+    return total + getOrderNetRevenue(order);
   }, 0);
+  const periodRevenue = cateringRevenue + offlineRevenue + onlineRevenue;
   const stockNeedsOrder = stockItems.filter(
     (item) => item.status === "HARUS ORDER"
   ).length;
@@ -785,8 +797,8 @@ const Metrics = () => {
     return total + cashIn + qrisIn + transferIn;
   }, 0);
   const recappedRevenueTotal = getOrdersNetRevenueTotal(recappedOrders);
-  const recappedMaterialSpendTotal = null;
-  const grossProfitTotal = recappedRevenueTotal;
+  const recappedMaterialSpendTotal = getOrdersHppTotal(recappedOrders, menuItems);
+  const grossProfitTotal = recappedRevenueTotal - recappedMaterialSpendTotal;
   const netProfitTotal = grossProfitTotal - dailyExpenseTotal;
   const netCashTotal = cashRecordedTotal - dailyExpenseTotal;
 
@@ -816,7 +828,7 @@ const Metrics = () => {
       title: "Total Penjualan",
       value: isLoading ? "..." : formatCurrency(periodRevenue),
       badge: activePeriod.badge,
-      description: "Total order sebelum potongan platform dan QRIS.",
+      description: "Include potongan QRIS 0,7% dan platform.",
       icon: FiDollarSign,
       tone: "sales",
     },
@@ -824,7 +836,7 @@ const Metrics = () => {
       title: "Penjualan Catering",
       value: isLoading ? "..." : formatCurrency(cateringRevenue),
       badge: activePeriod.badge,
-      description: "Order paket dan acara.",
+      description: "Order paket dan acara. Include potongan QRIS 0,7%.",
       icon: FiTruck,
       tone: "catering",
     },
@@ -832,7 +844,7 @@ const Metrics = () => {
       title: "Penjualan Offline",
       value: isLoading ? "..." : formatCurrency(offlineRevenue),
       badge: activePeriod.badge,
-      description: "Transaksi langsung di kasir.",
+      description: "Include potongan QRIS 0,7%.",
       icon: FiShoppingBag,
       tone: "offline",
     },
@@ -840,7 +852,7 @@ const Metrics = () => {
       title: "Penjualan Online",
       value: isLoading ? "..." : formatCurrency(onlineRevenue),
       badge: activePeriod.badge,
-      description: "Order dari platform online.",
+      description: "Include potongan platform.",
       icon: FiMonitor,
       tone: "online",
     },
@@ -893,9 +905,11 @@ const Metrics = () => {
         },
         {
           title: "HPP",
-          value: isFinancialLoading ? "..." : "-",
+          value: isFinancialLoading
+            ? "..."
+            : formatCurrency(recappedMaterialSpendTotal),
           badge: activePeriod.badge,
-          description: "Belum dipakai dalam hitungan keuntungan.",
+          description: "Modal bahan dari resep menu.",
           icon: FiPackage,
           tone: "cost",
         },
@@ -903,7 +917,7 @@ const Metrics = () => {
           title: "Untung Kotor",
           value: isFinancialLoading ? "..." : formatCurrency(grossProfitTotal),
           badge: activePeriod.badge,
-          description: "Penjualan bersih setelah potongan QRIS dan platform.",
+          description: "Penjualan bersih dikurangi HPP.",
           icon: FiTrendingUp,
           tone: "profit",
         },

@@ -545,7 +545,7 @@ const MenuManagement = () => {
       }, 0),
     [menuForm.ingredients, stockItems]
   );
-  const autoHppCost = roundMoney(autoIngredientCostTotal * 1.3);
+  const autoHppCost = roundMoney(autoIngredientCostTotal);
   const autoGrossProfit = roundMoney(
     parseMoneyInput(menuForm.regularPrice) - autoHppCost
   );
@@ -1704,7 +1704,7 @@ const MenuManagement = () => {
                 <div className="mt-4 grid grid-cols-1 gap-2">
                   {!HIDE_AUTO_HPP_FIELD && (
                     <label className="block text-sm font-semibold text-amber-200">
-                      HPP <span className="text-xs text-[#777]">(Auto +30%)</span>
+                      HPP <span className="text-xs text-[#777]">(Auto)</span>
                       <div className="mt-2 flex overflow-hidden rounded-lg border border-amber-500/30 bg-amber-500/10">
                         <span className="flex shrink-0 items-center px-4 text-sm font-bold text-amber-200">
                           Rp

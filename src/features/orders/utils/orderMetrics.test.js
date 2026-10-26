@@ -57,6 +57,11 @@ describe("revenue breakdown", () => {
       paymentMethod: "QRIS",
       bills: { totalWithTax: 90000 },
     };
+    const offlineQrisOrder = {
+      orderType: "Offline",
+      paymentMethod: "QRIS",
+      bills: { totalWithTax: 100000 },
+    };
     const cashOrder = {
       orderType: "Offline",
       paymentMethod: "Tunai",
@@ -64,10 +69,12 @@ describe("revenue breakdown", () => {
     };
 
     expect(getOrderGrossRevenue(onlineQrisOrder)).toBe(100000);
-    expect(getOrderIncomeDeduction(onlineQrisOrder)).toBe(10700);
-    expect(getOrderNetRevenue(onlineQrisOrder)).toBe(89300);
+    expect(getOrderIncomeDeduction(onlineQrisOrder)).toBe(10000);
+    expect(getOrderNetRevenue(onlineQrisOrder)).toBe(90000);
+    expect(getOrderIncomeDeduction(offlineQrisOrder)).toBe(700);
+    expect(getOrderNetRevenue(offlineQrisOrder)).toBe(99300);
     expect(getOrdersGrossRevenueTotal([onlineQrisOrder, cashOrder])).toBe(150000);
-    expect(getOrdersNetRevenueTotal([onlineQrisOrder, cashOrder])).toBe(139300);
+    expect(getOrdersNetRevenueTotal([onlineQrisOrder, offlineQrisOrder, cashOrder])).toBe(239300);
   });
 
   it("normalizes payment and platform labels for reporting", () => {
