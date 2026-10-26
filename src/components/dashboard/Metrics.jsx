@@ -791,17 +791,17 @@ const Metrics = () => {
   const cateringRevenue = filteredOrders.reduce((total, order) => {
     if (!isCateringOrder(order)) return total;
 
-    return total + getOrderGrossRevenue(order);
+    return total + getOrderNetRevenue(order);
   }, 0);
   const offlineRevenue = filteredOrders.reduce((total, order) => {
     if (order.orderType === "Online" || isCateringOrder(order)) return total;
 
-    return total + getOrderGrossRevenue(order);
+    return total + getOrderNetRevenue(order);
   }, 0);
   const onlineRevenue = filteredOrders.reduce((total, order) => {
     if (order.orderType !== "Online" || isCateringOrder(order)) return total;
 
-    return total + getOrderGrossRevenue(order);
+    return total + getOrderNetRevenue(order);
   }, 0);
   const periodRevenue = cateringRevenue + offlineRevenue + onlineRevenue;
   const stockNeedsOrder = stockItems.filter(
@@ -850,7 +850,7 @@ const Metrics = () => {
       title: "Total Penjualan",
       value: isLoading ? "..." : formatCurrency(periodRevenue),
       badge: activePeriod.badge,
-      description: "Belum dipotong QRIS 0,7% dan biaya platform.",
+      description: "Sudah dipotong QRIS 0,7% dan biaya platform.",
       icon: FiDollarSign,
       tone: "sales",
     },
@@ -858,7 +858,7 @@ const Metrics = () => {
       title: "Penjualan Catering",
       value: isLoading ? "..." : formatCurrency(cateringRevenue),
       badge: activePeriod.badge,
-      description: "Order paket dan acara. Belum dipotong QRIS 0,7%.",
+      description: "Order paket dan acara. Sudah dipotong QRIS 0,7% jika bayar QRIS.",
       icon: FiTruck,
       tone: "catering",
     },
@@ -866,7 +866,7 @@ const Metrics = () => {
       title: "Penjualan Offline",
       value: isLoading ? "..." : formatCurrency(offlineRevenue),
       badge: activePeriod.badge,
-      description: "Belum dipotong QRIS 0,7%.",
+      description: "Sudah dipotong QRIS 0,7% jika bayar QRIS.",
       icon: FiShoppingBag,
       tone: "offline",
     },
@@ -874,7 +874,7 @@ const Metrics = () => {
       title: "Penjualan Online",
       value: isLoading ? "..." : formatCurrency(onlineRevenue),
       badge: activePeriod.badge,
-      description: "Belum dipotong biaya platform.",
+      description: "Sudah dipotong biaya platform.",
       icon: FiMonitor,
       tone: "online",
     },
