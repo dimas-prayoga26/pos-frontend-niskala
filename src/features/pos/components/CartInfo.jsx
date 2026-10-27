@@ -1,11 +1,7 @@
 import React, { useEffect, useRef } from "react";
 import { FaMinus, FaPlus } from "react-icons/fa6";
 import { useDispatch, useSelector } from "react-redux";
-import {
-  addItems,
-  decreaseItem,
-  updateItemTemperature,
-} from "../cartSlice";
+import { addItems, decreaseItem } from "../cartSlice";
 import { formatCurrency } from "../../../shared/lib/format";
 
 const CartInfo = () => {
@@ -28,10 +24,6 @@ const CartInfo = () => {
 
   const handleDecreaseQuantity = (itemId) => {
     dispatch(decreaseItem(itemId));
-  };
-
-  const updateTemperature = (item, temperature) => {
-    dispatch(updateItemTemperature({ id: item.id, temperature }));
   };
 
   return (
@@ -64,11 +56,6 @@ const CartInfo = () => {
                         {item.addOns.map((addOn) => addOn.name).join(", ")}
                       </p>
                     )}
-                    {item.variant && (
-                      <p className="mt-1 text-xs text-[#ababab]">
-                        {item.variant}
-                      </p>
-                    )}
                   </div>
                   <p className="shrink-0 text-[#ababab] font-semibold">
                     x{item.quantity}
@@ -96,25 +83,6 @@ const CartInfo = () => {
                     {formatCurrency(item.price)}
                   </p>
                 </div>
-
-                {item.temperatureOptions && (
-                  <div className="mt-3 grid grid-cols-2 gap-2">
-                    {item.temperatureOptions.map((temperature) => (
-                      <button
-                        key={temperature}
-                        onClick={() => updateTemperature(item, temperature)}
-                        className={`rounded-lg border px-3 py-2 text-xs font-bold transition ${
-                          item.temperatureVariant === temperature
-                            ? "border-[#a79981] bg-[#a79981] text-[#101010]"
-                            : "border-[#303030] bg-[#222222] text-[#ababab] hover:border-[#a79981] hover:text-[#a79981]"
-                        }`}
-                      >
-                        {temperature}
-                      </button>
-                    ))}
-                  </div>
-                )}
-
               </div>
             );
           })

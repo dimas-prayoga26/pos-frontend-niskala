@@ -35,38 +35,15 @@ const MenuItemCard = ({
   item,
   price,
   quantity,
-  sizePrices,
-  selectedSizeName,
-  onSelectSize,
   onIncrement,
   onDecrement,
   onQuantityChange,
 }) => (
   <div className="flex min-h-[210px] flex-col justify-between rounded-lg bg-[#1a1a1a] p-3 hover:bg-[#2a2a2a] sm:min-h-[260px] sm:p-4">
     <div>
-      <div className={sizePrices ? "min-h-[64px] sm:min-h-[72px]" : ""}>
-        <h1 className="text-sm font-semibold leading-tight text-[#f5f5f5] sm:text-lg">
-          {item.name}
-        </h1>
-        {sizePrices ? (
-          <div className="mt-2 flex flex-wrap gap-1">
-            {Object.keys(sizePrices).map((sizeName) => (
-              <button
-                key={sizeName}
-                type="button"
-                onClick={() => onSelectSize(sizeName)}
-                className={`rounded-md border px-2 py-1 text-[10px] font-bold transition sm:text-xs ${
-                  selectedSizeName === sizeName
-                    ? "border-[#a79981] bg-[#a79981] text-[#101010]"
-                    : "border-[#303030] bg-[#222222] text-[#ababab] hover:border-[#a79981] hover:text-[#a79981]"
-                }`}
-              >
-                {sizeName}
-              </button>
-            ))}
-          </div>
-        ) : null}
-      </div>
+      <h1 className="text-sm font-semibold leading-tight text-[#f5f5f5] sm:text-lg">
+        {item.name}
+      </h1>
       <img
         src={getItemImage(item)}
         alt={item.name}

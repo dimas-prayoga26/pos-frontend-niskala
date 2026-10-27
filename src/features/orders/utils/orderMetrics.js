@@ -1,8 +1,12 @@
 // Order figures used by home, orders, dashboard and recaps: display code,
 // money actually received, and HPP (cost of goods) per item/order.
-import { getJakartaParts } from "../../../shared/lib/dates";
+import { getJakartaDateKey, getJakartaParts } from "../../../shared/lib/dates";
 
 export const QRIS_FEE_RATE = 0.007;
+// From October 2026 QRIS payments up to Rp100.000 carry no fee (MDR 0%) and
+// only larger ones pay 0.7%; orders before that keep the flat 0.7%.
+export const QRIS_FREE_LIMIT = 100000;
+export const QRIS_FREE_LIMIT_SINCE = "2026-10-01";
 
 const toPositiveNumber = (value) => Math.max(Number(value) || 0, 0);
 
@@ -60,12 +64,19 @@ export const getOrderPlatformDeduction = (order) =>
 export const getOrderGrossRevenue = (order) =>
   getOrderReceivedAmount(order) + getOrderPlatformDeduction(order);
 
-// Online orders are settled by the platform, so only in-store QR payments pay the QRIS fee.
+const isQrisFeeFree = (order, amount) =>
+  amount <= QRIS_FREE_LIMIT &&
+  getJakartaDateKey(order?.orderDate || new Date()) >= QRIS_FREE_LIMIT_SINCE;
+
+// Online orders are settled by the platform, so only in-store QR payments pay
+// the QRIS fee, and not when the payment is within the fee-free limit.
 export const getOrderQrisDeduction = (
   order,
   grossRevenue = getOrderGrossRevenue(order)
 ) =>
-  order?.orderType !== "Online" && isQrPayment(order?.paymentMethod)
+  order?.orderType !== "Online" &&
+  isQrPayment(order?.paymentMethod) &&
+  !isQrisFeeFree(order, grossRevenue)
     ? Math.max(grossRevenue * QRIS_FEE_RATE, 0)
     : 0;
 
@@ -94,12 +105,6 @@ const parseMenuItemIdFromKey = (value) => {
   return Number.isFinite(parsedId) && parsedId > 0 ? parsedId : null;
 };
 
-const parseSizeNameFromKey = (value) => {
-  const parts = String(value || "").split("-");
-
-  return parts.length > 2 ? parts.slice(2).join("-").trim() : "";
-};
-
 const getOrderItemMenuId = (item) => {
   const directId = Number(
     item?.sourceMenuItemId || item?.menuItemSourceId || item?.menuId
@@ -111,17 +116,6 @@ const getOrderItemMenuId = (item) => {
   if (Number.isFinite(menuItemId) && menuItemId > 0) return menuItemId;
 
   return parseMenuItemIdFromKey(item?.menuItemId) || parseMenuItemIdFromKey(item?.id);
-};
-
-const getOrderItemSizeName = (item) => {
-  const explicitSize = String(item?.sizeVariant || item?.sizeName || "").trim();
-  if (explicitSize) return explicitSize;
-
-  const sizeFromKey =
-    parseSizeNameFromKey(item?.menuItemId) || parseSizeNameFromKey(item?.id);
-  if (sizeFromKey) return sizeFromKey;
-
-  return String(item?.variant || "").split("/")[0].trim();
 };
 
 const findMenuForOrderItem = (item, menuItems = []) => {
@@ -144,18 +138,8 @@ export const getOrderItemHpp = (item, menuItems = []) => {
   if (Number.isFinite(snapshotHpp) && snapshotHpp > 0) return snapshotHpp;
 
   const menuItem = findMenuForOrderItem(item, menuItems);
-  if (!menuItem) return 0;
 
-  const sizes = Array.isArray(menuItem.sizes) ? menuItem.sizes : [];
-  if (sizes.length) {
-    const sizeName = normalizeText(getOrderItemSizeName(item));
-    const matchedSize =
-      sizes.find((size) => normalizeText(size.name) === sizeName) || sizes[0];
-
-    return Number(matchedSize?.hppCost ?? matchedSize?.hpp ?? 0) || 0;
-  }
-
-  return Number(menuItem.hppCost ?? menuItem.hpp ?? 0) || 0;
+  return Number(menuItem?.hppCost ?? menuItem?.hpp ?? 0) || 0;
 };
 
 export const getOrderHppTotal = (order, menuItems = []) =>

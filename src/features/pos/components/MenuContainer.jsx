@@ -5,13 +5,7 @@ import { setCustomer } from "../../../redux/slices/customerSlice";
 import { getCategories, getMenuItems } from "../api";
 import { addItems, decreaseItem, setItemQuantity } from "../cartSlice";
 import { buildMenuCatalog } from "../utils/menuCatalog";
-import {
-  buildCartItem,
-  getCartItemId,
-  getItemUnitPrice,
-  getSelectedSizeName,
-  getSizePrices,
-} from "../utils/menuPricing";
+import { buildCartItem, getCartItemId, getItemUnitPrice } from "../utils/menuPricing";
 import CategorySelector from "./CategorySelector";
 import MenuItemCard from "./MenuItemCard";
 
@@ -19,7 +13,6 @@ const MAX_QUANTITY = 999;
 
 const MenuContainer = () => {
   const [selected, setSelected] = useState(null);
-  const [selectedSizeByItem, setSelectedSizeByItem] = useState({});
   const cartData = useSelector((state) => state.cart);
   const orderType = useSelector((state) => state.customer.orderType || "Offline");
   const dispatch = useDispatch();
@@ -66,18 +59,7 @@ const MenuContainer = () => {
     cartData.find((item) => item.id === id)?.quantity || 0;
 
   const toCartItem = (item) =>
-    buildCartItem(item, {
-      category: selected,
-      selectedSize: getSelectedSizeName(item, selectedSizeByItem),
-      isOnlineOrder,
-    });
-
-  const selectItemSize = (item, sizeName) => {
-    setSelectedSizeByItem((current) => ({
-      ...current,
-      [item.id]: sizeName,
-    }));
-  };
+    buildCartItem(item, { category: selected, isOnlineOrder });
 
   return (
     <>
@@ -87,18 +69,14 @@ const MenuContainer = () => {
 
       <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-3 sm:gap-4 px-4 md:px-10 py-4 w-full">
         {selected?.items.map((item) => {
-          const selectedSizeName = getSelectedSizeName(item, selectedSizeByItem);
-          const cartItemId = getCartItemId(item, selected, selectedSizeName);
+          const cartItemId = getCartItemId(item, selected);
 
           return (
             <MenuItemCard
               key={item.id}
               item={item}
-              price={getItemUnitPrice(item, selectedSizeName, isOnlineOrder)}
+              price={getItemUnitPrice(item, isOnlineOrder)}
               quantity={getItemQuantity(cartItemId)}
-              sizePrices={getSizePrices(item)}
-              selectedSizeName={selectedSizeName}
-              onSelectSize={(sizeName) => selectItemSize(item, sizeName)}
               onIncrement={() => dispatch(addItems({ ...toCartItem(item), quantity: 1 }))}
               onDecrement={() => dispatch(decreaseItem(cartItemId))}
               onQuantityChange={(value) =>

@@ -7,8 +7,6 @@ import cartReducer, {
   removeItem,
   setItemQuantity,
   updateItemCustomization,
-  updateItemTemperature,
-  updateItemVariant,
 } from "../../src/features/pos/cartSlice";
 import customerReducer, { removeCustomer, setCustomer } from "../../src/redux/slices/customerSlice";
 import { removeUser, setUser, userReducer } from "../../src/features/auth";
@@ -20,9 +18,6 @@ const coffee = {
   name: "Kopi Uji",
   basePrice: 20000,
   pricePerQuantity: 20000,
-  sizePrices: { Regular: 20000, Large: 26000 },
-  originalSizePrices: { Regular: 20000, Large: 26000 },
-  sizeVariant: "Regular",
   addOns: [],
 };
 
@@ -32,7 +27,7 @@ describe("cart slice", () => {
   it("adds items, merges duplicates and keeps the line total", () => {
     const state = reduce(cartReducer, [addItems(coffee), addItems({ ...coffee, quantity: 2 })], []);
     expect(state).toHaveLength(1);
-    expect(state[0]).toMatchObject({ quantity: 3, price: 60000, variant: "Regular" });
+    expect(state[0]).toMatchObject({ quantity: 3, price: 60000 });
     expect(getTotalPrice({ cart: state })).toBe(60000);
   });
 
@@ -54,24 +49,23 @@ describe("cart slice", () => {
     expect(state).toEqual([]);
   });
 
-  it("reprices on size change and add-ons, and labels the variant", () => {
+  it("reprices on add-ons and when the item is re-added at a new price", () => {
     let state = cartReducer([], addItems(coffee));
-    state = cartReducer(state, updateItemVariant({ id: "3-7", variant: "Large" }));
-    expect(state[0]).toMatchObject({ basePrice: 26000, pricePerQuantity: 26000, price: 26000 });
     state = cartReducer(state, updateItemCustomization({ id: "3-7", addOns: [{ price: 3000 }, { price: "2000" }] }));
-    expect(state[0]).toMatchObject({ pricePerQuantity: 31000, price: 31000 });
-    state = cartReducer(state, updateItemTemperature({ id: "3-7", temperature: "Ice" }));
-    expect(state[0].variant).toBe("Large / Ice");
+    expect(state[0]).toMatchObject({ pricePerQuantity: 25000, price: 25000 });
+    state = cartReducer(state, addItems({ ...coffee, basePrice: 24000, originalPrice: 20000 }));
+    expect(state[0]).toMatchObject({ quantity: 2, basePrice: 24000, originalPrice: 20000, pricePerQuantity: 29000, price: 58000 });
   });
 });
 
 describe("customer slice", () => {
   it("merges partial updates and keeps omitted fields", () => {
     const initial = customerReducer(undefined, { type: "init" });
-    expect(initial).toMatchObject({ orderType: "Offline", guests: 1, orderDate: getJakartaDateKey() });
+    expect(initial).toMatchObject({ orderType: "Offline", orderDate: getJakartaDateKey() });
+    expect(initial).not.toHaveProperty("guests");
 
-    let state = customerReducer(initial, setCustomer({ name: "Budi", guests: 3 }));
-    expect(state).toMatchObject({ customerName: "Budi", guests: 3, orderPlatformId: null });
+    let state = customerReducer(initial, setCustomer({ name: "Budi" }));
+    expect(state).toMatchObject({ customerName: "Budi", orderPlatformId: null });
 
     state = customerReducer(state, setCustomer({ orderType: "Online", orderPlatformId: 2, orderDate: "" }));
     expect(state.orderDate).toBe(getJakartaDateKey());

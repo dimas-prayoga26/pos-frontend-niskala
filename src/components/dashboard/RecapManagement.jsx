@@ -799,9 +799,8 @@ const RecapManagement = () => {
           const totalIncome = grossRevenue * revenueShare;
           const incomeDeduction = incomeDeductionTotal * revenueShare;
           const netIncome = Math.max(totalIncome - incomeDeduction, 0);
-          const variant = String(
-            item.sizeName || item.sizeVariant || item.variant || ""
-          ).trim();
+          // Historical items may still carry a size/temperature label.
+          const variant = String(item.variant || "").trim();
           const menuName =
             variant && variant !== item.name ? `${item.name} - ${variant}` : item.name;
 

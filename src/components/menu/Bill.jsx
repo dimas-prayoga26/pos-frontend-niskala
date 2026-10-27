@@ -127,7 +127,6 @@ const Bill = () => {
     customerDetails: {
       name: getCustomerName(),
       phone: orderType === "Offline" ? customerData.customerPhone?.trim() || "" : "",
-      guests: customerData.guests || 1,
     },
     orderType,
     orderDate: orderType === "Online" ? customerData.orderDate || "" : undefined,

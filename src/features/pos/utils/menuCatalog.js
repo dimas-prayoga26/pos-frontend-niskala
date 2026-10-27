@@ -28,9 +28,6 @@ export const buildMenuCatalog = (categories, menuItems, isOnlineOrder) =>
         regularPrice: item.regularPrice ?? item.price,
         includeOnlinePlatform: Boolean(item.includeOnlinePlatform),
         onlinePrice: item.onlinePrice ?? null,
-        largePrice: item.largePrice,
-        variants: item.variants || [],
-        sizes: item.sizes || [],
         imagePath: item.imagePath || null,
         taxRate:
           item.category?.taxRate ??

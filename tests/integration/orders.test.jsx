@@ -17,7 +17,7 @@ const makeOrder = (id, name, orderDate, totalWithTax, extra = {}) => ({
   id,
   _id: id,
   orderId: `2601-000${id}`,
-  customerDetails: { name, guests: 1 },
+  customerDetails: { name },
   orderType: "Offline",
   orderStatus: "In Progress",
   orderDate,

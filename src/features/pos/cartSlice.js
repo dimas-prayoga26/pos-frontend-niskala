@@ -5,36 +5,17 @@ const initialState = [];
 const getItemPrice = (item) => item.pricePerQuantity * item.quantity;
 const getAddOnTotal = (item) =>
   (item.addOns || []).reduce((total, addOn) => total + (Number(addOn.price) || 0), 0);
-const getVariantText = (item) =>
-  [item.sizeVariant, item.temperatureVariant].filter(Boolean).join(" / ") ||
-  item.variant ||
-  null;
+// Re-adding an item picks up its current tax and price (e.g. after switching
+// between offline and online pricing).
 const syncItemBasePrice = (existingItem, nextItem) => {
   existingItem.taxRate = nextItem.taxRate ?? existingItem.taxRate ?? null;
-  existingItem.sizePrices = nextItem.sizePrices ?? existingItem.sizePrices ?? null;
-  existingItem.originalSizePrices =
-    nextItem.originalSizePrices ?? existingItem.originalSizePrices ?? null;
-  existingItem.temperatureOptions =
-    nextItem.temperatureOptions ?? existingItem.temperatureOptions ?? null;
-  existingItem.sizeVariant =
-    existingItem.sizeVariant ?? nextItem.sizeVariant ?? nextItem.variant ?? null;
-  existingItem.temperatureVariant =
-    existingItem.temperatureVariant ?? nextItem.temperatureVariant ?? null;
 
-  const selectedVariant = existingItem.sizeVariant ?? nextItem.sizeVariant;
-  const nextBasePrice =
-    nextItem.sizePrices?.[selectedVariant] ?? nextItem.basePrice;
-
-  if (!nextBasePrice || existingItem.basePrice === nextBasePrice) {
-    existingItem.variant = getVariantText(existingItem);
-    return;
-  }
+  const nextBasePrice = nextItem.basePrice;
+  if (!nextBasePrice || existingItem.basePrice === nextBasePrice) return;
 
   existingItem.basePrice = nextBasePrice;
-  existingItem.originalPrice =
-    nextItem.originalSizePrices?.[selectedVariant] ?? nextItem.originalPrice;
+  existingItem.originalPrice = nextItem.originalPrice;
   existingItem.pricePerQuantity = nextBasePrice + getAddOnTotal(existingItem);
-  existingItem.variant = getVariantText(existingItem);
 };
 
 const cartSlice = createSlice({
@@ -56,7 +37,6 @@ const cartSlice = createSlice({
       state.push({
         ...item,
         quantity,
-        variant: getVariantText(item),
         price: item.pricePerQuantity * quantity,
       });
     },
@@ -97,7 +77,6 @@ const cartSlice = createSlice({
       state.push({
         ...item,
         quantity: parsedQuantity,
-        variant: getVariantText(item),
         price: item.pricePerQuantity * parsedQuantity,
       });
     },
@@ -120,35 +99,6 @@ const cartSlice = createSlice({
       existingItem.price = getItemPrice(existingItem);
     },
 
-    updateItemVariant: (state, action) => {
-      const { id, variant } = action.payload;
-      const existingItem = state.find((item) => item.id === id);
-
-      if (!existingItem) return;
-
-      existingItem.sizeVariant = variant;
-
-      const nextBasePrice = existingItem.sizePrices?.[variant];
-      if (nextBasePrice === undefined) return;
-
-      existingItem.basePrice = nextBasePrice;
-      existingItem.originalPrice =
-        existingItem.originalSizePrices?.[variant] ?? existingItem.originalPrice;
-      existingItem.pricePerQuantity = nextBasePrice + getAddOnTotal(existingItem);
-      existingItem.price = getItemPrice(existingItem);
-      existingItem.variant = getVariantText(existingItem);
-    },
-
-    updateItemTemperature: (state, action) => {
-      const { id, temperature } = action.payload;
-      const existingItem = state.find((item) => item.id === id);
-
-      if (!existingItem) return;
-
-      existingItem.temperatureVariant = temperature;
-      existingItem.variant = getVariantText(existingItem);
-    },
-
     removeAllItems: () => {
       return [];
     },
@@ -163,8 +113,6 @@ export const {
   removeItem,
   setItemQuantity,
   updateItemCustomization,
-  updateItemVariant,
-  updateItemTemperature,
   removeAllItems,
 } =
   cartSlice.actions;

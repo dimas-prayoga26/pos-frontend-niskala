@@ -53,21 +53,21 @@ describe("dashboard metrics", () => {
     api.getOrders.mockResolvedValue({ data: { data: orders } });
   });
 
-  it("shows sales after QRIS 0.7% and platform fee deductions", async () => {
+  it("shows sales after QRIS 0.7% (above Rp100.000) and platform fee deductions", async () => {
     renderWithProviders(<Metrics />, { route: "/dashboard" });
 
-    // Offline: 100.000 QRIS - 0,7% + 50.000 cash.
+    // Offline: 100.000 QRIS (fee-free up to Rp100.000) + 50.000 cash.
     await waitFor(() =>
-      expect(cardOf("Penjualan Offline")).toHaveTextContent(/Rp\s149\.300$/)
+      expect(cardOf("Penjualan Offline")).toHaveTextContent(/Rp\s150\.000$/)
     );
     // Online: 100.000 gross - 10.000 platform fee.
     expect(cardOf("Penjualan Online")).toHaveTextContent(/Rp\s90\.000$/);
     // Catering: 200.000 QRIS - 0,7%.
     expect(cardOf("Penjualan Catering")).toHaveTextContent(/Rp\s198\.600$/);
-    expect(cardOf("Total Penjualan")).toHaveTextContent(/Rp\s437\.900$/);
+    expect(cardOf("Total Penjualan")).toHaveTextContent(/Rp\s438\.600$/);
     // Keuntungan follows Rekap New, so it counts days without a daily recap too.
     expect(
       screen.getByText("Penjualan Bersih").closest(".min-w-0")
-    ).toHaveTextContent(/Rp\s437\.900$/);
+    ).toHaveTextContent(/Rp\s438\.600$/);
   });
 });
