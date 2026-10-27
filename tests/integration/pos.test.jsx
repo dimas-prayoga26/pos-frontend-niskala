@@ -19,14 +19,9 @@ const menuItems = [
     id: 11,
     categoryId: 1,
     name: "Kopi Susu",
-    price: null,
-    regularPrice: null,
+    price: 18000,
+    regularPrice: 18000,
     includeOnlinePlatform: false,
-    sizes: [
-      { name: "Reguler", price: 18000 },
-      { name: "Large", price: 24000 },
-    ],
-    variants: ["Hot", "Ice"],
     imagePath: "/uploads/menu/kopi.jpg",
   },
   {
@@ -37,10 +32,8 @@ const menuItems = [
     regularPrice: 15000,
     includeOnlinePlatform: true,
     onlinePrice: 19000,
-    sizes: [],
-    variants: [],
   },
-  { id: 21, categoryId: 2, name: "Kentang", price: 12000, regularPrice: 12000, sizes: [] },
+  { id: 21, categoryId: 2, name: "Kentang", price: 12000, regularPrice: 12000 },
 ];
 
 const itemCard = (name) => screen.getAllByText(name).at(-1).closest("div.flex.min-h-\\[210px\\]");
@@ -52,28 +45,24 @@ describe("POS menu", () => {
     api.getMenuItems.mockResolvedValue({ data: { data: menuItems } });
   });
 
-  it("adds items to the cart with size-specific ids and prices", async () => {
+  it("adds items to the cart with their menu price and category tax", async () => {
     const { store } = renderWithProviders(<MenuContainer />, { route: "/menu" });
     await screen.findByText("Kopi Susu");
     expect(store.getState().customer.selectedCategoryName).toBe("Coffee");
 
     const kopi = itemCard("Kopi Susu");
-    fireEvent.click(within(kopi).getByRole("button", { name: "+" }));
-    fireEvent.click(within(kopi).getByRole("button", { name: "Large" }));
-    expect(kopi).toHaveTextContent(/Rp\s24\.000/);
+    expect(kopi).toHaveTextContent(/Rp\s18\.000/);
     fireEvent.click(within(kopi).getByRole("button", { name: "+" }));
     fireEvent.click(within(kopi).getByRole("button", { name: "+" }));
 
     expect(cart(store).map((item) => [item.id, item.quantity, item.price, item.taxRate])).toEqual([
-      ["1-11-Reguler", 1, 18000, 10],
-      ["1-11-Large", 2, 48000, 10],
+      ["1-11", 2, 36000, 10],
     ]);
-    expect(cart(store)[1]).toMatchObject({
+    expect(cart(store)[0]).toMatchObject({
       sourceMenuItemId: 11,
-      sizeVariant: "Large",
       categoryName: "Coffee",
-      temperatureOptions: ["Hot", "Ice"],
-      sizePrices: { Reguler: 18000, Large: 24000 },
+      basePrice: 18000,
+      originalPrice: 18000,
     });
     expect(within(kopi).getByRole("img")).toHaveAttribute("src", expect.stringMatching(/\/uploads\/menu\/kopi\.jpg$/));
   });

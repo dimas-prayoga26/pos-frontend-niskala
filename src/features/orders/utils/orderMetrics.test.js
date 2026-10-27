@@ -16,11 +16,8 @@ import {
 } from "./orderMetrics";
 
 const menuItems = [
-  { id: 7, name: "Kopi Uji", hppCost: 0, sizes: [
-    { name: "Regular", hppCost: 6000 },
-    { name: "Large", hppCost: 8000 },
-  ] },
-  { id: 9, name: "Roti Uji", hppCost: 5000, sizes: [] },
+  { id: 7, name: "Kopi Uji", hppCost: 6000 },
+  { id: 9, name: "Roti Uji", hppCost: 5000 },
 ];
 
 describe("order code", () => {
@@ -57,9 +54,11 @@ describe("revenue breakdown", () => {
       paymentMethod: "QRIS",
       bills: { totalWithTax: 90000 },
     };
+    // Before October 2026 every in-store QRIS payment paid 0.7%.
     const offlineQrisOrder = {
       orderType: "Offline",
       paymentMethod: "QRIS",
+      orderDate: "2026-09-15 10:00:00",
       bills: { totalWithTax: 100000 },
     };
     const cashOrder = {
@@ -77,6 +76,22 @@ describe("revenue breakdown", () => {
     expect(getOrdersNetRevenueTotal([onlineQrisOrder, offlineQrisOrder, cashOrder])).toBe(239300);
   });
 
+  it("charges QRIS 0.7% from October 2026 only above Rp100.000", () => {
+    const qris = (totalWithTax, orderDate) => ({
+      orderType: "Offline",
+      paymentMethod: "QRIS",
+      orderDate,
+      bills: { totalWithTax },
+    });
+
+    expect(getOrderIncomeDeduction(qris(100000, "2026-10-05 09:00:00"))).toBe(0);
+    expect(getOrderIncomeDeduction(qris(45000, "2026-10-01 00:05:00"))).toBe(0);
+    expect(getOrderIncomeDeduction(qris(150000, "2026-10-05 09:00:00"))).toBe(1050);
+    expect(getOrderNetRevenue(qris(150000, "2026-10-05 09:00:00"))).toBe(148950);
+    // September keeps the flat fee, even for small payments.
+    expect(getOrderIncomeDeduction(qris(50000, "2026-09-30 23:30:00"))).toBe(350);
+  });
+
   it("normalizes payment and platform labels for reporting", () => {
     expect(isCashPayment("Tunai")).toBe(true);
     expect(isCashPayment("cash")).toBe(true);
@@ -92,14 +107,9 @@ describe("HPP", () => {
     expect(getOrderItemHpp({ hpp_cost: "3100" }, menuItems)).toBe(3100);
   });
 
-  it("falls back to the menu size HPP resolved from ids, keys or variants", () => {
-    expect(getOrderItemHpp({ sourceMenuItemId: 7, sizeVariant: "Large" }, menuItems)).toBe(8000);
-    expect(getOrderItemHpp({ id: "3-7-Large" }, menuItems)).toBe(8000);
-    expect(getOrderItemHpp({ menuItemId: 7, variant: "Regular / Hot" }, menuItems)).toBe(6000);
-    expect(getOrderItemHpp({ menuItemId: 7, sizeVariant: "Jumbo" }, menuItems)).toBe(6000);
-  });
-
-  it("falls back to the menu HPP by id or by name, else 0", () => {
+  it("falls back to the menu HPP by id, cart key or name, else 0", () => {
+    expect(getOrderItemHpp({ sourceMenuItemId: 7 }, menuItems)).toBe(6000);
+    expect(getOrderItemHpp({ id: "3-7-Large" }, menuItems)).toBe(6000);
     expect(getOrderItemHpp({ menuItemId: 9 }, menuItems)).toBe(5000);
     expect(getOrderItemHpp({ name: " roti uji " }, menuItems)).toBe(5000);
     expect(getOrderItemHpp({ name: "Tidak Ada" }, menuItems)).toBe(0);
@@ -108,7 +118,7 @@ describe("HPP", () => {
   it("multiplies by quantity and sums across orders", () => {
     const order = {
       items: [
-        { sourceMenuItemId: 7, sizeVariant: "Regular", quantity: 2 },
+        { sourceMenuItemId: 7, quantity: 2 },
         { hppCost: 1000, quantity: -1 },
         { menuItemId: 9, quantity: "3" },
       ],

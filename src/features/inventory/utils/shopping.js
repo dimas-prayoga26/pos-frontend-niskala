@@ -110,7 +110,7 @@ export const buildFallbackItemGroups = (purchases = [], stockItems = []) => {
           itemName: item.item_name,
           stock: stockItem ? Number(stockItem.stock || 0) : null,
           stockUnit: stockItem?.unit || item.stock_unit,
-          averageCost: Number(stockItem?.averageCost || item.stock_average_cost || 0),
+          averageCost: Number(stockItem?.averageCost || item.stock_unit_cost || 0),
           stockValue: Number(stockItem?.stockValue || item.stock_value_after || 0),
           purchaseCount: 0,
           histories: [],
@@ -132,7 +132,7 @@ export const buildFallbackItemGroups = (purchases = [], stockItems = []) => {
         total: Number(item.total),
         stockQuantity: Number(item.stock_quantity),
         stockUnit: item.stock_unit,
-        stockAverageCost: Number(item.stock_average_cost || 0),
+        stockAverageCost: Number(item.stock_unit_cost || 0),
         stockValueAfter: Number(item.stock_value_after || 0),
       });
     });

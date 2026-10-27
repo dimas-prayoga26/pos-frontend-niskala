@@ -16,8 +16,10 @@ const useStockItemActions = ({ onDeleted, onCogsSaved }) => {
       enqueueSnackbar("Bahan berhasil dihapus.", { variant: "success" });
       onDeleted();
     },
-    onError: () => {
-      enqueueSnackbar("Gagal menghapus bahan.", { variant: "error" });
+    onError: (error) => {
+      enqueueSnackbar(error?.response?.data?.message || "Gagal menghapus bahan.", {
+        variant: "error",
+      });
     },
   });
   const cogsMutation = useMutation({

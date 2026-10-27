@@ -106,15 +106,12 @@ const emptyMenuForm = {
   onlinePrice: "",
   hppCost: "",
   grossProfit: "",
-  variants: [],
-  sizes: [],
   ingredients: [],
   imageFile: null,
   imagePath: "",
 };
 
 const ITEMS_PER_PAGE = 10;
-const MENU_SIZES_ENABLED = false;
 const HIDE_AUTO_HPP_FIELD = true;
 
 const resolveMenuImageUrl = (imagePath) => {
@@ -204,19 +201,9 @@ const getIngredientCostDescription = (ingredient, stockItem, cost) => {
   if (!stockItem) return "Pilih bahan stok dulu untuk menghitung cost.";
 
   const quantity = Number(ingredient.quantity || 0);
-  const unit = stockItem.unit || ingredient.unit || "unit";
-  const normalizedUnit = normalizeStockUnit(unit);
   const averageCost = Number(stockItem.averageCost || 0);
 
-  if (["gr", "g", "gram"].includes(normalizedUnit)) {
-    return `${formatMoneyDisplay(averageCost)} x ${quantity || 0} = ${formatMoneyDisplay(cost)}`;
-  }
-
-  if (["ml", "milliliter", "mililiter"].includes(normalizedUnit)) {
-    return `${formatMoneyDisplay(averageCost)} x ${quantity || 0} = ${formatMoneyDisplay(cost)}`;
-  }
-
-  return `${formatMoneyDisplay(averageCost)} x ${quantity || 0} = ${formatMoneyDisplay(cost)}`;
+  return `${formatMoneyDisplay(averageCost)} x ${quantity || 0} ${stockItem.unit || ""} = ${formatMoneyDisplay(cost)}`;
 };
 
 const roundMoney = (value) =>
@@ -269,14 +256,6 @@ const MenuManagement = () => {
     () => categories.filter((category) => category.isActive !== false),
     [categories]
   );
-  const ingredientSizeOptions = useMemo(
-    () =>
-      menuForm.sizes
-        .map((size) => size.name.trim())
-        .filter(Boolean)
-        .filter((sizeName, index, list) => list.indexOf(sizeName) === index),
-    [menuForm.sizes]
-  );
   const categorySelectOptions = useMemo(
     () =>
       categories.map((category) => ({
@@ -288,13 +267,6 @@ const MenuManagement = () => {
   const menuCategoryFilterOptions = useMemo(
     () => [{ id: "", text: "Semua kategori" }, ...categorySelectOptions],
     [categorySelectOptions]
-  );
-  const ingredientSizeSelectOptions = useMemo(
-    () => [
-      { id: "", text: "Semua ukuran" },
-      ...ingredientSizeOptions.map((sizeName) => ({ id: sizeName, text: sizeName })),
-    ],
-    [ingredientSizeOptions]
   );
   const stockItemSelectOptions = useMemo(
     () => [
@@ -496,7 +468,6 @@ const MenuManagement = () => {
           item.regularPrice ?? item.price,
           item.includeOnlinePlatform ? "online" : "offline",
           item.onlinePrice,
-          item.largePrice,
         ]
           .join(" ")
           .toLowerCase()
@@ -531,7 +502,6 @@ const MenuManagement = () => {
     ? (menuPage - 1) * ITEMS_PER_PAGE + 1
     : 0;
   const menuEnd = Math.min(menuPage * ITEMS_PER_PAGE, filteredMenuItems.length);
-  const hasMenuSizes = MENU_SIZES_ENABLED && menuForm.sizes.length > 0;
   const autoIngredientCostTotal = useMemo(
     () =>
       menuForm.ingredients.reduce((total, ingredient) => {
@@ -578,57 +548,6 @@ const MenuManagement = () => {
     setMenuForm((current) => ({ ...current, [field]: value }));
   };
 
-  const updateMenuVariant = (index, value) => {
-    setMenuForm((current) => ({
-      ...current,
-      variants: current.variants.map((variant, variantIndex) =>
-        variantIndex === index ? value : variant
-      ),
-    }));
-  };
-
-  const addMenuVariantField = () => {
-    setMenuForm((current) => ({
-      ...current,
-      variants: [...current.variants, ""],
-    }));
-  };
-
-  const removeMenuVariantField = (index) => {
-    setMenuForm((current) => ({
-      ...current,
-      variants: current.variants.filter((_, variantIndex) => variantIndex !== index),
-    }));
-  };
-
-  const updateMenuSize = (index, field, value) => {
-    setMenuForm((current) => ({
-      ...current,
-      sizes: current.sizes.map((size, sizeIndex) =>
-        sizeIndex === index ? { ...size, [field]: value } : size
-      ),
-    }));
-  };
-
-  const addMenuSizeField = () => {
-    setMenuForm((current) => ({
-      ...current,
-      includeOnlinePlatform: false,
-      onlinePrice: "",
-      sizes: [
-        ...current.sizes,
-        { name: "", price: "", hppCost: "", grossProfit: "" },
-      ],
-    }));
-  };
-
-  const removeMenuSizeField = (index) => {
-    setMenuForm((current) => ({
-      ...current,
-      sizes: current.sizes.filter((_, sizeIndex) => sizeIndex !== index),
-    }));
-  };
-
   const updateMenuIngredient = (index, field, value) => {
     setMenuForm((current) => ({
       ...current,
@@ -652,7 +571,6 @@ const MenuManagement = () => {
               stockItemId,
               ingredientName:
                 selectedStockItem?.name || ingredient.ingredientName || "",
-              unit: selectedStockItem?.unit || ingredient.unit || "",
             }
           : ingredient
       ),
@@ -665,11 +583,9 @@ const MenuManagement = () => {
       ingredients: [
         ...current.ingredients,
         {
-          sizeName: "",
           stockItemId: "",
           ingredientName: "",
           quantity: "",
-          unit: "",
           note: "",
         },
       ],
@@ -717,48 +633,22 @@ const MenuManagement = () => {
   const handleSubmitMenuItem = (event) => {
     event.preventDefault();
 
-    const activeMenuSizes = MENU_SIZES_ENABLED ? menuForm.sizes : [];
-    const hasIncompleteSize = activeMenuSizes.some(
-      (size) =>
-        !size.name.trim() ||
-        size.price === ""
-    );
-    const sizes = activeMenuSizes
-      .map((size) => ({
-        name: size.name.trim(),
-        price: parseMoneyInput(size.price),
-        hppCost: parseMoneyInput(size.hppCost),
-        grossProfit:
-          parseMoneyInput(size.grossProfit),
-      }))
-      .filter((size) => size.name && size.price >= 0);
-    const variants = menuForm.variants
-      .map((variant) => variant.trim())
-      .filter(Boolean);
+    // Recipe rows must reference a stock item; rows without one are not saved.
+    // Quantities are in the stock item's unit.
     const ingredients = menuForm.ingredients
       .map((ingredient) => ({
-        sizeName: MENU_SIZES_ENABLED ? ingredient.sizeName || "" : "",
-        stockItemId: ingredient.stockItemId || null,
-        ingredientName: ingredient.ingredientName.trim(),
+        stockItemId: Number(ingredient.stockItemId) || null,
         quantity: Number(ingredient.quantity) || 0,
-        unit: ingredient.unit.trim(),
         note: ingredient.note.trim(),
       }))
-      .filter(
-        (ingredient) =>
-          ingredient.ingredientName &&
-          ingredient.quantity >= 0 &&
-          ingredient.unit
-      );
+      .filter((ingredient) => ingredient.stockItemId && ingredient.quantity >= 0);
     const basePrice = parseMoneyInput(menuForm.regularPrice);
     const onlinePrice =
       menuForm.includeOnlinePlatform && menuForm.onlinePrice !== ""
         ? parseMoneyInput(menuForm.onlinePrice)
         : null;
-    const hppCost = hasMenuSizes ? parseMoneyInput(menuForm.hppCost) : autoHppCost;
-    const grossProfit = hasMenuSizes
-      ? parseMoneyInput(menuForm.grossProfit)
-      : autoGrossProfit;
+    const hppCost = autoHppCost;
+    const grossProfit = autoGrossProfit;
 
     const hasMenuImage =
       Boolean(menuForm.imageFile) || Boolean(menuForm.imagePath.trim());
@@ -766,13 +656,11 @@ const MenuManagement = () => {
     if (
       !menuForm.categoryId ||
       !menuForm.name.trim() ||
-      (!hasMenuSizes && menuForm.regularPrice === "") ||
+      menuForm.regularPrice === "" ||
       !hasMenuImage
     ) {
       enqueueSnackbar(
-        hasMenuSizes
-          ? "Field wajib: category, nama menu, upload image, dan status."
-          : "Field wajib: category, nama menu, harga reguler, upload image, dan status.",
+        "Field wajib: category, nama menu, harga reguler, upload image, dan status.",
         {
           variant: "warning",
         }
@@ -780,11 +668,7 @@ const MenuManagement = () => {
       return;
     }
 
-    if (
-      menuForm.includeOnlinePlatform &&
-      !hasMenuSizes &&
-      menuForm.onlinePrice === ""
-    ) {
+    if (menuForm.includeOnlinePlatform && menuForm.onlinePrice === "") {
       enqueueSnackbar("Harga online wajib diisi jika platform online disertakan.", {
         variant: "warning",
       });
@@ -797,16 +681,7 @@ const MenuManagement = () => {
       baseMoneyFields.push(menuForm.onlinePrice);
     }
 
-    const hasInvalidBaseMoney =
-      !hasMenuSizes &&
-      baseMoneyFields.some((value) => !isValidMoneyInput(value));
-    const hasInvalidSizeMoney = activeMenuSizes.some((size) =>
-      [size.price, size.hppCost, size.grossProfit].some(
-        (value) => !isValidMoneyInput(value)
-      )
-    );
-
-    if (hasInvalidBaseMoney || hasInvalidSizeMoney) {
+    if (baseMoneyFields.some((value) => !isValidMoneyInput(value))) {
       enqueueSnackbar(
         "Format nominal tidak valid. Contoh yang benar: 20000, 20.000, atau 5440,5.",
         { variant: "warning" }
@@ -814,25 +689,7 @@ const MenuManagement = () => {
       return;
     }
 
-    if (hasMenuSizes && hasIncompleteSize) {
-      enqueueSnackbar(
-        "Setiap ukuran wajib isi nama ukuran dan harga reguler.",
-        { variant: "warning" }
-      );
-      return;
-    }
-
-    const hasInvalidSizeFinancial = sizes.some(
-      (size) => size.price < 0 || size.hppCost < 0 || size.grossProfit < 0
-    );
-
-    if (
-      (!hasMenuSizes &&
-        (basePrice < 0 ||
-          hppCost < 0 ||
-          (onlinePrice !== null && onlinePrice < 0))) ||
-      hasInvalidSizeFinancial
-    ) {
+    if (basePrice < 0 || hppCost < 0 || (onlinePrice !== null && onlinePrice < 0)) {
       enqueueSnackbar("Harga dan HPP tidak boleh minus.", {
         variant: "warning",
       });
@@ -842,17 +699,12 @@ const MenuManagement = () => {
     menuItemMutation.mutate({
       categoryId: menuForm.categoryId,
       name: menuForm.name.trim(),
-      includeOnlinePlatform: hasMenuSizes
-        ? false
-        : Boolean(menuForm.includeOnlinePlatform),
-      regularPrice: hasMenuSizes ? null : basePrice,
-      onlinePrice: hasMenuSizes ? null : onlinePrice,
-      largePrice: hasMenuSizes ? sizes[1]?.price ?? null : null,
-      hppCost: hasMenuSizes ? null : hppCost,
-      grossProfit: hasMenuSizes ? null : grossProfit,
+      includeOnlinePlatform: Boolean(menuForm.includeOnlinePlatform),
+      regularPrice: basePrice,
+      onlinePrice,
+      hppCost,
+      grossProfit,
       ingredients,
-      variants,
-      sizes: MENU_SIZES_ENABLED ? sizes : [],
       imageFile: menuForm.imageFile,
       imagePath: menuForm.imagePath.trim(),
       isAvailable: Boolean(menuForm.isAvailable),
@@ -880,50 +732,24 @@ const MenuManagement = () => {
   };
 
   const startEditMenuItem = (item) => {
-    const firstSize = item.sizes?.[0] || {};
-    const hasItemSizes = MENU_SIZES_ENABLED && Boolean(item.sizes?.length);
-
     setEditingMenuItem(item);
     setIsMenuFormOpen(true);
     setMenuForm({
       categoryId: String(item.categoryId || item.category?.id || ""),
       isAvailable: item.isAvailable !== false,
       name: item.name,
-      regularPrice: hasItemSizes
-        ? ""
-        : String(item.regularPrice ?? item.price ?? firstSize.price ?? ""),
+      regularPrice: String(item.regularPrice ?? item.price ?? ""),
       includeOnlinePlatform: Boolean(item.includeOnlinePlatform),
       onlinePrice:
         item.onlinePrice === null || item.onlinePrice === undefined
           ? ""
           : String(item.onlinePrice),
-      hppCost: hasItemSizes
-        ? ""
-        : String(item.hppCost ?? item.hpp ?? firstSize.hppCost ?? firstSize.hpp ?? ""),
-      grossProfit: hasItemSizes
-        ? ""
-        : String(
-            item.grossProfit ??
-              item.profit ??
-              firstSize.grossProfit ??
-              firstSize.profit ??
-              ""
-          ),
-      variants: item.variants?.length ? item.variants : [],
-      sizes: MENU_SIZES_ENABLED
-        ? (item.sizes || []).map((size) => ({
-            name: size.name,
-            price: String(size.price),
-            hppCost: String(size.hppCost ?? size.hpp ?? ""),
-            grossProfit: String(size.grossProfit ?? size.profit ?? ""),
-          }))
-        : [],
+      hppCost: String(item.hppCost ?? item.hpp ?? ""),
+      grossProfit: String(item.grossProfit ?? item.profit ?? ""),
       ingredients: (item.ingredients || []).map((ingredient) => ({
-        sizeName: MENU_SIZES_ENABLED ? ingredient.sizeName || "" : "",
         stockItemId: String(ingredient.stockItemId || ""),
         ingredientName: ingredient.ingredientName || ingredient.name || "",
         quantity: String(ingredient.quantity ?? ""),
-        unit: ingredient.unit || "",
         note: ingredient.note || "",
       })),
       imageFile: null,
@@ -1391,132 +1217,6 @@ const MenuManagement = () => {
                 className="mt-2 w-full rounded-lg bg-[#262626] px-4 py-3 text-sm text-[#f5f5f5] outline-none"
               />
             </label>
-            {MENU_SIZES_ENABLED && (
-              <div className="mt-4">
-                <div className="mb-2 flex items-center justify-between">
-                  <span className="text-sm font-semibold text-[#ababab]">
-                    Ukuran & Harga <span className="text-xs text-[#777]">(Opsional)</span>
-                  </span>
-                  <button
-                    type="button"
-                    onClick={addMenuSizeField}
-                    className="rounded-md bg-[#333] px-3 py-1 text-xs font-bold text-[#f5f5f5]"
-                  >
-                    Tambah
-                  </button>
-                </div>
-                <div className="space-y-2">
-                  {menuForm.sizes.map((size, index) => (
-                    <div
-                      key={index}
-                      className="rounded-lg border border-[#333] bg-[#202020] p-3"
-                    >
-                      <div className="grid grid-cols-[minmax(0,1fr)_40px] gap-2">
-                        <input
-                          value={size.name}
-                          onChange={(event) =>
-                            updateMenuSize(index, "name", event.target.value)
-                          }
-                          placeholder="Nama ukuran, contoh: Reguler / Large"
-                          className="min-w-0 rounded-lg bg-[#262626] px-3 py-3 text-sm text-[#f5f5f5] outline-none"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => removeMenuSizeField(index)}
-                          className="w-10 rounded-lg bg-[#333] text-sm font-bold text-red-300"
-                        >
-                          X
-                        </button>
-                      </div>
-                      <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-3">
-                        {[
-                          ["price", "Harga Reguler", "18000", "#a79981", false],
-                          ["hppCost", "HPP", "0", "rgb(253 230 138)", true],
-                          [
-                            "grossProfit",
-                            "Gross Profit",
-                            "0",
-                            "rgb(167 243 208)",
-                            true,
-                          ],
-                        ].map(([field, label, placeholder, color, isOptional]) => (
-                          <label
-                            key={field}
-                            className="block min-w-0 text-xs font-bold"
-                            style={{ color }}
-                          >
-                            <span>
-                              {label}{" "}
-                              {isOptional && (
-                                <span className="font-semibold text-[#777]">
-                                  (Opsional)
-                                </span>
-                              )}
-                            </span>
-                            <div className="mt-1 flex min-w-0 overflow-hidden rounded-lg bg-[#262626]">
-                              <span className="flex shrink-0 items-center px-2 text-sm font-bold">
-                                Rp
-                              </span>
-                              <input
-                                value={size[field]}
-                                onChange={(event) =>
-                                  updateMenuSize(index, field, event.target.value)
-                                }
-                                type="text"
-                                inputMode="decimal"
-                                placeholder={placeholder}
-                                className="min-w-0 w-full bg-transparent py-3 pr-2 text-sm text-[#f5f5f5] outline-none"
-                              />
-                            </div>
-                          </label>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                <p className="mt-2 text-xs text-[#777]">
-                  Boleh kosong kalau menu hanya punya satu harga reguler. HPP dan gross profit boleh dikosongkan.
-                </p>
-              </div>
-            )}
-            <div className="mt-4">
-              <div className="mb-2 flex items-center justify-between">
-                <span className="text-sm font-semibold text-[#ababab]">
-                  Varian <span className="text-xs text-[#777]">(Opsional)</span>
-                </span>
-                <button
-                  type="button"
-                  onClick={addMenuVariantField}
-                  className="rounded-md bg-[#333] px-3 py-1 text-xs font-bold text-[#f5f5f5]"
-                >
-                  Tambah
-                </button>
-              </div>
-              <div className="space-y-2">
-                {menuForm.variants.map((variant, index) => (
-                  <div key={index} className="grid grid-cols-[1fr_auto] gap-2">
-                    <input
-                      value={variant}
-                      onChange={(event) =>
-                        updateMenuVariant(index, event.target.value)
-                      }
-                      placeholder="Cold / Hot / Less Sugar"
-                      className="rounded-lg bg-[#262626] px-3 py-3 text-sm text-[#f5f5f5] outline-none"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => removeMenuVariantField(index)}
-                      className="rounded-lg bg-[#333] px-3 text-sm font-bold text-red-300"
-                    >
-                      X
-                    </button>
-                  </div>
-                ))}
-              </div>
-              <p className="mt-2 text-xs text-[#777]">
-                Boleh kosong. Contoh varian: Hot, Cold, Less Sugar.
-              </p>
-            </div>
             <div className="mt-4">
               <div className="mb-2 flex items-center justify-between">
                 <span className="text-sm font-semibold text-[#ababab]">
@@ -1581,7 +1281,7 @@ const MenuManagement = () => {
                           className="min-w-0 rounded-lg bg-[#262626] px-3 py-3 text-sm text-[#f5f5f5] outline-none"
                         />
                         <input
-                          value={selectedIngredientStockItem?.unit || ingredient.unit}
+                          value={selectedIngredientStockItem?.unit || ""}
                           disabled
                           placeholder="gr"
                           aria-label="Satuan bahan"
@@ -1630,113 +1330,109 @@ const MenuManagement = () => {
                 Boleh kosong. Dipakai sebagai catatan resep dan pengurangan stok otomatis.
               </p>
             </div>
-            {!hasMenuSizes && (
-              <>
-                <div className="mt-4">
-                  <div className="mb-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                    <span className="text-sm font-semibold text-[#ababab]">
-                      Harga
+            <div className="mt-4">
+              <div className="mb-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <span className="text-sm font-semibold text-[#ababab]">
+                  Harga
+                </span>
+                <label className="flex w-fit items-center gap-3 text-sm font-bold text-[#ababab]">
+                  <span>Include online platform</span>
+                  <input
+                    type="checkbox"
+                    checked={Boolean(menuForm.includeOnlinePlatform)}
+                    onChange={(event) =>
+                      setMenuForm((current) => ({
+                        ...current,
+                        includeOnlinePlatform: event.target.checked,
+                        onlinePrice: event.target.checked
+                          ? current.onlinePrice
+                          : "",
+                      }))
+                    }
+                    className="peer sr-only"
+                  />
+                  <span className="relative h-7 w-12 rounded-full bg-[#333] transition after:absolute after:left-1 after:top-1 after:h-5 after:w-5 after:rounded-full after:bg-[#f5f5f5] after:transition peer-checked:bg-[#a79981] peer-checked:after:translate-x-5" />
+                </label>
+              </div>
+              <div
+                className={`grid grid-cols-1 gap-3 ${
+                  menuForm.includeOnlinePlatform ? "sm:grid-cols-2" : ""
+                }`}
+              >
+                <label className="block text-sm font-semibold text-[#ababab]">
+                  Harga Reguler
+                  <div className="mt-2 flex overflow-hidden rounded-lg bg-[#262626]">
+                    <span className="flex shrink-0 items-center px-4 text-sm font-bold text-[#a79981]">
+                      Rp
                     </span>
-                    <label className="flex w-fit items-center gap-3 text-sm font-bold text-[#ababab]">
-                      <span>Include online platform</span>
-                      <input
-                        type="checkbox"
-                        checked={Boolean(menuForm.includeOnlinePlatform)}
-                        onChange={(event) =>
-                          setMenuForm((current) => ({
-                            ...current,
-                            includeOnlinePlatform: event.target.checked,
-                            onlinePrice: event.target.checked
-                              ? current.onlinePrice
-                              : "",
-                          }))
-                        }
-                        className="peer sr-only"
-                      />
-                      <span className="relative h-7 w-12 rounded-full bg-[#333] transition after:absolute after:left-1 after:top-1 after:h-5 after:w-5 after:rounded-full after:bg-[#f5f5f5] after:transition peer-checked:bg-[#a79981] peer-checked:after:translate-x-5" />
-                    </label>
+                    <input
+                      value={menuForm.regularPrice}
+                      onChange={(event) =>
+                        updateMenuForm("regularPrice", event.target.value)
+                      }
+                      type="text"
+                      inputMode="decimal"
+                      placeholder="18000"
+                      className="min-w-0 w-full bg-transparent py-3 pr-4 text-sm text-[#f5f5f5] outline-none"
+                    />
                   </div>
-                  <div
-                    className={`grid grid-cols-1 gap-3 ${
-                      menuForm.includeOnlinePlatform ? "sm:grid-cols-2" : ""
-                    }`}
-                  >
-                    <label className="block text-sm font-semibold text-[#ababab]">
-                      Harga Reguler
-                      <div className="mt-2 flex overflow-hidden rounded-lg bg-[#262626]">
-                        <span className="flex shrink-0 items-center px-4 text-sm font-bold text-[#a79981]">
-                          Rp
-                        </span>
-                        <input
-                          value={menuForm.regularPrice}
-                          onChange={(event) =>
-                            updateMenuForm("regularPrice", event.target.value)
-                          }
-                          type="text"
-                          inputMode="decimal"
-                          placeholder="18000"
-                          className="min-w-0 w-full bg-transparent py-3 pr-4 text-sm text-[#f5f5f5] outline-none"
-                        />
-                      </div>
-                    </label>
-                    {menuForm.includeOnlinePlatform && (
-                      <label className="block text-sm font-semibold text-sky-200">
-                        Harga Online
-                        <div className="mt-2 flex overflow-hidden rounded-lg border border-sky-500/30 bg-sky-500/10">
-                          <span className="flex shrink-0 items-center px-4 text-sm font-bold text-sky-200">
-                            Rp
-                          </span>
-                          <input
-                            value={menuForm.onlinePrice}
-                            onChange={(event) =>
-                              updateMenuForm("onlinePrice", event.target.value)
-                            }
-                            type="text"
-                            inputMode="decimal"
-                            placeholder="21000"
-                            className="min-w-0 w-full bg-transparent py-3 pr-4 text-sm text-[#f5f5f5] outline-none"
-                          />
-                        </div>
-                      </label>
-                    )}
-                  </div>
-                </div>
-                <div className="mt-4 grid grid-cols-1 gap-2">
-                  {!HIDE_AUTO_HPP_FIELD && (
-                    <label className="block text-sm font-semibold text-amber-200">
-                      HPP <span className="text-xs text-[#777]">(Auto)</span>
-                      <div className="mt-2 flex overflow-hidden rounded-lg border border-amber-500/30 bg-amber-500/10">
-                        <span className="flex shrink-0 items-center px-4 text-sm font-bold text-amber-200">
-                          Rp
-                        </span>
-                        <input
-                          value={formatMoneyDisplay(autoHppCost)}
-                          disabled
-                          type="text"
-                          placeholder="0"
-                          className="min-w-0 w-full bg-transparent py-3 pr-4 text-sm text-[#f5f5f5] outline-none disabled:opacity-100"
-                        />
-                      </div>
-                    </label>
-                  )}
-                  <label className="block text-sm font-semibold text-emerald-200">
-                    Gross Profit <span className="text-xs text-[#777]">(Auto)</span>
-                    <div className="mt-2 flex overflow-hidden rounded-lg border border-emerald-500/30 bg-emerald-500/10">
-                      <span className="flex shrink-0 items-center px-4 text-sm font-bold text-emerald-200">
+                </label>
+                {menuForm.includeOnlinePlatform && (
+                  <label className="block text-sm font-semibold text-sky-200">
+                    Harga Online
+                    <div className="mt-2 flex overflow-hidden rounded-lg border border-sky-500/30 bg-sky-500/10">
+                      <span className="flex shrink-0 items-center px-4 text-sm font-bold text-sky-200">
                         Rp
                       </span>
                       <input
-                        value={formatMoneyDisplay(autoGrossProfit)}
-                        disabled
+                        value={menuForm.onlinePrice}
+                        onChange={(event) =>
+                          updateMenuForm("onlinePrice", event.target.value)
+                        }
                         type="text"
-                        placeholder="0"
-                        className="min-w-0 w-full bg-transparent py-3 pr-4 text-sm text-[#f5f5f5] outline-none disabled:opacity-100"
+                        inputMode="decimal"
+                        placeholder="21000"
+                        className="min-w-0 w-full bg-transparent py-3 pr-4 text-sm text-[#f5f5f5] outline-none"
                       />
                     </div>
                   </label>
+                )}
+              </div>
+            </div>
+            <div className="mt-4 grid grid-cols-1 gap-2">
+              {!HIDE_AUTO_HPP_FIELD && (
+                <label className="block text-sm font-semibold text-amber-200">
+                  HPP <span className="text-xs text-[#777]">(Auto)</span>
+                  <div className="mt-2 flex overflow-hidden rounded-lg border border-amber-500/30 bg-amber-500/10">
+                    <span className="flex shrink-0 items-center px-4 text-sm font-bold text-amber-200">
+                      Rp
+                    </span>
+                    <input
+                      value={formatMoneyDisplay(autoHppCost)}
+                      disabled
+                      type="text"
+                      placeholder="0"
+                      className="min-w-0 w-full bg-transparent py-3 pr-4 text-sm text-[#f5f5f5] outline-none disabled:opacity-100"
+                    />
+                  </div>
+                </label>
+              )}
+              <label className="block text-sm font-semibold text-emerald-200">
+                Gross Profit <span className="text-xs text-[#777]">(Auto)</span>
+                <div className="mt-2 flex overflow-hidden rounded-lg border border-emerald-500/30 bg-emerald-500/10">
+                  <span className="flex shrink-0 items-center px-4 text-sm font-bold text-emerald-200">
+                    Rp
+                  </span>
+                  <input
+                    value={formatMoneyDisplay(autoGrossProfit)}
+                    disabled
+                    type="text"
+                    placeholder="0"
+                    className="min-w-0 w-full bg-transparent py-3 pr-4 text-sm text-[#f5f5f5] outline-none disabled:opacity-100"
+                  />
                 </div>
-              </>
-            )}
+              </label>
+            </div>
             <div className="mt-4">
               <label className="block text-sm font-semibold text-[#ababab]">
                 Upload Image
@@ -1870,25 +1566,8 @@ const MenuManagement = () => {
                           {item.includeOnlinePlatform ? "Ya" : "Tidak"}
                         </span>
                       </td>
-                      <td className="p-4">
-                        <div className="text-sm font-semibold">
-                          {(item.sizes?.length
-                            ? item.sizes
-                            : [
-                                {
-                                  name: "Reguler",
-                                  price: item.regularPrice ?? item.price,
-                                },
-                              ]
-                          ).map((size, sizeIndex) => (
-                            <p
-                              key={`${size.name}-${sizeIndex}`}
-                              className={sizeIndex ? "mt-1 text-[#a79981]" : ""}
-                            >
-                              {size.name} {formatCurrency(size.price)}
-                            </p>
-                          ))}
-                        </div>
+                      <td className="p-4 text-sm font-semibold">
+                        {formatCurrency(item.regularPrice ?? item.price)}
                       </td>
                       <td className="p-4 text-sm font-semibold text-sky-200">
                         {item.onlinePrice === null || item.onlinePrice === undefined
@@ -1896,42 +1575,10 @@ const MenuManagement = () => {
                           : formatCurrency(item.onlinePrice)}
                       </td>
                       <td className="p-4 text-sm font-semibold text-amber-200">
-                        <div>
-                          {(item.sizes?.length
-                            ? item.sizes
-                            : [{ name: "HPP", hppCost: item.hppCost || item.hpp || 0 }]
-                          ).map((size, sizeIndex) => (
-                            <p
-                              key={`${size.name}-hpp-${sizeIndex}`}
-                              className={sizeIndex ? "mt-1 text-amber-100/80" : ""}
-                            >
-                              {item.sizes?.length ? `${size.name} ` : ""}
-                              {formatCurrency(size.hppCost || size.hpp || 0)}
-                            </p>
-                          ))}
-                        </div>
+                        {formatCurrency(item.hppCost || item.hpp || 0)}
                       </td>
                       <td className="p-4 text-sm font-semibold text-emerald-200">
-                        <div>
-                          {(item.sizes?.length
-                            ? item.sizes
-                            : [
-                                {
-                                  name: "Gross Profit",
-                                  grossProfit:
-                                    item.grossProfit || item.profit || 0,
-                                },
-                              ]
-                          ).map((size, sizeIndex) => (
-                            <p
-                              key={`${size.name}-profit-${sizeIndex}`}
-                              className={sizeIndex ? "mt-1 text-emerald-100/80" : ""}
-                            >
-                              {item.sizes?.length ? `${size.name} ` : ""}
-                              {formatCurrency(size.grossProfit || size.profit || 0)}
-                            </p>
-                          ))}
-                        </div>
+                        {formatCurrency(item.grossProfit || item.profit || 0)}
                       </td>
                       <td className="p-4 text-center">
                         <span
