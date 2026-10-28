@@ -11,6 +11,10 @@ import { formatCurrency } from "../../../shared/lib/format";
 import { formatDateAndTime, formatJakartaReceiptDate } from "../../../shared/lib/dates";
 import { getDisplayOrderCode } from "../utils/orderMetrics";
 
+// Deleting orders is hidden for now: a deleted order disappears from the live
+// recap (Rekap New) for good. Set to true to show "Hapus Pesanan" again.
+const ORDER_DELETE_ENABLED = false;
+
 const getOrderVariantText = (variant) => {
   const parts = String(variant ?? "")
     .split("/")
@@ -142,15 +146,17 @@ const OrderCard = ({
                     <MdInfoOutline size={18} />
                     Lihat Detail
                   </button>
-                  <button
-                    type="button"
-                    onClick={handleDeleteOrder}
-                    disabled={isDeletingOrder}
-                    className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm font-semibold text-red-400 hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    <MdDeleteOutline size={18} />
-                    {isDeletingOrder ? "Menghapus..." : "Hapus Pesanan"}
-                  </button>
+                  {ORDER_DELETE_ENABLED && (
+                    <button
+                      type="button"
+                      onClick={handleDeleteOrder}
+                      disabled={isDeletingOrder}
+                      className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm font-semibold text-red-400 hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      <MdDeleteOutline size={18} />
+                      {isDeletingOrder ? "Menghapus..." : "Hapus Pesanan"}
+                    </button>
+                  )}
                 </div>
               )}
             </div>
