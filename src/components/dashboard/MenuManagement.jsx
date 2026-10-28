@@ -13,6 +13,7 @@ import {
   deleteMenuItem,
   getCategories,
   getMenuItems,
+  getSemiItems,
   getStockItems,
   uploadMenuImage,
   updateCategory,
@@ -169,6 +170,23 @@ const isValidMoneyInput = (value) => {
 const getCategoryId = (category) => String(category?.id || category?._id || "");
 const normalizeStockUnit = (unit) => String(unit || "").trim().toLowerCase();
 
+// A recipe line uses a bahan baku (stockItemId) or a bahan setengah jadi
+// (semiItemId); the form keys both as "raw:<id>" / "semi:<id>".
+const getIngredientKey = (ingredient) => {
+  if (ingredient?.semiItemId) return `semi:${ingredient.semiItemId}`;
+  if (ingredient?.stockItemId) return `raw:${ingredient.stockItemId}`;
+  return "";
+};
+
+const fromIngredientKey = (key) => {
+  const [kind, id] = String(key || "").split(":");
+  const itemId = Number(id) || null;
+
+  return kind === "semi"
+    ? { stockItemId: null, semiItemId: itemId }
+    : { stockItemId: itemId, semiItemId: null };
+};
+
 const getCogsDisplay = (stockItem) => {
   if (!stockItem) return "COGS: -";
 
@@ -249,9 +267,34 @@ const MenuManagement = () => {
     placeholderData: keepPreviousData,
   });
 
+  const { data: semiItemsRes } = useQuery({
+    queryKey: ["semi-items", "menu-management"],
+    queryFn: getSemiItems,
+    placeholderData: keepPreviousData,
+  });
+
   const categories = categoriesRes?.data?.data || [];
   const menuItems = menuItemsRes?.data?.data || [];
-  const stockItems = stockItemsRes?.data?.data || [];
+  const stockItemsData = stockItemsRes?.data?.data;
+  const semiItemsData = semiItemsRes?.data?.data;
+  // Bahan baku, then bahan setengah jadi (e.g. Nasi, used per portion).
+  const stockItems = useMemo(
+    () => [
+      ...(stockItemsData || []).map((item) => ({
+        ...item,
+        key: `raw:${item.id || item._id}`,
+        label: item.name,
+      })),
+      ...(semiItemsData || []).map((item) => ({
+        ...item,
+        key: `semi:${item.id || item._id}`,
+        label: `${item.name} (Setengah jadi)`,
+      })),
+    ],
+    [stockItemsData, semiItemsData]
+  );
+  const findIngredientItem = (key) =>
+    stockItems.find((stockItem) => stockItem.key === String(key || ""));
   const positionCategories = useMemo(
     () => categories.filter((category) => category.isActive !== false),
     [categories]
@@ -272,9 +315,8 @@ const MenuManagement = () => {
     () => [
       { id: "", text: "Pilih dari stok" },
       ...stockItems.map((stockItem) => ({
-        id: String(stockItem.id || stockItem._id),
-        // Prepared items (bahan olahan, e.g. Nasi) are used per portion.
-        text: stockItem.isPrepared ? `${stockItem.name} (Olahan)` : stockItem.name,
+        id: stockItem.key,
+        text: stockItem.label,
       })),
     ],
     [stockItems]
@@ -507,9 +549,7 @@ const MenuManagement = () => {
     () =>
       menuForm.ingredients.reduce((total, ingredient) => {
         const selectedStockItem = stockItems.find(
-          (stockItem) =>
-            String(stockItem.id || stockItem._id) ===
-            String(ingredient.stockItemId || "")
+          (stockItem) => stockItem.key === String(ingredient.itemKey || "")
         );
 
         return total + getIngredientCost(ingredient, selectedStockItem);
@@ -558,10 +598,8 @@ const MenuManagement = () => {
     }));
   };
 
-  const selectIngredientStockItem = (index, stockItemId) => {
-    const selectedStockItem = stockItems.find(
-      (item) => String(item.id || item._id) === String(stockItemId)
-    );
+  const selectIngredientStockItem = (index, itemKey) => {
+    const selectedStockItem = findIngredientItem(itemKey);
 
     setMenuForm((current) => ({
       ...current,
@@ -569,7 +607,7 @@ const MenuManagement = () => {
         ingredientIndex === index
           ? {
               ...ingredient,
-              stockItemId,
+              itemKey,
               ingredientName:
                 selectedStockItem?.name || ingredient.ingredientName || "",
             }
@@ -584,7 +622,7 @@ const MenuManagement = () => {
       ingredients: [
         ...current.ingredients,
         {
-          stockItemId: "",
+          itemKey: "",
           ingredientName: "",
           quantity: "",
           note: "",
@@ -638,11 +676,14 @@ const MenuManagement = () => {
     // Quantities are in the stock item's unit.
     const ingredients = menuForm.ingredients
       .map((ingredient) => ({
-        stockItemId: Number(ingredient.stockItemId) || null,
+        ...fromIngredientKey(ingredient.itemKey),
         quantity: Number(ingredient.quantity) || 0,
         note: ingredient.note.trim(),
       }))
-      .filter((ingredient) => ingredient.stockItemId && ingredient.quantity >= 0);
+      .filter(
+        (ingredient) =>
+          (ingredient.stockItemId || ingredient.semiItemId) && ingredient.quantity >= 0
+      );
     const basePrice = parseMoneyInput(menuForm.regularPrice);
     const onlinePrice =
       menuForm.includeOnlinePlatform && menuForm.onlinePrice !== ""
@@ -748,7 +789,7 @@ const MenuManagement = () => {
       hppCost: String(item.hppCost ?? item.hpp ?? ""),
       grossProfit: String(item.grossProfit ?? item.profit ?? ""),
       ingredients: (item.ingredients || []).map((ingredient) => ({
-        stockItemId: String(ingredient.stockItemId || ""),
+        itemKey: getIngredientKey(ingredient),
         ingredientName: ingredient.ingredientName || ingredient.name || "",
         quantity: String(ingredient.quantity ?? ""),
         note: ingredient.note || "",
@@ -1233,10 +1274,8 @@ const MenuManagement = () => {
               </div>
               <div className="space-y-3">
                 {menuForm.ingredients.map((ingredient, index) => {
-                  const selectedIngredientStockItem = stockItems.find(
-                    (stockItem) =>
-                      String(stockItem.id || stockItem._id) ===
-                      String(ingredient.stockItemId || "")
+                  const selectedIngredientStockItem = findIngredientItem(
+                    ingredient.itemKey
                   );
                   const ingredientCost = getIngredientCost(
                     ingredient,
@@ -1251,7 +1290,7 @@ const MenuManagement = () => {
                       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                         <CreatableSelect2
                           options={stockItemSelectOptions}
-                          value={ingredient.stockItemId}
+                          value={ingredient.itemKey}
                           onSelect={(option) =>
                             selectIngredientStockItem(index, option?.id || "")
                           }

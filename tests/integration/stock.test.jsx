@@ -6,14 +6,16 @@ import { renderWithProviders } from "../renderWithProviders";
 
 vi.mock("../../src/https/index", async (importOriginal) => ({
   ...(await importOriginal()),
-  addPreparedItem: vi.fn(),
-  deletePreparedProduction: vi.fn(),
+  addSemiItem: vi.fn(),
+  deleteSemiItem: vi.fn(),
+  deleteSemiProduction: vi.fn(),
   deleteStockItem: vi.fn(),
-  getPreparedProductions: vi.fn(),
   getPurchases: vi.fn(),
+  getSemiItems: vi.fn(),
+  getSemiProductions: vi.fn(),
   getShoppingSuppliers: vi.fn(),
   getStockItems: vi.fn(),
-  recordPreparedProduction: vi.fn(),
+  recordSemiProduction: vi.fn(),
   updateStockCogs: vi.fn(),
 }));
 
@@ -32,7 +34,8 @@ const stockItem = (id, overrides = {}) => ({
   ...overrides,
 });
 
-// Bahan olahan made from "Bahan 03" (1 pcs per recipe); never listed in Stok Barang.
+// Bahan setengah jadi made from "Bahan 03" (1 pcs per recipe), served by its
+// own endpoint and never listed in Stok Barang.
 const nasi = stockItem(20, {
   name: "Nasi",
   category: "Olahan",
@@ -41,7 +44,6 @@ const nasi = stockItem(20, {
   minimumStock: 0,
   averageCost: 875,
   stockValue: 68250,
-  isPrepared: true,
   portionSize: 150,
   yieldQuantity: 16,
   recipeCost: 1000,
@@ -53,7 +55,6 @@ const items = [
   stockItem(1, { name: "Susu Segar", unit: "ml", stock: 800, averageCost: 25.61, stockValue: 20488, supplier: "Toko Susu", status: "HAMPIR HABIS" }),
   stockItem(2, { name: "Air Galon", isUnlimited: true, status: "BEBAS STOK" }),
   ...Array.from({ length: 10 }, (_, index) => stockItem(index + 3)),
-  nasi,
 ];
 
 const asAdmin = { user: { _id: 1, name: "Admin", email: "a", phone: "1", role: "Admin", isAuth: true } };
@@ -64,6 +65,7 @@ const findRow = async (name) => (await screen.findByText(name)).closest("tr");
 describe("stock management", () => {
   beforeEach(() => {
     api.getStockItems.mockResolvedValue({ data: { data: items } });
+    api.getSemiItems.mockResolvedValue({ data: { data: [nasi] } });
     api.getPurchases.mockResolvedValue({ data: { data: { purchases: [], itemGroups: [], total: 0 } } });
     api.getShoppingSuppliers.mockResolvedValue({ data: { data: [] } });
   });
@@ -139,13 +141,13 @@ describe("stock management", () => {
     expect(screen.queryByText("Aksi")).not.toBeInTheDocument();
   });
 
-  it("lists prepared items in their own tab, not in Stok Barang", async () => {
+  it("lists bahan setengah jadi in their own tab, not in Stok Barang", async () => {
     renderWithProviders(<StockManagement />, { preloadedState: asAdmin });
 
     await findRow("Susu Segar");
     expect(screen.queryByText("Nasi")).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Bahan Olahan" }));
+    fireEvent.click(screen.getByRole("button", { name: "Bahan Setengah Jadi" }));
     const row = rowOf("Nasi");
     expect(row).toHaveTextContent("1 resep: Bahan 03 1 pcs · Rp 1.000");
     expect(row).toHaveTextContent("150 gr");
@@ -153,16 +155,23 @@ describe("stock management", () => {
     expect(row).toHaveTextContent("78 porsi");
     expect(row).toHaveTextContent("Rp 68.250");
     expect(row).toHaveTextContent("Rp 875 / porsi");
+
+    // Deleting goes to the semi item endpoint, not the bahan baku one.
+    api.deleteSemiItem.mockResolvedValue({ data: { success: true } });
+    fireEvent.click(within(row).getByRole("button", { name: "Hapus" }));
+    fireEvent.click(within(screen.getByText("Hapus bahan?").parentElement).getByRole("button", { name: "Hapus" }));
+    await waitFor(() => expect(api.deleteSemiItem.mock.calls[0][0]).toBe(20));
+    expect(api.deleteStockItem).not.toHaveBeenCalled();
   });
 
-  it("adds a prepared item from raw items only", async () => {
-    api.addPreparedItem.mockResolvedValue({ data: { success: true } });
+  it("adds a bahan setengah jadi from bahan baku only", async () => {
+    api.addSemiItem.mockResolvedValue({ data: { success: true } });
     renderWithProviders(<StockManagement />, { preloadedState: asAdmin });
 
     await findRow("Susu Segar");
-    fireEvent.click(screen.getByRole("button", { name: "Bahan Olahan" }));
-    fireEvent.click(screen.getByRole("button", { name: "Tambah Bahan Olahan" }));
-    const dialog = screen.getByRole("form", { name: "Form bahan olahan" });
+    fireEvent.click(screen.getByRole("button", { name: "Bahan Setengah Jadi" }));
+    fireEvent.click(screen.getByRole("button", { name: "Tambah Bahan Setengah Jadi" }));
+    const dialog = screen.getByRole("form", { name: "Form bahan setengah jadi" });
     const ingredient = within(dialog).getByRole("combobox", { name: "Bahan 1" });
     expect(within(ingredient).queryByRole("option", { name: "Nasi" })).not.toBeInTheDocument();
 
@@ -175,7 +184,7 @@ describe("stock management", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: "Simpan" }));
 
     await waitFor(() =>
-      expect(api.addPreparedItem.mock.calls[0][0]).toEqual({
+      expect(api.addSemiItem.mock.calls[0][0]).toEqual({
         name: "Sambal",
         unit: "porsi",
         portionSize: 25,
@@ -183,16 +192,16 @@ describe("stock management", () => {
         components: [{ stockItemId: 1, quantity: 500 }],
       })
     );
-    expect(await screen.findByText("Bahan olahan ditambahkan.")).toBeInTheDocument();
+    expect(await screen.findByText("Bahan setengah jadi ditambahkan.")).toBeInTheDocument();
   });
 
   it("lets cashiers record a cooking from the weighed result", async () => {
-    api.recordPreparedProduction.mockResolvedValue({ data: { success: true } });
+    api.recordSemiProduction.mockResolvedValue({ data: { success: true } });
     renderWithProviders(<StockManagement />, { preloadedState: asCashier });
 
     await findRow("Susu Segar");
-    fireEvent.click(screen.getByRole("button", { name: "Bahan Olahan" }));
-    expect(screen.queryByRole("button", { name: "Tambah Bahan Olahan" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Bahan Setengah Jadi" }));
+    expect(screen.queryByRole("button", { name: "Tambah Bahan Setengah Jadi" })).not.toBeInTheDocument();
     expect(within(rowOf("Nasi")).queryByRole("button", { name: "Ubah" })).not.toBeInTheDocument();
     fireEvent.click(within(rowOf("Nasi")).getByRole("button", { name: "Catat Masak" }));
 
@@ -212,8 +221,8 @@ describe("stock management", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: "Simpan" }));
 
     await waitFor(() =>
-      expect(api.recordPreparedProduction.mock.calls[0][0]).toEqual({
-        stockItemId: 20,
+      expect(api.recordSemiProduction.mock.calls[0][0]).toEqual({
+        semiItemId: 20,
         batchQuantity: 5,
         outputWeight: 3000,
         note: "",
@@ -223,7 +232,7 @@ describe("stock management", () => {
   });
 
   it("shows the cooking history and lets admins undo only the latest", async () => {
-    api.getPreparedProductions.mockResolvedValue({
+    api.getSemiProductions.mockResolvedValue({
       data: {
         data: [
           { id: 8, batchQuantity: 1, outputWeight: null, portionQuantity: 15, cost: 1000, unitCost: 67, producedAt: "2026-10-28 14:00:00", userName: "Admin", note: "dibagi langsung", items: [{ stockItemId: 3, name: "Bahan 03", quantity: 1, unit: "pcs" }] },
@@ -231,11 +240,11 @@ describe("stock management", () => {
         ],
       },
     });
-    api.deletePreparedProduction.mockResolvedValue({ data: { success: true } });
+    api.deleteSemiProduction.mockResolvedValue({ data: { success: true } });
     renderWithProviders(<StockManagement />, { preloadedState: asAdmin });
 
     await findRow("Susu Segar");
-    fireEvent.click(screen.getByRole("button", { name: "Bahan Olahan" }));
+    fireEvent.click(screen.getByRole("button", { name: "Bahan Setengah Jadi" }));
     fireEvent.click(within(rowOf("Nasi")).getByRole("button", { name: "Riwayat" }));
 
     const dialog = await screen.findByRole("dialog", { name: "Riwayat masak Nasi" });
@@ -246,6 +255,6 @@ describe("stock management", () => {
 
     fireEvent.click(within(dialog).getByRole("button", { name: "Batalkan" }));
     fireEvent.click(within(dialog).getByRole("button", { name: "Ya, batalkan" }));
-    await waitFor(() => expect(api.deletePreparedProduction.mock.calls[0][0]).toBe(8));
+    await waitFor(() => expect(api.deleteSemiProduction.mock.calls[0][0]).toBe(8));
   });
 });

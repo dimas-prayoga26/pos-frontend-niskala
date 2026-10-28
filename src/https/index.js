@@ -92,13 +92,18 @@ export const updateStockCogs = ({ stockItemId, ...data }) =>
   axiosWrapper.patch(`/api/stock-item/${stockItemId}/cogs`, data);
 export const deleteStockItem = (stockItemId) =>
   axiosWrapper.delete(`/api/stock-item/${stockItemId}`);
-// Prepared items (bahan olahan) and their cooking ("Catat Masak").
-export const addPreparedItem = (data) => axiosWrapper.post("/api/stock-item/prepared", data);
-export const updatePreparedItem = ({ stockItemId, ...data }) =>
-  axiosWrapper.put(`/api/stock-item/${stockItemId}/prepared`, data);
-export const getPreparedProductions = (stockItemId) =>
-  axiosWrapper.get(`/api/stock-item/${stockItemId}/productions`);
-export const recordPreparedProduction = ({ stockItemId, ...data }) =>
-  axiosWrapper.post(`/api/stock-item/${stockItemId}/productions`, data);
-export const deletePreparedProduction = (productionId) =>
-  axiosWrapper.delete(`/api/stock-item/productions/${productionId}`);
+// Bahan setengah jadi (stock_semi_items) and their cooking ("Catat Masak").
+export const getSemiItems = () => axiosWrapper.get("/api/stock-item/semi");
+export const addSemiItem = (data) => axiosWrapper.post("/api/stock-item/semi", data);
+export const updateSemiItem = ({ semiItemId, ...data }) =>
+  axiosWrapper.put(`/api/stock-item/semi/${semiItemId}`, data);
+export const deleteSemiItem = (semiItemId) =>
+  axiosWrapper.delete(`/api/stock-item/semi/${semiItemId}`);
+export const updateSemiStock = ({ semiItemId, stock }) =>
+  axiosWrapper.patch(`/api/stock-item/semi/${semiItemId}/stock`, { stock });
+export const getSemiProductions = (semiItemId) =>
+  axiosWrapper.get(`/api/stock-item/semi/${semiItemId}/productions`);
+export const recordSemiProduction = ({ semiItemId, ...data }) =>
+  axiosWrapper.post(`/api/stock-item/semi/${semiItemId}/productions`, data);
+export const deleteSemiProduction = (productionId) =>
+  axiosWrapper.delete(`/api/stock-item/semi/productions/${productionId}`);

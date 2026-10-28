@@ -1,40 +1,54 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { enqueueSnackbar } from "notistack";
 import {
-  addPreparedItem,
-  deletePreparedProduction,
-  recordPreparedProduction,
-  updatePreparedItem,
-  updateStockQuantity,
+  addSemiItem,
+  deleteSemiItem,
+  deleteSemiProduction,
+  recordSemiProduction,
+  updateSemiItem,
+  updateSemiStock,
 } from "../api";
 
 const showError = (fallback) => (error) => {
   enqueueSnackbar(error?.response?.data?.message || fallback, { variant: "error" });
 };
 
-// Bahan olahan actions: save the item, record a cooking, undo the latest one
-// and adjust leftover portions. Callers pass callbacks to close their dialog.
-const usePreparedItemActions = ({ onSaved, onProduced, onAdjusted }) => {
+// Bahan setengah jadi actions: save or delete the item, record a cooking, undo
+// the latest one and adjust leftover portions. Callers pass callbacks to close
+// their dialog.
+const usePreparedItemActions = ({ onSaved, onDeleted, onProduced, onAdjusted }) => {
   const queryClient = useQueryClient();
+  // Cooking also moves bahan baku stock, so both lists are refreshed.
   const refresh = () => {
+    queryClient.invalidateQueries({ queryKey: ["semi-items"] });
     queryClient.invalidateQueries({ queryKey: ["stock-items"] });
-    queryClient.invalidateQueries({ queryKey: ["prepared-productions"] });
+    queryClient.invalidateQueries({ queryKey: ["semi-productions"] });
   };
 
   const saveMutation = useMutation({
     mutationFn: ({ id, ...payload }) =>
-      id ? updatePreparedItem({ stockItemId: id, ...payload }) : addPreparedItem(payload),
+      id ? updateSemiItem({ semiItemId: id, ...payload }) : addSemiItem(payload),
     onSuccess: (_response, { id }) => {
       refresh();
-      enqueueSnackbar(id ? "Bahan olahan diperbarui." : "Bahan olahan ditambahkan.", {
-        variant: "success",
-      });
+      enqueueSnackbar(
+        id ? "Bahan setengah jadi diperbarui." : "Bahan setengah jadi ditambahkan.",
+        { variant: "success" }
+      );
       onSaved();
     },
-    onError: showError("Gagal menyimpan bahan olahan."),
+    onError: showError("Gagal menyimpan bahan setengah jadi."),
+  });
+  const deleteMutation = useMutation({
+    mutationFn: deleteSemiItem,
+    onSuccess: () => {
+      refresh();
+      enqueueSnackbar("Bahan berhasil dihapus.", { variant: "success" });
+      onDeleted();
+    },
+    onError: showError("Gagal menghapus bahan."),
   });
   const produceMutation = useMutation({
-    mutationFn: recordPreparedProduction,
+    mutationFn: recordSemiProduction,
     onSuccess: () => {
       refresh();
       enqueueSnackbar("Catatan masak disimpan.", { variant: "success" });
@@ -43,7 +57,7 @@ const usePreparedItemActions = ({ onSaved, onProduced, onAdjusted }) => {
     onError: showError("Gagal menyimpan catatan masak."),
   });
   const undoMutation = useMutation({
-    mutationFn: deletePreparedProduction,
+    mutationFn: deleteSemiProduction,
     onSuccess: () => {
       refresh();
       enqueueSnackbar("Catatan masak dibatalkan.", { variant: "success" });
@@ -51,10 +65,10 @@ const usePreparedItemActions = ({ onSaved, onProduced, onAdjusted }) => {
     onError: showError("Gagal membatalkan catatan masak."),
   });
   const adjustMutation = useMutation({
-    mutationFn: updateStockQuantity,
+    mutationFn: updateSemiStock,
     onSuccess: () => {
       refresh();
-      enqueueSnackbar("Stok bahan olahan disesuaikan.", { variant: "success" });
+      enqueueSnackbar("Stok bahan setengah jadi disesuaikan.", { variant: "success" });
       onAdjusted();
     },
     onError: showError("Gagal menyesuaikan stok."),
@@ -63,13 +77,15 @@ const usePreparedItemActions = ({ onSaved, onProduced, onAdjusted }) => {
   return {
     save: (payload) => saveMutation.mutate(payload),
     isSaving: saveMutation.isPending,
+    deleteItem: (item) => deleteMutation.mutate(item.id || item._id),
+    isDeleting: deleteMutation.isPending,
     produce: (item, payload) =>
-      produceMutation.mutate({ stockItemId: item.id || item._id, ...payload }),
+      produceMutation.mutate({ semiItemId: item.id || item._id, ...payload }),
     isProducing: produceMutation.isPending,
     undoProduction: (productionId) => undoMutation.mutate(productionId),
     isUndoing: undoMutation.isPending,
     adjustStock: (item, stock) =>
-      adjustMutation.mutate({ stockItemId: item.id || item._id, stock }),
+      adjustMutation.mutate({ semiItemId: item.id || item._id, stock }),
     isAdjusting: adjustMutation.isPending,
   };
 };
