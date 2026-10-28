@@ -9,13 +9,17 @@ vi.mock("../../src/https/index", async (importOriginal) => ({
   addSemiItem: vi.fn(),
   deleteSemiItem: vi.fn(),
   deleteSemiProduction: vi.fn(),
+  deleteSemiWaste: vi.fn(),
   deleteStockItem: vi.fn(),
   getPurchases: vi.fn(),
   getSemiItems: vi.fn(),
   getSemiProductions: vi.fn(),
+  getSemiWastes: vi.fn(),
   getShoppingSuppliers: vi.fn(),
   getStockItems: vi.fn(),
   recordSemiProduction: vi.fn(),
+  recordSemiWaste: vi.fn(),
+  updateSemiStock: vi.fn(),
   updateStockCogs: vi.fn(),
 }));
 
@@ -179,6 +183,10 @@ describe("stock management", () => {
     fireEvent.change(within(dialog).getByPlaceholderText("Contoh: 150"), { target: { value: "25" } });
     fireEvent.change(ingredient, { target: { value: "1" } });
     fireEvent.change(within(dialog).getByRole("textbox", { name: "Takaran bahan 1" }), { target: { value: "500" } });
+    // Sambal keeps for days: no daily write-off.
+    const resetDaily = within(dialog).getByRole("checkbox", { name: /Habis setiap hari/ });
+    expect(resetDaily).toBeChecked();
+    fireEvent.click(resetDaily);
     expect(dialog).toHaveTextContent("ml");
     expect(dialog).toHaveTextContent("Rp 12.805");
     fireEvent.click(within(dialog).getByRole("button", { name: "Simpan" }));
@@ -189,6 +197,7 @@ describe("stock management", () => {
         unit: "porsi",
         portionSize: 25,
         minimumStock: 0,
+        resetDaily: false,
         components: [{ stockItemId: 1, quantity: 500 }],
       })
     );
@@ -256,5 +265,82 @@ describe("stock management", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: "Batalkan" }));
     fireEvent.click(within(dialog).getByRole("button", { name: "Ya, batalkan" }));
     await waitFor(() => expect(api.deleteSemiProduction.mock.calls[0][0]).toBe(8));
+  });
+
+  it("lets cashiers throw portions away and shows the kerugian", async () => {
+    api.recordSemiWaste.mockResolvedValue({ data: { success: true } });
+    renderWithProviders(<StockManagement />, { preloadedState: asCashier });
+
+    await findRow("Susu Segar");
+    fireEvent.click(screen.getByRole("button", { name: "Bahan Setengah Jadi" }));
+    fireEvent.click(within(rowOf("Nasi")).getByRole("button", { name: "Buang" }));
+
+    const dialog = screen.getByRole("form", { name: "Form buang porsi" });
+    const quantity = within(dialog).getByPlaceholderText("Contoh: 5");
+    fireEvent.change(quantity, { target: { value: "80" } });
+    expect(dialog).toHaveTextContent("Lebih dari sisa stok (78 porsi)");
+    expect(within(dialog).getByRole("button", { name: "Buang" })).toBeDisabled();
+
+    // 5 of 78 portions worth Rp 68.250: Rp 4.375.
+    fireEvent.change(quantity, { target: { value: "5" } });
+    expect(dialog).toHaveTextContent("Rp 4.375");
+    fireEvent.change(within(dialog).getByRole("combobox", { name: "Alasan" }), { target: { value: "Tumpah" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Buang" }));
+
+    await waitFor(() =>
+      expect(api.recordSemiWaste.mock.calls[0][0]).toEqual({
+        semiItemId: 20,
+        quantity: 5,
+        reason: "Tumpah",
+        note: "",
+      })
+    );
+    expect(await screen.findByText("Kerugian dicatat.")).toBeInTheDocument();
+  });
+
+  it("warns that a lower stock count becomes kerugian", async () => {
+    api.updateSemiStock.mockResolvedValue({ data: { success: true } });
+    renderWithProviders(<StockManagement />, { preloadedState: asAdmin });
+
+    await findRow("Susu Segar");
+    fireEvent.click(screen.getByRole("button", { name: "Bahan Setengah Jadi" }));
+    fireEvent.click(within(rowOf("Nasi")).getByRole("button", { name: "Sesuaikan" }));
+
+    const dialog = screen.getByRole("form", { name: "Form sesuaikan stok" });
+    fireEvent.change(within(dialog).getByRole("textbox"), { target: { value: "70" } });
+    expect(dialog).toHaveTextContent("Kurang 8 porsi dicatat sebagai kerugian (Penyesuaian): Rp 7.000");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Simpan" }));
+    await waitFor(() => expect(api.updateSemiStock.mock.calls[0][0]).toEqual({ semiItemId: 20, stock: 70 }));
+  });
+
+  it("lists the kerugian per day and lets admins undo the latest write-off of an item", async () => {
+    api.getSemiWastes.mockResolvedValue({
+      data: {
+        data: {
+          wastes: [
+            { id: 12, semiItemId: 20, itemName: "Nasi", wasteDate: "2026-10-28", quantity: 70, unit: "porsi", cost: 61250, reason: "Sisa akhir hari", note: "", userName: "Admin", createdAt: "2026-10-28 22:00:00" },
+            { id: 11, semiItemId: 20, itemName: "Nasi", wasteDate: "2026-10-28", quantity: 8, unit: "porsi", cost: 7000, reason: "Penyesuaian", note: "", userName: "Admin", createdAt: "2026-10-28 15:00:00" },
+          ],
+          dailyTotals: [{ date: "2026-10-28", cost: 68250, entries: 2 }],
+        },
+      },
+    });
+    api.deleteSemiWaste.mockResolvedValue({ data: { success: true } });
+    renderWithProviders(<StockManagement />, { preloadedState: asAdmin });
+
+    await findRow("Susu Segar");
+    fireEvent.click(screen.getByRole("button", { name: "Bahan Setengah Jadi" }));
+    fireEvent.click(screen.getByRole("button", { name: "Riwayat Kerugian" }));
+
+    const dialog = await screen.findByRole("dialog", { name: "Riwayat kerugian" });
+    expect(await within(dialog).findByText("Sisa akhir hari")).toBeInTheDocument();
+    expect(dialog).toHaveTextContent("Kerugian per hari");
+    expect(dialog).toHaveTextContent("Rp 68.250");
+    expect(dialog).toHaveTextContent("Nasi · 70 porsi");
+    expect(within(dialog).getAllByRole("button", { name: "Batalkan" })).toHaveLength(1);
+
+    fireEvent.click(within(dialog).getByRole("button", { name: "Batalkan" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Ya, kembalikan ke stok" }));
+    await waitFor(() => expect(api.deleteSemiWaste.mock.calls[0][0]).toBe(12));
   });
 });

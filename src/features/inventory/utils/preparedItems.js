@@ -61,12 +61,25 @@ export const getProductionUsage = (item, batchQuantity, stockItems = []) => {
 export const getUsageCost = (usage) =>
   roundCurrency(usage.reduce((total, used) => total + used.cost, 0));
 
+// Value lost when quantity portions are thrown away: the exact unit cost
+// (stock value / stock), as the backend writes it off.
+export const getWasteCost = (item, quantity) => {
+  const portions = roundPortions(positive(quantity));
+  const stock = Number(item?.stock || 0);
+  const stockValue = Number(item?.stockValue || 0);
+
+  return stock > 0 && stockValue > 0
+    ? roundCurrency((stockValue * portions) / stock)
+    : roundCurrency(portions * Number(item?.averageCost || 0));
+};
+
 // Request body for saving a prepared item from the dialog form.
 export const toPreparedPayload = (form) => ({
   name: form.name.trim(),
   unit: form.unit.trim() || "porsi",
   portionSize: positive(form.portionSize),
   minimumStock: positive(form.minimumStock),
+  resetDaily: Boolean(form.resetDaily),
   components: form.components
     .map((component) => ({
       stockItemId: Number(component.stockItemId) || 0,

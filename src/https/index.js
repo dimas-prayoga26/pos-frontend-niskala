@@ -107,3 +107,10 @@ export const recordSemiProduction = ({ semiItemId, ...data }) =>
   axiosWrapper.post(`/api/stock-item/semi/${semiItemId}/productions`, data);
 export const deleteSemiProduction = (productionId) =>
   axiosWrapper.delete(`/api/stock-item/semi/productions/${productionId}`);
+// Kerugian: portions of a bahan setengah jadi thrown away.
+export const getSemiWastes = (params = {}) =>
+  axiosWrapper.get("/api/stock-item/semi/wastes", { params });
+export const recordSemiWaste = ({ semiItemId, ...data }) =>
+  axiosWrapper.post(`/api/stock-item/semi/${semiItemId}/wastes`, data);
+export const deleteSemiWaste = (wasteId) =>
+  axiosWrapper.delete(`/api/stock-item/semi/wastes/${wasteId}`);

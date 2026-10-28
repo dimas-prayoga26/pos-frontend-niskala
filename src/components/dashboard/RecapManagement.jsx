@@ -13,6 +13,8 @@ import {
   getMenuItems,
   getOrders,
   getRecaps,
+  getSemiItems,
+  getSemiWastes,
   getUsers,
 } from "../../https";
 import OrderDateRangeFilter from "../../features/orders/components/OrderDateRangeFilter";
@@ -597,9 +599,35 @@ const RecapManagement = () => {
     placeholderData: keepPreviousData,
   });
 
+  // Kerugian bahan setengah jadi per day, and the daily items whose leftover
+  // the daily recap writes off.
+  const { data: semiWastesRes } = useQuery({
+    queryKey: ["semi-wastes", "recap"],
+    queryFn: () => getSemiWastes(),
+    placeholderData: keepPreviousData,
+  });
+  const { data: semiItemsRes } = useQuery({
+    queryKey: ["semi-items", "recap"],
+    queryFn: getSemiItems,
+    placeholderData: keepPreviousData,
+  });
+
   const orders = ordersRes?.data?.data || [];
   const savedRecaps = savedRecapsRes?.data?.data || [];
   const dailyRecapsSource = dailyRecapsSourceRes?.data?.data || [];
+  const wasteTotalByDate = useMemo(
+    () =>
+      new Map(
+        (semiWastesRes?.data?.data?.dailyTotals || []).map((day) => [
+          String(day.date).slice(0, 10),
+          Number(day.cost) || 0,
+        ])
+      ),
+    [semiWastesRes]
+  );
+  const dailySemiLeftovers = (semiItemsRes?.data?.data || []).filter(
+    (item) => item.resetDaily && Number(item.stock) > 0
+  );
   const { data: usersRes } = useQuery({
     queryKey: ["users"],
     queryFn: getUsers,
@@ -965,11 +993,12 @@ const RecapManagement = () => {
         hppTotal,
         grossProfit: totalRevenue - hppTotal,
         dailyExpense,
+        wasteTotal: wasteTotalByDate.get(String(recap.recapDate).slice(0, 10)) || 0,
         cashRecorded,
         netCash: cashRecorded - dailyExpense,
       };
     });
-  }, [activeTab, recapRowByKey, savedRecaps]);
+  }, [activeTab, recapRowByKey, savedRecaps, wasteTotalByDate]);
   const weeklyTableRows = useMemo(() => {
     if (activeTab !== "weekly") return savedRecaps;
 
@@ -1381,9 +1410,23 @@ const RecapManagement = () => {
 
   const saveDailyRecapMutation = useMutation({
     mutationFn: (data) => addRecap({ periodType: "daily", data }),
-    onSuccess: () => {
+    onSuccess: (response) => {
       queryClient.invalidateQueries({ queryKey: ["recaps"] });
+      // The recap wrote off the leftover of daily bahan setengah jadi.
+      queryClient.invalidateQueries({ queryKey: ["semi-items"] });
+      queryClient.invalidateQueries({ queryKey: ["semi-wastes"] });
       enqueueSnackbar("Rekap harian berhasil disimpan", { variant: "success" });
+      const writtenOff = response?.data?.data?.writtenOff || [];
+      if (writtenOff.length) {
+        enqueueSnackbar(
+          `Sisa dibuang: ${writtenOff
+            .map((item) => `${item.name} ${Number(item.quantity).toLocaleString("id-ID")}`)
+            .join(", ")} (kerugian ${formatCurrency(
+            writtenOff.reduce((total, item) => total + Number(item.cost || 0), 0)
+          )}).`,
+          { variant: "info" }
+        );
+      }
       setRecapForm(createRecapFormFromOrders(orders, menuItems));
       setPendingDailyRecapPayload(null);
       setActiveTab("daily");
@@ -1665,6 +1708,7 @@ const RecapManagement = () => {
                   </th>
                 )}
                 <th className={`${dailyHeadClass} text-right`}>Pengeluaran</th>
+                <th className={`${dailyHeadClass} text-right`}>Kerugian bahan</th>
                 <th className={`${dailyHeadClass} text-right`}>Kas bersih</th>
                 <th className={`${dailyHeadClass} text-right`}>Selisih kas</th>
                 <th className={`${dailyHeadClass} text-left`}>Menu laku</th>
@@ -1829,6 +1873,7 @@ const RecapManagement = () => {
                     {SHOW_HPP_FIELDS &&
                       renderDailyAmountCell(row.grossProfit, "profit")}
                     {renderDailyAmountCell(row.dailyExpense, "danger")}
+                    {renderDailyAmountCell(row.wasteTotal, "danger")}
                     {renderDailyAmountCell(
                       row.netCash,
                       Number(row.netCash) < 0 ? "danger" : "profit"
@@ -1857,7 +1902,7 @@ const RecapManagement = () => {
                   <tr>
                     <td
                       className="p-4 text-[#ababab]"
-                      colSpan={SHOW_HPP_FIELDS ? 14 : 12}
+                      colSpan={SHOW_HPP_FIELDS ? 15 : 13}
                     >
                       Belum ada laporan - isi form di atas saat closing hari ini.
                     </td>
@@ -1867,7 +1912,7 @@ const RecapManagement = () => {
                   <tr>
                     <td
                       className="p-4 text-center text-[#ababab]"
-                      colSpan={SHOW_HPP_FIELDS ? 14 : 12}
+                      colSpan={SHOW_HPP_FIELDS ? 15 : 13}
                     >
                       Loading recap...
                     </td>
@@ -2445,6 +2490,29 @@ const RecapManagement = () => {
                 Gunakan tombol ini hanya saat closing harian sudah final.
               </p>
             </div>
+
+            {dailySemiLeftovers.length > 0 && (
+              <div className="mt-3 rounded-lg border border-[#4a2e2e] bg-[#2a1b1b] p-4">
+                <p className="text-sm font-semibold text-red-300">
+                  Sisa bahan setengah jadi dibuang dan dicatat sebagai kerugian:
+                </p>
+                <ul className="mt-2 space-y-1 text-sm text-[#e5e5e5]">
+                  {dailySemiLeftovers.map((item) => (
+                    <li key={item.id} className="flex justify-between gap-3">
+                      <span>
+                        {item.name} · {Number(item.stock).toLocaleString("id-ID")} {item.unit}
+                      </span>
+                      <span className="font-semibold text-red-300">
+                        {formatCurrency(item.stockValue)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+                <p className="mt-2 text-xs text-[#ababab]">
+                  Stoknya mulai dari 0 lagi. Porsi dari masak setelah tanggal rekap tidak ikut dibuang.
+                </p>
+              </div>
+            )}
 
             <div className="mt-5 flex justify-end gap-3 border-t border-[#333] pt-4">
               <button
