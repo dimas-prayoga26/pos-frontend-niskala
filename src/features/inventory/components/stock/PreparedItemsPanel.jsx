@@ -15,6 +15,8 @@ const PreparedItemsPanel = ({
   onProduce,
   onHistory,
   onAdjust,
+  onWaste,
+  onWasteHistory,
   onDelete,
 }) => (
   <div className="rounded-lg bg-[#1f1f1f] p-4">
@@ -26,15 +28,24 @@ const PreparedItemsPanel = ({
           masak dibagi takaran 1 porsi.
         </p>
       </div>
-      {isAdmin && (
+      <div className="flex shrink-0 flex-wrap gap-2">
         <button
           type="button"
-          onClick={onAdd}
-          className="shrink-0 rounded-lg bg-[#a79981] px-4 py-2 text-sm font-bold text-[#101010]"
+          onClick={onWasteHistory}
+          className="rounded-lg bg-[#333] px-4 py-2 text-sm font-bold text-[#f5f5f5]"
         >
-          Tambah Bahan Setengah Jadi
+          Riwayat Kerugian
         </button>
-      )}
+        {isAdmin && (
+          <button
+            type="button"
+            onClick={onAdd}
+            className="rounded-lg bg-[#a79981] px-4 py-2 text-sm font-bold text-[#101010]"
+          >
+            Tambah Bahan Setengah Jadi
+          </button>
+        )}
+      </div>
     </div>
 
     <div className="overflow-x-auto">
@@ -58,7 +69,17 @@ const PreparedItemsPanel = ({
             return (
               <tr key={item.id || item._id} className="border-b border-gray-600 hover:bg-[#333]">
                 <td className="p-4">
-                  <p className="font-semibold">{item.name}</p>
+                  <p className="font-semibold">
+                    {item.name}
+                    {item.resetDaily && (
+                      <span
+                        title="Sisa porsi dibuang saat Rekap Harian disimpan"
+                        className="ml-2 rounded-md bg-[#333] px-2 py-0.5 text-xs font-semibold text-[#d6c7ae]"
+                      >
+                        Harian
+                      </span>
+                    )}
+                  </p>
                   <p className="mt-1 text-xs font-medium text-[#ababab]">
                     1 resep: {describeComposition(item.components) || "-"} ·{" "}
                     {currency(item.recipeCost)}
@@ -115,6 +136,14 @@ const PreparedItemsPanel = ({
                     </button>
                     <button type="button" onClick={() => onAdjust(item)} className={actionClass}>
                       Sesuaikan
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onWaste(item)}
+                      disabled={!(Number(item.stock) > 0)}
+                      className="font-semibold text-red-400 hover:text-red-300 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      Buang
                     </button>
                     {isAdmin && (
                       <>

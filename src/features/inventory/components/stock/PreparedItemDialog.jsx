@@ -13,6 +13,7 @@ const toForm = (item) => ({
   unit: item?.unit || "porsi",
   portionSize: item?.portionSize ? String(item.portionSize) : "",
   minimumStock: item?.minimumStock ? String(item.minimumStock) : "",
+  resetDaily: item ? Boolean(item.resetDaily) : true,
   components: item?.components?.length
     ? item.components.map((component) => ({
         stockItemId: String(component.stockItemId),
@@ -116,6 +117,25 @@ const PreparedItemDialog = ({ item, rawItems, onSave, onCancel, isSaving }) => {
             />
           </label>
         </div>
+
+        <label className="mb-3 flex items-start gap-3 rounded-lg border border-[#333] bg-[#202020] p-3">
+          <input
+            type="checkbox"
+            checked={form.resetDaily}
+            onChange={(event) =>
+              setForm((current) => ({ ...current, resetDaily: event.target.checked }))
+            }
+            className="mt-1 h-4 w-4 accent-[#a79981]"
+          />
+          <span>
+            <span className="block text-sm font-semibold">Habis setiap hari</span>
+            <span className="block text-xs text-[#ababab]">
+              Saat Rekap Harian disimpan, sisa porsinya dicatat sebagai kerugian (Sisa akhir hari)
+              dan stok mulai dari 0 lagi. Matikan untuk bahan yang tahan beberapa hari, misalnya
+              Sambal.
+            </span>
+          </span>
+        </label>
 
         <div className="mb-3 rounded-lg border border-[#333] bg-[#202020] p-3">
           <div className="mb-2 flex items-center justify-between gap-3">

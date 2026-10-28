@@ -4,7 +4,9 @@ import {
   addSemiItem,
   deleteSemiItem,
   deleteSemiProduction,
+  deleteSemiWaste,
   recordSemiProduction,
+  recordSemiWaste,
   updateSemiItem,
   updateSemiStock,
 } from "../api";
@@ -14,15 +16,16 @@ const showError = (fallback) => (error) => {
 };
 
 // Bahan setengah jadi actions: save or delete the item, record a cooking, undo
-// the latest one and adjust leftover portions. Callers pass callbacks to close
-// their dialog.
-const usePreparedItemActions = ({ onSaved, onDeleted, onProduced, onAdjusted }) => {
+// the latest one, adjust leftover portions and throw portions away (kerugian).
+// Callers pass callbacks to close their dialog.
+const usePreparedItemActions = ({ onSaved, onDeleted, onProduced, onAdjusted, onWasted }) => {
   const queryClient = useQueryClient();
   // Cooking also moves bahan baku stock, so both lists are refreshed.
   const refresh = () => {
     queryClient.invalidateQueries({ queryKey: ["semi-items"] });
     queryClient.invalidateQueries({ queryKey: ["stock-items"] });
     queryClient.invalidateQueries({ queryKey: ["semi-productions"] });
+    queryClient.invalidateQueries({ queryKey: ["semi-wastes"] });
   };
 
   const saveMutation = useMutation({
@@ -73,6 +76,23 @@ const usePreparedItemActions = ({ onSaved, onDeleted, onProduced, onAdjusted }) 
     },
     onError: showError("Gagal menyesuaikan stok."),
   });
+  const wasteMutation = useMutation({
+    mutationFn: recordSemiWaste,
+    onSuccess: () => {
+      refresh();
+      enqueueSnackbar("Kerugian dicatat.", { variant: "success" });
+      onWasted();
+    },
+    onError: showError("Gagal mencatat kerugian."),
+  });
+  const undoWasteMutation = useMutation({
+    mutationFn: deleteSemiWaste,
+    onSuccess: () => {
+      refresh();
+      enqueueSnackbar("Catatan buang dibatalkan, porsinya kembali ke stok.", { variant: "success" });
+    },
+    onError: showError("Gagal membatalkan catatan buang."),
+  });
 
   return {
     save: (payload) => saveMutation.mutate(payload),
@@ -87,6 +107,11 @@ const usePreparedItemActions = ({ onSaved, onDeleted, onProduced, onAdjusted }) 
     adjustStock: (item, stock) =>
       adjustMutation.mutate({ semiItemId: item.id || item._id, stock }),
     isAdjusting: adjustMutation.isPending,
+    waste: (item, payload) =>
+      wasteMutation.mutate({ semiItemId: item.id || item._id, ...payload }),
+    isWasting: wasteMutation.isPending,
+    undoWaste: (wasteId) => undoWasteMutation.mutate(wasteId),
+    isUndoingWaste: undoWasteMutation.isPending,
   };
 };
 

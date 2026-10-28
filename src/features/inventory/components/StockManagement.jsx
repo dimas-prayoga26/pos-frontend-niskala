@@ -12,6 +12,8 @@ import PreparedItemDialog from "./stock/PreparedItemDialog";
 import PreparedItemsPanel from "./stock/PreparedItemsPanel";
 import PreparedProductionDialog from "./stock/PreparedProductionDialog";
 import PreparedStockDialog from "./stock/PreparedStockDialog";
+import PreparedWasteDialog from "./stock/PreparedWasteDialog";
+import PreparedWasteHistoryDialog from "./stock/PreparedWasteHistoryDialog";
 import StockCogsDialog from "./stock/StockCogsDialog";
 import StockItemsPanel from "./stock/StockItemsPanel";
 
@@ -36,6 +38,8 @@ const StockManagement = () => {
   const [producingItem, setProducingItem] = useState(null);
   const [historyItem, setHistoryItem] = useState(null);
   const [adjustingItem, setAdjustingItem] = useState(null);
+  const [wastingItem, setWastingItem] = useState(null);
+  const [isWasteHistoryOpen, setIsWasteHistoryOpen] = useState(false);
   const stockActions = useStockItemActions({
     onDeleted: () => setPendingDeleteItem(null),
     onCogsSaved: () => setEditingCogsItem(null),
@@ -45,6 +49,7 @@ const StockManagement = () => {
     onDeleted: () => setPendingDeleteSemiItem(null),
     onProduced: () => setProducingItem(null),
     onAdjusted: () => setAdjustingItem(null),
+    onWasted: () => setWastingItem(null),
   });
 
   const { data: stockItemsRes, isError } = useQuery({
@@ -71,7 +76,9 @@ const StockManagement = () => {
       editingSemiItem ||
       producingItem ||
       historyItem ||
-      adjustingItem
+      adjustingItem ||
+      wastingItem ||
+      isWasteHistoryOpen
   );
 
   // Lock page scrolling while a dialog is open.
@@ -123,6 +130,8 @@ const StockManagement = () => {
           onProduce={setProducingItem}
           onHistory={setHistoryItem}
           onAdjust={setAdjustingItem}
+          onWaste={setWastingItem}
+          onWasteHistory={() => setIsWasteHistoryOpen(true)}
           onDelete={setPendingDeleteSemiItem}
         />
       )}
@@ -182,6 +191,24 @@ const StockManagement = () => {
           onSave={(stock) => semiActions.adjustStock(adjustingItem, stock)}
           onCancel={() => setAdjustingItem(null)}
           isSaving={semiActions.isAdjusting}
+        />
+      )}
+
+      {wastingItem && (
+        <PreparedWasteDialog
+          item={wastingItem}
+          onSave={(payload) => semiActions.waste(wastingItem, payload)}
+          onCancel={() => setWastingItem(null)}
+          isSaving={semiActions.isWasting}
+        />
+      )}
+
+      {isWasteHistoryOpen && (
+        <PreparedWasteHistoryDialog
+          isAdmin={isAdmin}
+          onUndo={semiActions.undoWaste}
+          isUndoing={semiActions.isUndoingWaste}
+          onClose={() => setIsWasteHistoryOpen(false)}
         />
       )}
 

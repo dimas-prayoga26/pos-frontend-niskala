@@ -5,6 +5,7 @@ import {
   getProductionPortions,
   getProductionUsage,
   getUsageCost,
+  getWasteCost,
   toPreparedPayload,
 } from "./preparedItems";
 
@@ -60,6 +61,7 @@ describe("prepared item utils", () => {
         unit: "",
         portionSize: "150",
         minimumStock: "",
+        resetDaily: true,
         components: [
           { stockItemId: "1", quantity: "1" },
           { stockItemId: "", quantity: "2" },
@@ -71,7 +73,17 @@ describe("prepared item utils", () => {
       unit: "porsi",
       portionSize: 150,
       minimumStock: 0,
+      resetDaily: true,
       components: [{ stockItemId: 1, quantity: 1 }],
     });
+  });
+
+  it("values thrown-away portions at the exact unit cost", () => {
+    const nasi = { stock: 78, stockValue: 68250, averageCost: 875 };
+
+    expect(getWasteCost(nasi, "8")).toBe(7000);
+    expect(getWasteCost(nasi, "0,5")).toBe(437.5);
+    expect(getWasteCost(nasi, "")).toBe(0);
+    expect(getWasteCost({ stock: 0, stockValue: 0, averageCost: 900 }, "2")).toBe(1800);
   });
 });
