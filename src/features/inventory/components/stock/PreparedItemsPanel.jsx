@@ -5,7 +5,7 @@ import { STOCK_STATUS_CLASS_NAMES } from "../../utils/stockItems";
 
 const actionClass = "font-semibold text-[#d6c7ae] hover:text-[#f5f5f5]";
 
-// "Bahan Olahan" tab: items cooked in-house (Nasi, Sambal, ...). Portions come
+// "Bahan Setengah Jadi" tab: items cooked in-house (Nasi, Sambal, ...). Portions come
 // from "Catat Masak"; selling a menu uses them like any stock item.
 const PreparedItemsPanel = ({
   preparedItems,
@@ -20,7 +20,7 @@ const PreparedItemsPanel = ({
   <div className="rounded-lg bg-[#1f1f1f] p-4">
     <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
       <div>
-        <h3 className="text-lg font-bold text-[#f5f5f5]">Bahan Olahan</h3>
+        <h3 className="text-lg font-bold text-[#f5f5f5]">Bahan Setengah Jadi</h3>
         <p className="mt-1 text-sm text-[#ababab]">
           Bahan yang dimasak sendiri dari bahan mentah. Jumlah porsi didapat dari berat hasil
           masak dibagi takaran 1 porsi.
@@ -32,7 +32,7 @@ const PreparedItemsPanel = ({
           onClick={onAdd}
           className="shrink-0 rounded-lg bg-[#a79981] px-4 py-2 text-sm font-bold text-[#101010]"
         >
-          Tambah Bahan Olahan
+          Tambah Bahan Setengah Jadi
         </button>
       )}
     </div>
@@ -41,7 +41,7 @@ const PreparedItemsPanel = ({
       <table className="w-full text-left text-[#f5f5f5]">
         <thead className="bg-[#333] text-[#ababab]">
           <tr>
-            <th className="p-3">Bahan Olahan</th>
+            <th className="p-3">Bahan Setengah Jadi</th>
             <th className="p-3 text-center">Takaran 1 Porsi</th>
             <th className="p-3 text-center">Hasil Terakhir</th>
             <th className="p-3 text-center">Stok</th>
@@ -138,7 +138,7 @@ const PreparedItemsPanel = ({
           {preparedItems.length === 0 && (
             <tr>
               <td className="p-4 text-center text-[#ababab]" colSpan={8}>
-                Belum ada bahan olahan. Tambahkan Nasi, Sambal, atau bahan lain yang dimasak
+                Belum ada bahan setengah jadi. Tambahkan Nasi, Sambal, atau bahan lain yang dimasak
                 sendiri.
               </td>
             </tr>

@@ -1,11 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { enqueueSnackbar } from "notistack";
 import { useSelector } from "react-redux";
-import { getStockItems } from "../api";
+import { getSemiItems, getStockItems } from "../api";
 import usePreparedItemActions from "../hooks/usePreparedItemActions";
 import useStockItemActions from "../hooks/useStockItemActions";
-import { isPreparedItem } from "../utils/preparedItems";
 import ShoppingManagement from "./ShoppingManagement";
 import DeleteStockItemDialog from "./stock/DeleteStockItemDialog";
 import PreparedHistoryDialog from "./stock/PreparedHistoryDialog";
@@ -19,20 +18,21 @@ import StockItemsPanel from "./stock/StockItemsPanel";
 const STOCK_TABS = [
   { key: "stock", label: "Stok Barang" },
   { key: "shopping", label: "Bahan Belanjaan" },
-  { key: "prepared", label: "Bahan Olahan" },
+  { key: "semi", label: "Bahan Setengah Jadi" },
 ];
 
-// Dashboard "Stok" tab: raw stock items, purchases (belanja) and prepared
-// items (bahan olahan) cooked from raw items.
+// Dashboard "Stok" tab: bahan baku (stock_raw_items), purchases (belanja) and
+// bahan setengah jadi (stock_semi_items) cooked from bahan baku.
 const StockManagement = () => {
   const userRole = useSelector((state) => state.user.role);
   const isAdmin = userRole?.toLowerCase() === "admin";
   const [activeStockTab, setActiveStockTab] = useState("stock");
   const [searchQuery, setSearchQuery] = useState("");
   const [pendingDeleteItem, setPendingDeleteItem] = useState(null);
+  const [pendingDeleteSemiItem, setPendingDeleteSemiItem] = useState(null);
   const [editingCogsItem, setEditingCogsItem] = useState(null);
-  // null = closed, {} = new prepared item, otherwise the item being edited.
-  const [editingPreparedItem, setEditingPreparedItem] = useState(null);
+  // null = closed, {} = new semi item, otherwise the item being edited.
+  const [editingSemiItem, setEditingSemiItem] = useState(null);
   const [producingItem, setProducingItem] = useState(null);
   const [historyItem, setHistoryItem] = useState(null);
   const [adjustingItem, setAdjustingItem] = useState(null);
@@ -40,8 +40,9 @@ const StockManagement = () => {
     onDeleted: () => setPendingDeleteItem(null),
     onCogsSaved: () => setEditingCogsItem(null),
   });
-  const preparedActions = usePreparedItemActions({
-    onSaved: () => setEditingPreparedItem(null),
+  const semiActions = usePreparedItemActions({
+    onSaved: () => setEditingSemiItem(null),
+    onDeleted: () => setPendingDeleteSemiItem(null),
     onProduced: () => setProducingItem(null),
     onAdjusted: () => setAdjustingItem(null),
   });
@@ -51,17 +52,26 @@ const StockManagement = () => {
     queryFn: getStockItems,
     placeholderData: keepPreviousData,
   });
+  const { data: semiItemsRes, isError: isSemiError } = useQuery({
+    queryKey: ["semi-items"],
+    queryFn: getSemiItems,
+    placeholderData: keepPreviousData,
+  });
 
-  if (isError) {
+  if (isError || isSemiError) {
     enqueueSnackbar("Data stok belum bisa dimuat.", { variant: "error" });
   }
 
-  const stockItems = useMemo(() => stockItemsRes?.data?.data || [], [stockItemsRes]);
-  // Prepared items are cooked, not bought: they get their own tab.
-  const rawItems = useMemo(() => stockItems.filter((item) => !isPreparedItem(item)), [stockItems]);
-  const preparedItems = useMemo(() => stockItems.filter(isPreparedItem), [stockItems]);
+  const stockItems = stockItemsRes?.data?.data || [];
+  const semiItems = semiItemsRes?.data?.data || [];
   const isDialogOpen = Boolean(
-    pendingDeleteItem || editingCogsItem || editingPreparedItem || producingItem || historyItem || adjustingItem
+    pendingDeleteItem ||
+      pendingDeleteSemiItem ||
+      editingCogsItem ||
+      editingSemiItem ||
+      producingItem ||
+      historyItem ||
+      adjustingItem
   );
 
   // Lock page scrolling while a dialog is open.
@@ -102,23 +112,23 @@ const StockManagement = () => {
       </div>
 
       {activeStockTab === "shopping" && (
-        <ShoppingManagement stockItems={rawItems} isAdmin={isAdmin} />
+        <ShoppingManagement stockItems={stockItems} isAdmin={isAdmin} />
       )}
-      {activeStockTab === "prepared" && (
+      {activeStockTab === "semi" && (
         <PreparedItemsPanel
-          preparedItems={preparedItems}
+          preparedItems={semiItems}
           isAdmin={isAdmin}
-          onAdd={() => setEditingPreparedItem({})}
-          onEdit={setEditingPreparedItem}
+          onAdd={() => setEditingSemiItem({})}
+          onEdit={setEditingSemiItem}
           onProduce={setProducingItem}
           onHistory={setHistoryItem}
           onAdjust={setAdjustingItem}
-          onDelete={setPendingDeleteItem}
+          onDelete={setPendingDeleteSemiItem}
         />
       )}
       {activeStockTab === "stock" && (
         <StockItemsPanel
-          stockItems={rawItems}
+          stockItems={stockItems}
           searchQuery={searchQuery}
           onSearchChange={setSearchQuery}
           isAdmin={isAdmin}
@@ -136,23 +146,23 @@ const StockManagement = () => {
         />
       )}
 
-      {isAdmin && editingPreparedItem && (
+      {isAdmin && editingSemiItem && (
         <PreparedItemDialog
-          item={editingPreparedItem.id ? editingPreparedItem : null}
-          rawItems={rawItems}
-          onSave={preparedActions.save}
-          onCancel={() => setEditingPreparedItem(null)}
-          isSaving={preparedActions.isSaving}
+          item={editingSemiItem.id ? editingSemiItem : null}
+          rawItems={stockItems}
+          onSave={semiActions.save}
+          onCancel={() => setEditingSemiItem(null)}
+          isSaving={semiActions.isSaving}
         />
       )}
 
       {producingItem && (
         <PreparedProductionDialog
           item={producingItem}
-          stockItems={rawItems}
-          onSave={(payload) => preparedActions.produce(producingItem, payload)}
+          stockItems={stockItems}
+          onSave={(payload) => semiActions.produce(producingItem, payload)}
           onCancel={() => setProducingItem(null)}
-          isSaving={preparedActions.isProducing}
+          isSaving={semiActions.isProducing}
         />
       )}
 
@@ -160,8 +170,8 @@ const StockManagement = () => {
         <PreparedHistoryDialog
           item={historyItem}
           isAdmin={isAdmin}
-          onUndo={preparedActions.undoProduction}
-          isUndoing={preparedActions.isUndoing}
+          onUndo={semiActions.undoProduction}
+          isUndoing={semiActions.isUndoing}
           onClose={() => setHistoryItem(null)}
         />
       )}
@@ -169,9 +179,9 @@ const StockManagement = () => {
       {adjustingItem && (
         <PreparedStockDialog
           item={adjustingItem}
-          onSave={(stock) => preparedActions.adjustStock(adjustingItem, stock)}
+          onSave={(stock) => semiActions.adjustStock(adjustingItem, stock)}
           onCancel={() => setAdjustingItem(null)}
-          isSaving={preparedActions.isAdjusting}
+          isSaving={semiActions.isAdjusting}
         />
       )}
 
@@ -181,6 +191,15 @@ const StockManagement = () => {
           onConfirm={() => stockActions.deleteItem(pendingDeleteItem)}
           onCancel={() => setPendingDeleteItem(null)}
           isDeleting={stockActions.isDeleting}
+        />
+      )}
+
+      {isAdmin && pendingDeleteSemiItem && (
+        <DeleteStockItemDialog
+          item={pendingDeleteSemiItem}
+          onConfirm={() => semiActions.deleteItem(pendingDeleteSemiItem)}
+          onCancel={() => setPendingDeleteSemiItem(null)}
+          isDeleting={semiActions.isDeleting}
         />
       )}
     </div>

@@ -1,20 +1,22 @@
 // inventory endpoints. Definitions still live in src/https/index.js (a file
 // with uncommitted changes); move them here when that file is migrated.
 export {
-  addPreparedItem,
+  addSemiItem,
   addSupplier,
-  deletePreparedProduction,
   deletePurchaseItem,
+  deleteSemiItem,
+  deleteSemiProduction,
   deleteStockItem,
-  getPreparedProductions,
   getPurchases,
+  getSemiItems,
+  getSemiProductions,
   getShoppingSuppliers,
   getStockItems,
-  recordPreparedProduction,
+  recordSemiProduction,
   savePurchase,
-  updatePreparedItem,
   updatePurchaseItem,
+  updateSemiItem,
+  updateSemiStock,
   updateStockCogs,
-  updateStockQuantity,
   updateSupplier,
 } from "../../https";

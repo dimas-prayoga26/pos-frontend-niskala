@@ -45,7 +45,7 @@ const PreparedItemDialog = ({ item, rawItems, onSave, onCancel, isSaving }) => {
 
     const payload = toPreparedPayload(form);
     if (!payload.name) {
-      enqueueSnackbar("Nama bahan olahan wajib diisi.", { variant: "error" });
+      enqueueSnackbar("Nama bahan setengah jadi wajib diisi.", { variant: "error" });
       return;
     }
     if (!payload.components.length) {
@@ -60,12 +60,12 @@ const PreparedItemDialog = ({ item, rawItems, onSave, onCancel, isSaving }) => {
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
       <form
         onSubmit={handleSubmit}
-        aria-label="Form bahan olahan"
+        aria-label="Form bahan setengah jadi"
         className="max-h-[92vh] overflow-y-auto rounded-lg bg-[#262626] p-5 text-[#f5f5f5] shadow-2xl"
         style={{ width: "min(94vw, 620px)" }}
       >
         <div className="mb-4 border-b border-[#333] pb-3">
-          <h3 className="text-lg font-bold">{item ? "Ubah Bahan Olahan" : "Tambah Bahan Olahan"}</h3>
+          <h3 className="text-lg font-bold">{item ? "Ubah Bahan Setengah Jadi" : "Tambah Bahan Setengah Jadi"}</h3>
           <p className="mt-1 text-sm text-[#ababab]">
             Contoh: Nasi dari Beras 1 kg, Sambal dari Cabai, Bawang, Minyak, dan Garam.
           </p>

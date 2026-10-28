@@ -1,5 +1,5 @@
-// Bahan olahan (prepared items, e.g. Nasi from Beras): previews for the forms.
-// They mirror the backend (prepared.repository.js), which stores the result.
+// Bahan setengah jadi (semi items, e.g. Nasi from Beras): previews for the
+// forms. They mirror the backend (semi.repository.js), which stores the result.
 import { parseCostInput } from "./stockItems";
 
 const roundQuantity = (value) => Math.round((Number(value) || 0) * 10000) / 10000;
@@ -10,8 +10,6 @@ const positive = (value) => {
   const number = parseCostInput(value);
   return Number.isFinite(number) && number > 0 ? number : 0;
 };
-
-export const isPreparedItem = (item) => Boolean(item?.isPrepared);
 
 // Composition line cost at the raw item's current cost (whole rupiah).
 export const getComponentCost = (quantity, stockItem) =>

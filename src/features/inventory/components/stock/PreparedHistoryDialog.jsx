@@ -1,16 +1,16 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { formatDateAndTime } from "../../../../shared/lib/dates";
-import { getPreparedProductions } from "../../api";
+import { getSemiProductions } from "../../api";
 import { currency, quantityDisplay } from "../../utils/format";
 
-// Cooking history of a prepared item with the raw items each cooking used.
-// Admins can undo the latest cooking while its portions are still in stock.
+// Cooking history of a bahan setengah jadi with the bahan baku each cooking
+// used. Admins can undo the latest cooking while its portions are in stock.
 const PreparedHistoryDialog = ({ item, isAdmin, onUndo, isUndoing, onClose }) => {
   const [confirmingId, setConfirmingId] = useState(null);
   const { data, isPending, isError } = useQuery({
-    queryKey: ["prepared-productions", item.id || item._id],
-    queryFn: () => getPreparedProductions(item.id || item._id),
+    queryKey: ["semi-productions", item.id || item._id],
+    queryFn: () => getSemiProductions(item.id || item._id),
   });
   const productions = data?.data?.data || [];
 
