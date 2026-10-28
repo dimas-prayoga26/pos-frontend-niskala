@@ -1,20 +1,29 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { enqueueSnackbar } from "notistack";
 import { useSelector } from "react-redux";
 import { getStockItems } from "../api";
+import usePreparedItemActions from "../hooks/usePreparedItemActions";
 import useStockItemActions from "../hooks/useStockItemActions";
+import { isPreparedItem } from "../utils/preparedItems";
 import ShoppingManagement from "./ShoppingManagement";
 import DeleteStockItemDialog from "./stock/DeleteStockItemDialog";
+import PreparedHistoryDialog from "./stock/PreparedHistoryDialog";
+import PreparedItemDialog from "./stock/PreparedItemDialog";
+import PreparedItemsPanel from "./stock/PreparedItemsPanel";
+import PreparedProductionDialog from "./stock/PreparedProductionDialog";
+import PreparedStockDialog from "./stock/PreparedStockDialog";
 import StockCogsDialog from "./stock/StockCogsDialog";
 import StockItemsPanel from "./stock/StockItemsPanel";
 
 const STOCK_TABS = [
   { key: "stock", label: "Stok Barang" },
   { key: "shopping", label: "Bahan Belanjaan" },
+  { key: "prepared", label: "Bahan Olahan" },
 ];
 
-// Dashboard "Stok" tab: stock items and purchases (belanja).
+// Dashboard "Stok" tab: raw stock items, purchases (belanja) and prepared
+// items (bahan olahan) cooked from raw items.
 const StockManagement = () => {
   const userRole = useSelector((state) => state.user.role);
   const isAdmin = userRole?.toLowerCase() === "admin";
@@ -22,9 +31,19 @@ const StockManagement = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [pendingDeleteItem, setPendingDeleteItem] = useState(null);
   const [editingCogsItem, setEditingCogsItem] = useState(null);
+  // null = closed, {} = new prepared item, otherwise the item being edited.
+  const [editingPreparedItem, setEditingPreparedItem] = useState(null);
+  const [producingItem, setProducingItem] = useState(null);
+  const [historyItem, setHistoryItem] = useState(null);
+  const [adjustingItem, setAdjustingItem] = useState(null);
   const stockActions = useStockItemActions({
     onDeleted: () => setPendingDeleteItem(null),
     onCogsSaved: () => setEditingCogsItem(null),
+  });
+  const preparedActions = usePreparedItemActions({
+    onSaved: () => setEditingPreparedItem(null),
+    onProduced: () => setProducingItem(null),
+    onAdjusted: () => setAdjustingItem(null),
   });
 
   const { data: stockItemsRes, isError } = useQuery({
@@ -37,11 +56,17 @@ const StockManagement = () => {
     enqueueSnackbar("Data stok belum bisa dimuat.", { variant: "error" });
   }
 
-  const stockItems = stockItemsRes?.data?.data || [];
+  const stockItems = useMemo(() => stockItemsRes?.data?.data || [], [stockItemsRes]);
+  // Prepared items are cooked, not bought: they get their own tab.
+  const rawItems = useMemo(() => stockItems.filter((item) => !isPreparedItem(item)), [stockItems]);
+  const preparedItems = useMemo(() => stockItems.filter(isPreparedItem), [stockItems]);
+  const isDialogOpen = Boolean(
+    pendingDeleteItem || editingCogsItem || editingPreparedItem || producingItem || historyItem || adjustingItem
+  );
 
   // Lock page scrolling while a dialog is open.
   useEffect(() => {
-    if (!pendingDeleteItem && !editingCogsItem) return undefined;
+    if (!isDialogOpen) return undefined;
 
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
@@ -49,7 +74,7 @@ const StockManagement = () => {
     return () => {
       document.body.style.overflow = previousOverflow;
     };
-  }, [pendingDeleteItem, editingCogsItem]);
+  }, [isDialogOpen]);
 
   return (
     <div className="container mx-auto bg-[#262626] p-4 rounded-lg">
@@ -77,11 +102,23 @@ const StockManagement = () => {
       </div>
 
       {activeStockTab === "shopping" && (
-        <ShoppingManagement stockItems={stockItems} isAdmin={isAdmin} />
+        <ShoppingManagement stockItems={rawItems} isAdmin={isAdmin} />
+      )}
+      {activeStockTab === "prepared" && (
+        <PreparedItemsPanel
+          preparedItems={preparedItems}
+          isAdmin={isAdmin}
+          onAdd={() => setEditingPreparedItem({})}
+          onEdit={setEditingPreparedItem}
+          onProduce={setProducingItem}
+          onHistory={setHistoryItem}
+          onAdjust={setAdjustingItem}
+          onDelete={setPendingDeleteItem}
+        />
       )}
       {activeStockTab === "stock" && (
         <StockItemsPanel
-          stockItems={stockItems}
+          stockItems={rawItems}
           searchQuery={searchQuery}
           onSearchChange={setSearchQuery}
           isAdmin={isAdmin}
@@ -96,6 +133,45 @@ const StockManagement = () => {
           onSave={(values) => stockActions.saveCogs(editingCogsItem, values)}
           onCancel={() => setEditingCogsItem(null)}
           isSaving={stockActions.isSavingCogs}
+        />
+      )}
+
+      {isAdmin && editingPreparedItem && (
+        <PreparedItemDialog
+          item={editingPreparedItem.id ? editingPreparedItem : null}
+          rawItems={rawItems}
+          onSave={preparedActions.save}
+          onCancel={() => setEditingPreparedItem(null)}
+          isSaving={preparedActions.isSaving}
+        />
+      )}
+
+      {producingItem && (
+        <PreparedProductionDialog
+          item={producingItem}
+          stockItems={rawItems}
+          onSave={(payload) => preparedActions.produce(producingItem, payload)}
+          onCancel={() => setProducingItem(null)}
+          isSaving={preparedActions.isProducing}
+        />
+      )}
+
+      {historyItem && (
+        <PreparedHistoryDialog
+          item={historyItem}
+          isAdmin={isAdmin}
+          onUndo={preparedActions.undoProduction}
+          isUndoing={preparedActions.isUndoing}
+          onClose={() => setHistoryItem(null)}
+        />
+      )}
+
+      {adjustingItem && (
+        <PreparedStockDialog
+          item={adjustingItem}
+          onSave={(stock) => preparedActions.adjustStock(adjustingItem, stock)}
+          onCancel={() => setAdjustingItem(null)}
+          isSaving={preparedActions.isAdjusting}
         />
       )}
 

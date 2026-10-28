@@ -92,3 +92,13 @@ export const updateStockCogs = ({ stockItemId, ...data }) =>
   axiosWrapper.patch(`/api/stock-item/${stockItemId}/cogs`, data);
 export const deleteStockItem = (stockItemId) =>
   axiosWrapper.delete(`/api/stock-item/${stockItemId}`);
+// Prepared items (bahan olahan) and their cooking ("Catat Masak").
+export const addPreparedItem = (data) => axiosWrapper.post("/api/stock-item/prepared", data);
+export const updatePreparedItem = ({ stockItemId, ...data }) =>
+  axiosWrapper.put(`/api/stock-item/${stockItemId}/prepared`, data);
+export const getPreparedProductions = (stockItemId) =>
+  axiosWrapper.get(`/api/stock-item/${stockItemId}/productions`);
+export const recordPreparedProduction = ({ stockItemId, ...data }) =>
+  axiosWrapper.post(`/api/stock-item/${stockItemId}/productions`, data);
+export const deletePreparedProduction = (productionId) =>
+  axiosWrapper.delete(`/api/stock-item/productions/${productionId}`);
