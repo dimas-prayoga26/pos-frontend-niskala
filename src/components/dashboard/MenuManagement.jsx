@@ -273,7 +273,8 @@ const MenuManagement = () => {
       { id: "", text: "Pilih dari stok" },
       ...stockItems.map((stockItem) => ({
         id: String(stockItem.id || stockItem._id),
-        text: stockItem.name,
+        // Prepared items (bahan olahan, e.g. Nasi) are used per portion.
+        text: stockItem.isPrepared ? `${stockItem.name} (Olahan)` : stockItem.name,
       })),
     ],
     [stockItems]

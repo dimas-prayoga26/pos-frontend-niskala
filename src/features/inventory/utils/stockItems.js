@@ -4,6 +4,7 @@ export const STOCK_PAGE_SIZE = 10;
 export const STOCK_STATUS_CLASS_NAMES = {
   "BEBAS STOK": "bg-[#314259] text-blue-200",
   "HARUS ORDER": "bg-[#4a2e2e] text-red-400",
+  "HARUS MASAK": "bg-[#4a2e2e] text-red-400",
   "HAMPIR HABIS": "bg-[#4a452e] text-yellow-400",
   AMAN: "bg-[#2e4a40] text-green-400",
 };
