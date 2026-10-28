@@ -68,18 +68,15 @@ describe("orders page", () => {
     expect(screen.queryByRole("button", { name: "Reset" })).not.toBeInTheDocument();
   });
 
-  it("deletes an order after confirmation and refetches", async () => {
-    api.deleteOrder.mockResolvedValue({ data: { success: true } });
+  it("hides the delete action while order deletion is turned off", async () => {
     renderWithProviders(<OrdersPage />, { route: "/orders" });
     await waitFor(() => expect(cardIds()).toHaveLength(3));
 
     fireEvent.click(screen.getAllByRole("button", { name: "Order actions" })[0]);
-    fireEvent.click(screen.getByRole("button", { name: "Hapus Pesanan" }));
-    fireEvent.click(screen.getByRole("button", { name: "Hapus" }));
 
-    await waitFor(() => expect(api.deleteOrder).toHaveBeenCalledWith(3));
-    expect(await screen.findByText("Pesanan berhasil dihapus")).toBeInTheDocument();
-    await waitFor(() => expect(api.getOrders).toHaveBeenCalledTimes(2));
+    expect(screen.getByRole("button", { name: "Lihat Detail" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Hapus Pesanan" })).not.toBeInTheDocument();
+    expect(api.deleteOrder).not.toHaveBeenCalled();
   });
 
   it("shows the empty state when nothing matches", async () => {
