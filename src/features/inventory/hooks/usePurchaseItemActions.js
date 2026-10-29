@@ -1,27 +1,29 @@
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { enqueueSnackbar } from "notistack";
-import { deletePurchaseItem, updatePurchaseItem } from "../api";
+import { PURCHASE_KINDS } from "../utils/purchaseKinds";
 import { parseShoppingQuantity, unitPriceFromTotal } from "../utils/shopping";
 
 const EMPTY_EDIT_FORM = { quantity: "", unit: "", unitPrice: "" };
 
 // Edit and delete of a single purchase line (admin only). Both change stock on
 // the server, so stock items and purchases are refetched afterwards.
-const usePurchaseItemActions = () => {
+const usePurchaseItemActions = (kind = PURCHASE_KINDS.raw) => {
   const queryClient = useQueryClient();
   const [editingItem, setEditingItem] = useState(null);
   const [editForm, setEditForm] = useState(EMPTY_EDIT_FORM);
 
   const refreshAfterItemChange = async () => {
     await Promise.all([
-      queryClient.invalidateQueries({ queryKey: ["stock-items"] }),
-      queryClient.invalidateQueries({ queryKey: ["purchases"] }),
+      queryClient.invalidateQueries({ queryKey: [kind.stockKey] }),
+      queryClient.invalidateQueries({ queryKey: [kind.historyKey] }),
+      queryClient.invalidateQueries({ queryKey: ["payment-sources"] }),
+      queryClient.invalidateQueries({ queryKey: ["payment-source-mutations"] }),
     ]);
   };
 
   const updateItemMutation = useMutation({
-    mutationFn: updatePurchaseItem,
+    mutationFn: (data) => kind.updateItem(data),
     onSuccess: async () => {
       enqueueSnackbar("Item belanja berhasil diubah.", { variant: "success" });
       setEditingItem(null);
@@ -34,7 +36,7 @@ const usePurchaseItemActions = () => {
     },
   });
   const deleteItemMutation = useMutation({
-    mutationFn: deletePurchaseItem,
+    mutationFn: (id) => kind.deleteItem(id),
     onSuccess: async () => {
       enqueueSnackbar("Item belanja berhasil dihapus.", { variant: "success" });
       await refreshAfterItemChange();

@@ -15,7 +15,15 @@ const StatCard = ({ label, children, valueClassName = "" }) => (
 );
 
 // Purchase history and activity log of one item. Escape or a backdrop click closes it.
-const PurchaseHistoryDialog = ({ group, isAdmin, onClose, onEditItem, onDeleteItem, isDeleting }) => {
+const PurchaseHistoryDialog = ({
+  group,
+  isAdmin,
+  onClose,
+  onEditItem,
+  onDeleteItem,
+  isDeleting,
+  onOpenReceipts,
+}) => {
   const [tab, setTab] = useState("history");
 
   useEffect(() => {
@@ -55,7 +63,10 @@ const PurchaseHistoryDialog = ({ group, isAdmin, onClose, onEditItem, onDeleteIt
             <h2 id="shopping-history-title" className="text-xl font-bold">
               {group.itemName}
             </h2>
-            <p className="mt-1 text-sm text-[#ababab]">{group.purchaseCount} history pembelian</p>
+            <p className="mt-1 text-sm text-[#ababab]">
+              {group.purchaseCount} history pembelian
+              {group.category && ` · ${group.category}`}
+            </p>
           </div>
           <button
             type="button"
@@ -107,11 +118,27 @@ const PurchaseHistoryDialog = ({ group, isAdmin, onClose, onEditItem, onDeleteIt
                       <p className="text-xs text-[#ababab]">
                         #{item.purchaseId} - {item.paymentMethod}
                       </p>
+                      {(isAdmin || item.attachments?.length > 0) && (
+                        <button
+                          type="button"
+                          onClick={() => onOpenReceipts(item.purchaseId)}
+                          className="mt-1 rounded-md border border-[#a79981]/40 px-2 py-0.5 text-xs font-semibold text-[#d6c7ae] hover:bg-[#a79981]/10"
+                        >
+                          {item.attachments?.length ? `Bukti (${item.attachments.length})` : "+ Bukti"}
+                        </button>
+                      )}
                     </td>
                     <td className="p-2">{item.supplierName}</td>
                     <td className="p-2">{quantityDisplay(item.quantity, item.unit)}</td>
                     <td className="p-2 text-right">{currency(item.unitPrice)}</td>
-                    <td className="p-2 text-right">{currency(item.total)}</td>
+                    <td className="p-2 text-right">
+                      {currency(item.total)}
+                      {item.costTotal != null && item.costTotal !== item.total && (
+                        <p className="text-xs text-[#ababab]" title="Termasuk bagian ongkir, diskon, dan PPN nota">
+                          Masuk stok: {currency(item.costTotal)}
+                        </p>
+                      )}
+                    </td>
                     <td className="p-2 text-right">
                       {quantityDisplay(item.stockQuantity, item.stockUnit)}
                     </td>

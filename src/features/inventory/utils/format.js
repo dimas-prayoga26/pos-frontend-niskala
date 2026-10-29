@@ -32,6 +32,10 @@ export const displayCostUnit = (unit) => {
   return unit || "unit";
 };
 
+// Saldo can be negative: "-Rp 7.000" rather than "Rp -7.000".
+export const signedCurrency = (n) =>
+  Number(n || 0) < 0 ? `-${currency(-Number(n))}` : currency(n);
+
 // Digits-only rupiah input shown with thousand separators ("40.000").
 export const formatRupiahInput = (value) => {
   const digits = String(value ?? "").replace(/\D/g, "");

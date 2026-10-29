@@ -2,7 +2,7 @@ import React, { useMemo, useState, useEffect } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import Metrics from "../../../components/dashboard/Metrics";
 import RecentOrders from "../components/RecentOrders";
-import { StockManagement } from "../../inventory";
+import { ShoppingPage, StockManagement, usePurchaseDraftCount } from "../../inventory";
 import MenuManagement from "../../../components/dashboard/MenuManagement";
 import RecapManagement from "../../../components/dashboard/RecapManagement";
 import { SettingsManagement } from "../../settings";
@@ -53,6 +53,9 @@ const Dashboard = () => {
       .length;
   }, [lastSeenOrderId, orders]);
 
+  // Draft nota waiting for an admin to post them.
+  const draftCount = usePurchaseDraftCount();
+
   const lowStockCount = useMemo(() => {
     return stockItems.filter((item) => item.status === "HAMPIR HABIS").length;
   }, [stockItems]);
@@ -62,6 +65,7 @@ const Dashboard = () => {
         { key: "metrics", label: "Metrik" },
         { key: "orders", label: "Pesanan", badge: newOrderCount },
         { key: "stock", label: "Stok", badge: lowStockCount },
+        { key: "shopping", label: "Belanja", badge: draftCount },
         { key: "menu", label: "Menu" },
         { key: "recap", label: "Rekap" },
         { key: "setting", label: "Pengaturan" },
@@ -70,6 +74,7 @@ const Dashboard = () => {
         { key: "metrics", label: "Metrik" },
         { key: "orders", label: "Pesanan", badge: newOrderCount },
         { key: "stock", label: "Stok", badge: lowStockCount },
+        { key: "shopping", label: "Belanja", badge: draftCount },
         { key: "recap", label: "Rekap" },
       ];
 
@@ -145,6 +150,7 @@ const Dashboard = () => {
       {activeTab === "metrics" && <Metrics />}
       {activeTab === "orders" && <RecentOrders />}
       {activeTab === "stock" && <StockManagement />}
+      {activeTab === "shopping" && <ShoppingPage />}
       {activeTab === "menu" && isAdmin && <MenuManagement />}
       {activeTab === "recap" && <RecapManagement />}
       {activeTab === "setting" && isAdmin && <SettingsManagement />}

@@ -34,7 +34,7 @@ describe("shopping utils", () => {
       { stockItemId: 5, quantity: "2", unit: "gr", unitPrice: "30000" },
       { stockItemId: "draft:cup", quantity: "1/2", unit: "pcs", unitPrice: "1000" },
     ];
-    const form = { date: "2026-09-15", suplierId: "draft:pasar", paymentMethod: "Cash", note: "" };
+    const form = { date: "2026-09-15", suplierId: "draft:pasar", paymentSourceId: 1, note: "" };
     expect(isPurchaseFormComplete(form, rows)).toBe(true);
     expect(isPurchaseFormComplete({ ...form, suplierId: "" }, rows)).toBe(false);
     expect(isPurchaseFormComplete(form, [{ ...rows[0], quantity: "0" }])).toBe(false);
@@ -46,7 +46,7 @@ describe("shopping utils", () => {
       })
     ).toEqual({
       date: "2026-09-15",
-      paymentMethod: "Cash",
+      paymentSourceId: 1,
       note: "",
       suplierName: "Pasar",
       items: [
