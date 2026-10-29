@@ -28,7 +28,7 @@ const NO_ITEMS = [];
 const STOCK_TABS = [
   { key: "stock", label: "Bahan Baku" },
   { key: "semi", label: "Bahan Setengah Jadi" },
-  { key: "supply", label: "Perlengkapan" },
+  { key: "supply", label: "Lainnya" },
 ];
 
 // Dashboard "Stok" menu, what is on hand: bahan baku (stock_raw_items), bahan
@@ -130,7 +130,7 @@ const StockManagement = () => {
         <div>
           <h2 className="text-[#f5f5f5] text-xl font-semibold">Stok Management</h2>
           <p className="mt-1 text-sm text-[#ababab]">
-            Isi gudang: bahan baku, bahan setengah jadi, dan perlengkapan. Belanjanya lewat menu Belanja.
+            Isi gudang: bahan baku, bahan setengah jadi, dan lainnya. Belanjanya lewat menu Belanja.
           </p>
         </div>
         <div className="flex w-full shrink-0 gap-2 rounded-lg bg-[#1f1f1f] p-1 sm:w-fit">

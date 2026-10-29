@@ -17,16 +17,16 @@ const useSupplyItemActions = ({ onSaved, onAdjusted, onDeleted }) => {
     mutationFn: updateSupplyItem,
     onSuccess: () => {
       refresh();
-      enqueueSnackbar("Perlengkapan berhasil diubah.", { variant: "success" });
+      enqueueSnackbar("Barang lainnya berhasil diubah.", { variant: "success" });
       onSaved();
     },
-    onError: showError("Gagal mengubah perlengkapan."),
+    onError: showError("Gagal mengubah barang lainnya."),
   });
   const adjustMutation = useMutation({
     mutationFn: updateSupplyStock,
     onSuccess: () => {
       refresh();
-      enqueueSnackbar("Stok perlengkapan disesuaikan.", { variant: "success" });
+      enqueueSnackbar("Stok barang lainnya disesuaikan.", { variant: "success" });
       onAdjusted();
     },
     onError: showError("Gagal menyesuaikan stok."),
@@ -35,10 +35,10 @@ const useSupplyItemActions = ({ onSaved, onAdjusted, onDeleted }) => {
     mutationFn: deleteSupplyItem,
     onSuccess: () => {
       refresh();
-      enqueueSnackbar("Perlengkapan dihapus.", { variant: "success" });
+      enqueueSnackbar("Barang lainnya dihapus.", { variant: "success" });
       onDeleted();
     },
-    onError: showError("Gagal menghapus perlengkapan."),
+    onError: showError("Gagal menghapus barang lainnya."),
   });
 
   return {

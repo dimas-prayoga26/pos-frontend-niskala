@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { costDisplay, currency, formatRupiahInput, quantityDisplay } from "./format";
-import { buildFallbackItemGroups, buildPurchasePayload, getLogDetail, isPurchaseFormComplete, lineTotal, parseShoppingQuantity, purchaseUnitForStockUnit, unitPriceFromTotal } from "./shopping";
+import { buildPurchasePayload, getLogDetail, isPurchaseFormComplete, lineTotal, parseShoppingQuantity, purchaseUnitForStockUnit, unitPriceFromTotal } from "./shopping";
 
 describe("shopping utils", () => {
   it("parses decimal, comma and fraction quantities", () => {
@@ -54,19 +54,6 @@ describe("shopping utils", () => {
         { itemName: "Cup", quantity: 0.5, unit: "pcs", unitPrice: 1000 },
       ],
     });
-  });
-
-  it("groups raw purchases per stock item as a fallback", () => {
-    const groups = buildFallbackItemGroups(
-      [
-        { id: 1, purchase_date: "2026-09-01", suplier_name: "A", items: [{ id: 10, stock_item_id: 5, item_name: "Gula", quantity: "2", unit_price: "1", total: "2" }] },
-        { id: 2, purchase_date: "2026-09-02", suplier_name: "B", items: [{ id: 11, stock_item_id: 5, item_name: "Gula", quantity: "3", unit_price: "1", total: "3" }] },
-      ],
-      [{ id: 5, stock: "10", unit: "gr", averageCost: 1.5, stockValue: 15 }]
-    );
-    expect(groups).toHaveLength(1);
-    expect(groups[0]).toMatchObject({ stockItemId: 5, stock: 10, stockUnit: "gr", purchaseCount: 2 });
-    expect(groups[0].histories.map((history) => history.supplierName)).toEqual(["A", "B"]);
   });
 
   it("describes activity log entries", () => {

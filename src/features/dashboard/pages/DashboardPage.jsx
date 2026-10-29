@@ -56,8 +56,9 @@ const Dashboard = () => {
   // Draft nota waiting for an admin to post them.
   const draftCount = usePurchaseDraftCount();
 
+  // Bahan baku to restock: running low or already at/below the minimum.
   const lowStockCount = useMemo(() => {
-    return stockItems.filter((item) => item.status === "HAMPIR HABIS").length;
+    return stockItems.filter((item) => item.status === "HAMPIR HABIS" || item.status === "HARUS ORDER").length;
   }, [stockItems]);
 
   const tabs = isAdmin

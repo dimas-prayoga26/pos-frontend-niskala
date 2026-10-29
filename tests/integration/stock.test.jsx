@@ -90,6 +90,8 @@ describe("stock management", () => {
     expect(milk).toHaveTextContent("Rp 26 / ml");
     expect(milk).toHaveTextContent("HAMPIR HABIS");
     expect(rowOf("Air Galon")).toHaveTextContent("Bebas Stok");
+    // Bebas Stok has no asset value (its Rp 10.000 is not shown).
+    expect(rowOf("Air Galon")).not.toHaveTextContent("Rp 10.000");
     expect(screen.getByText(/^Showing/)).toHaveTextContent("Showing 1 - 10 of 12");
     expect(screen.getByText("1 / 2")).toBeInTheDocument();
 
@@ -402,15 +404,15 @@ describe("stock management", () => {
   });
 });
 
-describe("perlengkapan tab", () => {
+describe("lainnya tab", () => {
   const supplies = [
-    stockItem(31, { name: "Gas LPG", category: "Operasional", unit: "tabung", stock: 3, minimumStock: 1, averageCost: 22000, stockValue: 66000, status: "AMAN" }),
+    stockItem(31, { name: "Gas LPG", category: "Perlengkapan", unit: "tabung", stock: 3, minimumStock: 1, averageCost: 22000, stockValue: 66000, status: "AMAN" }),
     stockItem(32, { name: "Blender", category: "Peralatan", unit: "unit", stock: 1, minimumStock: 1, averageCost: 700000, stockValue: 700000, status: "HARUS ORDER" }),
-    stockItem(33, { name: "Iklan IG", category: "Promosi", unit: "paket", stockValue: 0, isUnlimited: true, status: "BEBAS STOK" }),
+    stockItem(33, { name: "Iklan IG", category: "Promosi", unit: "paket", stock: 2, averageCost: 150000, stockValue: 300000 }),
   ];
   const openSupplyTab = async (preloadedState = asAdmin) => {
     renderWithProviders(<StockManagement />, { preloadedState });
-    fireEvent.click(screen.getByRole("button", { name: "Perlengkapan" }));
+    fireEvent.click(screen.getByRole("button", { name: "Lainnya" }));
     return findRow("Gas LPG");
   };
 
@@ -420,23 +422,49 @@ describe("perlengkapan tab", () => {
     api.getSupplyItems.mockResolvedValue({ data: { data: supplies } });
   });
 
-  it("lists perlengkapan by category with their value and no separate create button", async () => {
+  it("lists barang lainnya by category with qty and value, without units, minimum, status or a create button", async () => {
     const gas = await openSupplyTab();
-    expect(gas).toHaveTextContent("Operasional");
+    expect(gas).toHaveTextContent("Perlengkapan");
     expect(gas).toHaveTextContent("Rp 66.000");
-    expect(rowOf("Iklan IG")).toHaveTextContent("Bebas Stok");
-    expect(screen.getByText(/Nilai perlengkapan/)).toHaveTextContent("Rp 766.000");
+    expect(gas).toHaveTextContent("Rp 22.000");
+    expect(gas).not.toHaveTextContent("tabung");
+    expect(screen.queryByRole("columnheader", { name: "Satuan" })).not.toBeInTheDocument();
+    // Not bahan to restock: Qty, Nilai and Harga per Barang only.
+    expect(screen.getAllByRole("columnheader").map((header) => header.textContent)).toEqual([
+      "Barang",
+      "Kategori",
+      "Qty",
+      "Nilai",
+      "Harga per Barang",
+      "Aksi",
+    ]);
+    expect(Array.from(rowOf("Iklan IG").cells, (cell) => cell.textContent).slice(0, 5)).toEqual([
+      "Iklan IG",
+      "Promosi",
+      "2",
+      "Rp 300.000",
+      "Rp 150.000",
+    ]);
+    expect(gas).not.toHaveTextContent("AMAN");
+    expect(screen.queryByText(/Bebas Stok/i)).not.toBeInTheDocument();
+    expect(screen.getByText(/Nilai barang lainnya/)).toHaveTextContent("Rp 1.066.000");
+    expect(
+      within(screen.getByRole("group", { name: "Kategori barang lainnya" }))
+        .getAllByRole("button")
+        .map((button) => button.textContent)
+    ).toEqual(["Semua", "Peralatan", "Perlengkapan", "Promosi", "Lain-lain"]);
     expect(screen.queryByRole("button", { name: /Tambah/ })).not.toBeInTheDocument();
     // Bahan baku never show up in Perlengkapan.
     expect(screen.queryByText("Susu Segar")).not.toBeInTheDocument();
 
-    fireEvent.click(within(screen.getByRole("group", { name: "Kategori perlengkapan" })).getByRole("button", { name: "Peralatan" }));
+    fireEvent.click(within(screen.getByRole("group", { name: "Kategori barang lainnya" })).getByRole("button", { name: "Peralatan" }));
     expect(screen.queryByText("Gas LPG")).not.toBeInTheDocument();
-    expect(rowOf("Blender")).toHaveTextContent("HARUS ORDER");
-    expect(screen.getByText(/Nilai perlengkapan/)).toHaveTextContent("Rp 700.000");
+    expect(rowOf("Blender")).not.toHaveTextContent("HARUS ORDER");
+    expect(within(rowOf("Blender")).getByRole("button", { name: "Sesuaikan" })).toBeInTheDocument();
+    expect(screen.getByText(/Nilai barang lainnya/)).toHaveTextContent("Rp 700.000");
   });
 
-  it("adjusts the counted stock, edits and deletes a perlengkapan", async () => {
+  it("adjusts the counted qty, edits and deletes a barang lainnya", async () => {
     api.updateSupplyStock.mockResolvedValue({ data: { success: true } });
     api.updateSupplyItem.mockResolvedValue({ data: { success: true } });
     api.deleteSupplyItem.mockResolvedValue({ data: { success: true } });
@@ -444,25 +472,25 @@ describe("perlengkapan tab", () => {
 
     fireEvent.click(within(gas).getByRole("button", { name: "Sesuaikan" }));
     const adjust = screen.getByRole("dialog", { name: "Sesuaikan Gas LPG" });
-    fireEvent.change(within(adjust).getByLabelText("Stok Sekarang (tabung)"), { target: { value: "1" } });
+    fireEvent.change(within(adjust).getByLabelText("Qty Sekarang"), { target: { value: "1" } });
     expect(adjust).toHaveTextContent("Rp 22.000");
     fireEvent.click(within(adjust).getByRole("button", { name: "Simpan" }));
     await waitFor(() => expect(api.updateSupplyStock.mock.calls[0][0]).toEqual({ supplyItemId: 31, stock: 1 }));
 
     fireEvent.click(within(rowOf("Gas LPG")).getByRole("button", { name: "Ubah" }));
-    const edit = screen.getByRole("dialog", { name: "Ubah Perlengkapan" });
+    const edit = screen.getByRole("dialog", { name: "Ubah Barang Lainnya" });
+    // No unit, minimum or Bebas Stok for barang Lainnya.
+    expect(within(edit).queryByLabelText("Satuan")).not.toBeInTheDocument();
+    expect(within(edit).queryByLabelText("Minimum")).not.toBeInTheDocument();
+    expect(within(edit).queryByRole("checkbox")).not.toBeInTheDocument();
     fireEvent.change(within(edit).getByLabelText("Nama"), { target: { value: "Gas LPG 3 kg" } });
-    fireEvent.change(within(edit).getByLabelText("Minimum"), { target: { value: "2" } });
     fireEvent.click(within(edit).getByRole("button", { name: "Simpan" }));
     await waitFor(() =>
       expect(api.updateSupplyItem.mock.calls[0][0]).toEqual({
         supplyItemId: 31,
         name: "Gas LPG 3 kg",
-        category: "Operasional",
-        unit: "tabung",
-        minimumStock: 2,
+        category: "Perlengkapan",
         supplier: "",
-        isUnlimited: false,
       })
     );
 
@@ -471,7 +499,7 @@ describe("perlengkapan tab", () => {
     await waitFor(() => expect(api.deleteSupplyItem.mock.calls[0][0]).toBe(32));
   });
 
-  it("lets cashiers count perlengkapan but not change them", async () => {
+  it("lets cashiers count barang lainnya but not change them", async () => {
     const gas = await openSupplyTab(asCashier);
     expect(within(gas).getByRole("button", { name: "Sesuaikan" })).toBeInTheDocument();
     expect(within(gas).queryByRole("button", { name: "Ubah" })).not.toBeInTheDocument();

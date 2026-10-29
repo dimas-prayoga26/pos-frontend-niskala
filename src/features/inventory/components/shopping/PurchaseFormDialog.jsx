@@ -9,15 +9,6 @@ import ReceiptPicker from "./ReceiptPicker";
 import { buttonClass, inputClass } from "./styles";
 
 const MAX_ROWS = 100;
-const SUPPLY_UNITS = ["pcs", "unit", "lembar", "pack", "tabung", "gr", "ml"];
-const SUPPLY_UNIT_OPTIONS = SUPPLY_UNITS.map((unit) => ({ id: unit, text: unit }));
-// Perlengkapan come in any unit: a typed one ("rim") is kept as an option.
-const supplyUnitOptions = (unit) =>
-  !unit || SUPPLY_UNITS.includes(unit) ? SUPPLY_UNIT_OPTIONS : [...SUPPLY_UNIT_OPTIONS, { id: unit, text: unit }];
-const createUnit = (name) => {
-  const unit = name.trim().toLowerCase().slice(0, 30);
-  return { id: unit, text: unit };
-};
 const kindButtonClass = (active) =>
   `rounded-md px-4 py-2 text-sm font-bold transition-colors ${
     active ? "bg-[#a79981] text-[#101010]" : "text-[#ababab] hover:bg-[#333] hover:text-white"
@@ -196,7 +187,7 @@ const PurchaseFormDialog = ({ purchaseForm, onClose }) => {
                   <div
                     className={`grid gap-3 sm:grid-cols-2 ${
                       isSupply
-                        ? "lg:grid-cols-[minmax(200px,2fr)_minmax(130px,1fr)_minmax(80px,.6fr)_minmax(90px,.7fr)_minmax(120px,1fr)_minmax(110px,.9fr)]"
+                        ? "lg:grid-cols-[minmax(220px,2fr)_minmax(140px,1fr)_minmax(80px,.6fr)_minmax(120px,1fr)_minmax(110px,.9fr)]"
                         : "lg:grid-cols-[minmax(220px,2fr)_minmax(80px,.6fr)_minmax(90px,.7fr)_minmax(120px,1fr)_minmax(120px,1fr)]"
                     }`}
                   >
@@ -212,7 +203,7 @@ const PurchaseFormDialog = ({ purchaseForm, onClose }) => {
                           })
                         }
                         onCreate={createItem}
-                        placeholder={isSupply ? "Cari atau buat perlengkapan" : "Cari atau buat barang"}
+                        placeholder={isSupply ? "Cari atau buat barang lainnya" : "Cari atau buat barang"}
                         disabled={saving}
                       />
                     </div>
@@ -244,18 +235,20 @@ const PurchaseFormDialog = ({ purchaseForm, onClose }) => {
                         className={inputClass}
                       />
                     </label>
-                    <div>
-                      <span className="mb-1 block text-sm">Satuan</span>
-                      <CreatableSelect2
-                        options={isSupply ? supplyUnitOptions(row.unit) : UNIT_OPTIONS}
-                        value={row.unit}
-                        onSelect={(option) => updateRow(row.key, { unit: option?.id || "" })}
-                        onCreate={isSupply ? createUnit : undefined}
-                        placeholder="Pilih satuan"
-                        label="Satuan"
-                        disabled={saving}
-                      />
-                    </div>
+                    {/* Barang Lainnya are counted per piece: no unit. */}
+                    {kind.showUnits && (
+                      <div>
+                        <span className="mb-1 block text-sm">Satuan</span>
+                        <CreatableSelect2
+                          options={UNIT_OPTIONS}
+                          value={row.unit}
+                          onSelect={(option) => updateRow(row.key, { unit: option?.id || "" })}
+                          placeholder="Pilih satuan"
+                          label="Satuan"
+                          disabled={saving}
+                        />
+                      </div>
+                    )}
                     <label>
                       <span className="mb-1 block text-sm">Harga Total</span>
                       <input
@@ -274,11 +267,10 @@ const PurchaseFormDialog = ({ purchaseForm, onClose }) => {
                       <p className="py-2 font-bold">{currency(lineTotal(row))}</p>
                     </div>
                   </div>
-                  {selectedItem?.unit && (
+                  {kind.showUnits && selectedItem?.unit && (
                     <p className="mt-2 text-xs text-[#ababab]">
-                      {isSupply
-                        ? `Satuan stok: ${selectedItem.unit}. Nilai per satuan dihitung otomatis dari harga total.`
-                        : `Satuan stok: ${selectedItem.unit}. Isi gramasi sesuai satuan stok; COGS dihitung otomatis dari harga total.`}
+                      Satuan stok: {selectedItem.unit}. Isi gramasi sesuai satuan stok; COGS dihitung otomatis dari
+                      harga total.
                     </p>
                   )}
                 </div>

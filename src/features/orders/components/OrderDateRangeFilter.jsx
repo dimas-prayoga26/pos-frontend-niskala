@@ -12,7 +12,9 @@ import { getDateRangeLabel } from "../utils/orderFilters";
 const dateKeyToPickerDate = (dateKey, todayKey) =>
   new Date(`${dateKey || todayKey}T00:00:00+07:00`);
 
-const OrderDateRangeFilter = ({ dateRange, onChange }) => {
+// Also the Custom Date of the Belanja period filter, which passes its own
+// label ("" for none) and input id.
+const OrderDateRangeFilter = ({ dateRange, onChange, label = "Filter by date", inputId = "order-date-range-filter" }) => {
   const todayKey = getJakartaDateKey();
   const [draftDateRange, setDraftDateRange] = useState({
     startDate: dateKeyToPickerDate(todayKey, todayKey),
@@ -94,14 +96,16 @@ const OrderDateRangeFilter = ({ dateRange, onChange }) => {
 
   return (
     <div className="flex w-full flex-col gap-2 sm:w-auto lg:flex-row lg:items-center">
-      <label className="text-sm font-semibold text-[#ababab]" htmlFor="order-date-range-filter">
-        Filter by date
-      </label>
+      {label && (
+        <label className="text-sm font-semibold text-[#ababab]" htmlFor={inputId}>
+          {label}
+        </label>
+      )}
       <div ref={dateRangePickerRef} className="relative w-full sm:w-72">
         <div className="flex items-center gap-2 rounded-lg bg-[#262626] px-3 py-2 text-sm font-semibold text-[#f5f5f5]">
           <MdDateRange className="shrink-0 text-[#a79981]" size={18} />
           <input
-            id="order-date-range-filter"
+            id={inputId}
             type="text"
             readOnly
             value={getDateRangeLabel(dateRange)}

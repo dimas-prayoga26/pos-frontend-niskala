@@ -5,7 +5,7 @@ import { currency } from "../../utils/format";
 const inputClass =
   "mt-2 w-full rounded-lg bg-[#262626] px-4 py-3 text-sm text-[#f5f5f5] outline-none focus:ring-1 focus:ring-[#a79981]";
 
-// "Sesuaikan": the counted stock of a perlengkapan (e.g. 3 tabung gas left).
+// "Sesuaikan": the counted qty of a barang Lainnya (e.g. 3 gas left).
 // Its value follows at the current price per unit.
 const SupplyStockDialog = ({ item, onSave, onCancel, isSaving }) => {
   const [stock, setStock] = useState(String(item.stock ?? 0));
@@ -17,7 +17,7 @@ const SupplyStockDialog = ({ item, onSave, onCancel, isSaving }) => {
     event.preventDefault();
     if (isSaving) return;
     if (!Number.isFinite(count) || count < 0 || String(stock).trim() === "") {
-      enqueueSnackbar("Isi jumlah stok yang valid.", { variant: "warning" });
+      enqueueSnackbar("Isi qty yang valid.", { variant: "warning" });
       return;
     }
     onSave(Math.round(count * 100) / 100);
@@ -35,10 +35,10 @@ const SupplyStockDialog = ({ item, onSave, onCancel, isSaving }) => {
           Sesuaikan {item.name}
         </h3>
         <p className="mt-1 text-sm text-[#ababab]">
-          Tercatat {item.stock} {item.unit}. Isi jumlah yang ada sekarang.
+          Tercatat {item.stock}. Isi jumlah yang ada sekarang.
         </p>
         <label className="mt-4 block text-sm font-semibold text-[#ababab]">
-          Stok Sekarang ({item.unit || "satuan"})
+          Qty Sekarang
           <input
             value={stock}
             onChange={(event) => setStock(event.target.value)}

@@ -3,7 +3,8 @@ import { formatRupiahInput } from "../../utils/format";
 import { UNIT_OPTIONS } from "../../utils/shopping";
 import { buttonClass, inputClass } from "./styles";
 
-const PurchaseItemEditDialog = ({ itemName, form, onChange, onSubmit, onClose, isSaving }) => (
+// showUnits false (barang Lainnya): no unit; the line keeps its own.
+const PurchaseItemEditDialog = ({ itemName, form, onChange, onSubmit, onClose, isSaving, showUnits = true }) => (
   <div
     className="fixed inset-0 z-[110] flex items-center justify-center bg-black/70 p-3"
     role="dialog"
@@ -27,7 +28,7 @@ const PurchaseItemEditDialog = ({ itemName, form, onChange, onSubmit, onClose, i
       </div>
       <div className="grid gap-3 sm:grid-cols-3">
         <label>
-          <span className="mb-1 block text-sm">Gramasi</span>
+          <span className="mb-1 block text-sm">{showUnits ? "Gramasi" : "Qty"}</span>
           <input
             value={form.quantity}
             onChange={(event) => onChange({ quantity: event.target.value })}
@@ -36,17 +37,19 @@ const PurchaseItemEditDialog = ({ itemName, form, onChange, onSubmit, onClose, i
             className={inputClass}
           />
         </label>
-        <div>
-          <span className="mb-1 block text-sm">Satuan</span>
-          <CreatableSelect2
-            options={UNIT_OPTIONS}
-            value={form.unit}
-            onSelect={(option) => onChange({ unit: option?.id || "" })}
-            placeholder="Pilih satuan"
-            label="Satuan"
-            disabled={isSaving}
-          />
-        </div>
+        {showUnits && (
+          <div>
+            <span className="mb-1 block text-sm">Satuan</span>
+            <CreatableSelect2
+              options={UNIT_OPTIONS}
+              value={form.unit}
+              onSelect={(option) => onChange({ unit: option?.id || "" })}
+              placeholder="Pilih satuan"
+              label="Satuan"
+              disabled={isSaving}
+            />
+          </div>
+        )}
         <label>
           <span className="mb-1 block text-sm">Harga Total</span>
           <input

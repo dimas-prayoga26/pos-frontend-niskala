@@ -58,12 +58,13 @@ export const lineTotal = (row) => Math.round(Number(row.unitPrice || 0) * 100) /
 export const unitPriceFromTotal = (quantity, total) =>
   Math.round((Number(total || 0) / Math.max(Number(quantity || 0), 1)) * 100) / 100;
 
-export const isPurchaseFormComplete = (form, rows) =>
+// requireUnit is false for barang Lainnya, which have no unit.
+export const isPurchaseFormComplete = (form, rows, { requireUnit = true } = {}) =>
   Boolean(form.suplierId) &&
   !rows.some(
     (row) =>
       !row.stockItemId ||
-      !row.unit.trim() ||
+      (requireUnit && !row.unit.trim()) ||
       !Number.isFinite(parseShoppingQuantity(row.quantity)) ||
       parseShoppingQuantity(row.quantity) <= 0 ||
       row.unitPrice === ""
@@ -95,60 +96,12 @@ export const buildPurchasePayload = (
           ? { itemName: draft.name, ...(category && { category }) }
           : { [itemIdKey]: stockItemId }),
         quantity: parsedQuantity,
-        unit,
+        // Lines without unit (barang Lainnya) take their item's unit on the server.
+        ...(unit && { unit }),
         unitPrice: unitPriceFromTotal(parsedQuantity, unitPrice),
       };
     }),
   };
-};
-
-// Groups purchase lines per stock item when the API does not return itemGroups.
-export const buildFallbackItemGroups = (purchases = [], stockItems = []) => {
-  const stockById = new Map(stockItems.map((item) => [Number(item.id || item._id), item]));
-  const groups = new Map();
-
-  purchases.forEach((purchase) => {
-    (purchase.items || []).forEach((item) => {
-      const stockItemId = Number(item.stock_item_id);
-      const key = stockItemId || item.item_name;
-      const stockItem = stockById.get(stockItemId);
-
-      if (!groups.has(key)) {
-        groups.set(key, {
-          stockItemId: stockItemId || null,
-          itemName: item.item_name,
-          stock: stockItem ? Number(stockItem.stock || 0) : null,
-          stockUnit: stockItem?.unit || item.stock_unit,
-          averageCost: Number(stockItem?.averageCost || item.stock_unit_cost || 0),
-          stockValue: Number(stockItem?.stockValue || item.stock_value_after || 0),
-          purchaseCount: 0,
-          histories: [],
-        });
-      }
-
-      const group = groups.get(key);
-      group.purchaseCount += 1;
-      group.histories.push({
-        id: item.id,
-        purchaseId: purchase.id,
-        itemName: item.item_name,
-        purchaseDate: purchase.purchase_date,
-        supplierName: purchase.suplier_name,
-        paymentMethod: purchase.payment_method,
-        attachments: purchase.attachments || [],
-        quantity: Number(item.quantity),
-        unit: item.unit,
-        unitPrice: Number(item.unit_price),
-        total: Number(item.total),
-        stockQuantity: Number(item.stock_quantity),
-        stockUnit: item.stock_unit,
-        stockAverageCost: Number(item.stock_unit_cost || 0),
-        stockValueAfter: Number(item.stock_value_after || 0),
-      });
-    });
-  });
-
-  return Array.from(groups.values());
 };
 
 export const getLogActionLabel = (log) =>
@@ -160,3 +113,24 @@ export const getLogDetail = (log) =>
     : log.action === "delete"
       ? `${quantityDisplay(log.oldData?.quantity, log.oldData?.unit)} dihapus`
       : `${quantityDisplay(log.oldData?.quantity, log.oldData?.unit)} -> ${quantityDisplay(log.newData?.quantity, log.newData?.unit)}, ${currency(log.oldData?.unitPrice)} -> ${currency(log.newData?.unitPrice)}`;
+
+const percentLabel = (value) => Number(value).toLocaleString("id-ID", { maximumFractionDigits: 2 });
+
+// Ongkir, diskon and PPN of a posted nota as lines under its barang, like the
+// paper nota ("Ongkir 1 × Rp 336 = Rp 336"); the Total under them is its
+// Grand Total. Used by the Per Nota table and the nota detail.
+export const notaFooterLines = (nota) => [
+  ...(nota.shippingCost > 0
+    ? [{ key: "shipping", label: "Ongkir", quantity: 1, price: nota.shippingCost, amount: nota.shippingCost }]
+    : []),
+  ...(nota.discountAmount > 0
+    ? [
+        {
+          key: "discount",
+          label: nota.discountType === "percent" ? `Diskon Nota (${percentLabel(nota.discountValue)}%)` : "Diskon Nota",
+          amount: -nota.discountAmount,
+        },
+      ]
+    : []),
+  ...(nota.taxAmount > 0 ? [{ key: "tax", label: `PPN ${percentLabel(nota.taxPercent)}%`, amount: nota.taxAmount }] : []),
+];

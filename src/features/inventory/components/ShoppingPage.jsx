@@ -27,7 +27,7 @@ const ShoppingPage = () => {
       <div className="mb-4">
         <h2 className="text-xl font-semibold text-[#f5f5f5]">Belanja</h2>
         <p className="mt-1 text-sm text-[#ababab]">
-          Barang masuk dan uang keluar: belanja bahan baku dan perlengkapan, draft nota, dan riwayatnya.
+          Barang masuk dan uang keluar: belanja bahan baku dan lainnya, draft nota, dan riwayatnya.
         </p>
       </div>
       <ShoppingManagement
