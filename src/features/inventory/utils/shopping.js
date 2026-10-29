@@ -2,18 +2,17 @@ import { currency, quantityDisplay } from "./format";
 
 // Purchase (belanja) helpers. The form asks for the TOTAL price of a line; the
 // API expects a unit price, so it is derived as total / quantity.
-export const PAYMENT_OPTIONS = ["Cash", "Rekening Penjualan", "Transfer", "QRIS"].map((name) => ({
-  id: name,
-  text: name,
-}));
 export const UNIT_OPTIONS = ["gr", "pcs", "ml"].map((unit) => ({ id: unit, text: unit }));
 export const HISTORY_PAGE_SIZE = 10;
 
 let rowKey = 0;
 
+// stockItemId holds the chosen item of either Jenis Belanja; category is only
+// asked for a new perlengkapan.
 export const blankRow = () => ({
   key: ++rowKey,
   stockItemId: "",
+  category: "",
   quantity: "",
   unit: "",
   unitPrice: "",
@@ -72,19 +71,29 @@ export const isPurchaseFormComplete = (form, rows) =>
 
 // Names created in the form ("draft:" ids) are sent as names so the server
 // creates the supplier/item inside the purchase transaction.
-export const buildPurchasePayload = (form, rows, { extraSuppliers, extraItems }) => {
+// itemIdKey is the API's name for an existing item: stockItemId (bahan baku)
+// or supplyItemId (perlengkapan).
+export const buildPurchasePayload = (
+  form,
+  rows,
+  { extraSuppliers, extraItems, itemIdKey = "stockItemId" }
+) => {
   const supplierDraft = extraSuppliers.find((item) => item.id === form.suplierId);
   const { suplierId, ...details } = form;
+  // Jenis Belanja picks the endpoint; it is not part of the nota.
+  delete details.kind;
 
   return {
     ...details,
     ...(supplierDraft ? { suplierName: supplierDraft.name } : { suplierId }),
-    items: rows.map(({ stockItemId, quantity, unit, unitPrice }) => {
+    items: rows.map(({ stockItemId, category, quantity, unit, unitPrice }) => {
       const draft = extraItems.find((item) => item.id === stockItemId);
       const parsedQuantity = parseShoppingQuantity(quantity);
 
       return {
-        ...(draft ? { itemName: draft.name } : { stockItemId }),
+        ...(draft
+          ? { itemName: draft.name, ...(category && { category }) }
+          : { [itemIdKey]: stockItemId }),
         quantity: parsedQuantity,
         unit,
         unitPrice: unitPriceFromTotal(parsedQuantity, unitPrice),
@@ -126,6 +135,7 @@ export const buildFallbackItemGroups = (purchases = [], stockItems = []) => {
         purchaseDate: purchase.purchase_date,
         supplierName: purchase.suplier_name,
         paymentMethod: purchase.payment_method,
+        attachments: purchase.attachments || [],
         quantity: Number(item.quantity),
         unit: item.unit,
         unitPrice: Number(item.unit_price),

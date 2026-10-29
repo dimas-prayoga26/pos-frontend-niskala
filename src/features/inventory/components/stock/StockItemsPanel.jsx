@@ -9,9 +9,10 @@ import {
 const pagerButtonClass =
   "rounded-lg bg-[#262626] px-3 py-2 font-semibold text-[#f5f5f5] disabled:cursor-not-allowed disabled:opacity-40";
 
-// "Stok Barang" tab: searchable, paged stock list. The page resets whenever
-// the tab is reopened or the search changes.
-const StockItemsPanel = ({ stockItems, searchQuery, onSearchChange, isAdmin, onEditCogs, onDelete }) => {
+// "Bahan Baku" tab: searchable, paged stock list. The page resets whenever
+// the tab is reopened or the search changes. "Ubah" only shows when
+// onEditCogs is given.
+const StockItemsPanel = ({ stockItems, searchQuery, onSearchChange, isAdmin, onAdd, onEditCogs, onDelete }) => {
   const [currentPage, setCurrentPage] = useState(1);
   const filteredItems = useMemo(
     () => filterStockItems(stockItems, searchQuery),
@@ -35,12 +36,21 @@ const StockItemsPanel = ({ stockItems, searchQuery, onSearchChange, isAdmin, onE
     <div className="rounded-lg bg-[#1f1f1f] p-4">
       <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h3 className="text-lg font-bold text-[#f5f5f5]">Stok Barang</h3>
+          <h3 className="text-lg font-bold text-[#f5f5f5]">Bahan Baku</h3>
           <p className="mt-1 text-sm text-[#ababab]">
             Daftar bahan, kategori, jumlah stok, dan status restock.
           </p>
         </div>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          {isAdmin && (
+            <button
+              type="button"
+              onClick={onAdd}
+              className="rounded-lg bg-[#a79981] px-4 py-2 text-sm font-bold text-[#101010] hover:bg-[#b7aa94]"
+            >
+              Tambah Stok
+            </button>
+          )}
           <input
             value={searchQuery}
             onChange={(event) => onSearchChange(event.target.value)}
@@ -103,13 +113,15 @@ const StockItemsPanel = ({ stockItems, searchQuery, onSearchChange, isAdmin, onE
                 {isAdmin && (
                   <td className="p-4">
                     <div className="flex items-center justify-center gap-4 text-sm font-semibold">
-                      <button
-                        type="button"
-                        onClick={() => onEditCogs(item)}
-                        className="text-[#d6c7ae] hover:text-[#f5f5f5]"
-                      >
-                        Ubah
-                      </button>
+                      {onEditCogs && (
+                        <button
+                          type="button"
+                          onClick={() => onEditCogs(item)}
+                          className="text-[#d6c7ae] hover:text-[#f5f5f5]"
+                        >
+                          Ubah
+                        </button>
+                      )}
                       <button
                         type="button"
                         onClick={() => onDelete(item)}

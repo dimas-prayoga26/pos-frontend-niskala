@@ -1,20 +1,21 @@
 import { useEffect, useMemo, useState } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { getPurchases } from "../api";
+import { PURCHASE_KINDS } from "../utils/purchaseKinds";
 import { HISTORY_PAGE_SIZE, buildFallbackItemGroups } from "../utils/shopping";
 
 const groupKey = (group) => String(group.stockItemId || group.itemName);
 
-// Paged, searchable purchase history grouped per item, plus the item whose
-// detail dialog is open (kept in sync with refetched data).
-const usePurchaseHistory = (stockItems) => {
+// Paged, searchable purchase history of one Jenis Belanja (PURCHASE_KINDS)
+// grouped per item, plus the item whose detail dialog is open (kept in sync
+// with refetched data).
+const usePurchaseHistory = (stockItems, kind = PURCHASE_KINDS.raw) => {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [selectedGroup, setSelectedGroup] = useState(null);
 
   const history = useQuery({
-    queryKey: ["purchases", search, page],
-    queryFn: () => getPurchases({ search, page }),
+    queryKey: [kind.historyKey, search, page],
+    queryFn: () => kind.list({ search, page }),
     placeholderData: keepPreviousData,
   });
   const historyData = history.data?.data?.data;

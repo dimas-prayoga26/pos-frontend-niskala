@@ -78,10 +78,55 @@ export const addSupplier = (data) => axiosWrapper.post("/api/shopping/suppliers"
 export const updateSupplier = ({ id, ...data }) => axiosWrapper.put(`/api/shopping/suppliers/${id}`, data);
 export const getPurchases = (params) => axiosWrapper.get("/api/shopping/purchases", { params });
 export const savePurchase = (data) => axiosWrapper.post("/api/shopping/purchases", data);
+// Draft nota: saved by staff, posted (approved) by an admin.
+export const getPurchaseDrafts = () => axiosWrapper.get("/api/shopping/purchases/drafts");
+export const updatePurchaseDraft = ({ id, ...data }) => axiosWrapper.put(`/api/shopping/purchases/${id}`, data);
+export const deletePurchaseDraft = (id) => axiosWrapper.delete(`/api/shopping/purchases/${id}`);
 export const updatePurchaseItem = ({ id, ...data }) =>
   axiosWrapper.put(`/api/shopping/purchase-items/${id}`, data);
 export const deletePurchaseItem = (id) =>
   axiosWrapper.delete(`/api/shopping/purchase-items/${id}`);
+// Bukti nota: photos of a purchase's paper receipt.
+export const uploadPurchaseAttachments = ({ purchaseId, files }) => {
+  const formData = new FormData();
+  files.forEach((file) => formData.append("files", file, file.name));
+  return axiosWrapper.post(`/api/shopping/purchases/${purchaseId}/attachments`, formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+};
+export const deletePurchaseAttachment = (attachmentId) =>
+  axiosWrapper.delete(`/api/shopping/purchase-attachments/${attachmentId}`);
+// Belanja perlengkapan (peralatan, operasional, promosi): the same nota form.
+export const getSupplyPurchases = (params) =>
+  axiosWrapper.get("/api/shopping/supply-purchases", { params });
+export const saveSupplyPurchase = (data) => axiosWrapper.post("/api/shopping/supply-purchases", data);
+export const getSupplyPurchaseDrafts = () => axiosWrapper.get("/api/shopping/supply-purchases/drafts");
+export const updateSupplyPurchaseDraft = ({ id, ...data }) =>
+  axiosWrapper.put(`/api/shopping/supply-purchases/${id}`, data);
+export const deleteSupplyPurchaseDraft = (id) => axiosWrapper.delete(`/api/shopping/supply-purchases/${id}`);
+export const updateSupplyPurchaseItem = ({ id, ...data }) =>
+  axiosWrapper.put(`/api/shopping/supply-purchase-items/${id}`, data);
+export const deleteSupplyPurchaseItem = (id) =>
+  axiosWrapper.delete(`/api/shopping/supply-purchase-items/${id}`);
+export const uploadSupplyPurchaseAttachments = ({ purchaseId, files }) => {
+  const formData = new FormData();
+  files.forEach((file) => formData.append("files", file, file.name));
+  return axiosWrapper.post(`/api/shopping/supply-purchases/${purchaseId}/attachments`, formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+};
+export const deleteSupplyPurchaseAttachment = (attachmentId) =>
+  axiosWrapper.delete(`/api/shopping/supply-purchase-attachments/${attachmentId}`);
+// Sumber pembayaran and their saldo (admin only).
+export const getPaymentSources = (params = {}) =>
+  axiosWrapper.get("/api/payment-source", { params });
+export const addPaymentSource = (data) => axiosWrapper.post("/api/payment-source", data);
+export const updatePaymentSource = ({ id, ...data }) =>
+  axiosWrapper.put(`/api/payment-source/${id}`, data);
+export const getPaymentSourceMutations = ({ id, page = 1 }) =>
+  axiosWrapper.get(`/api/payment-source/${id}/mutations`, { params: { page } });
+export const addPaymentSourceMutation = ({ id, ...data }) =>
+  axiosWrapper.post(`/api/payment-source/${id}/mutations`, data);
 export const addStockItem = (data) => axiosWrapper.post("/api/stock-item/", data);
 export const getStockItems = () => axiosWrapper.get("/api/stock-item");
 export const updateStockItem = ({ stockItemId, ...stockItemData }) =>
@@ -114,3 +159,12 @@ export const recordSemiWaste = ({ semiItemId, ...data }) =>
   axiosWrapper.post(`/api/stock-item/semi/${semiItemId}/wastes`, data);
 export const deleteSemiWaste = (wasteId) =>
   axiosWrapper.delete(`/api/stock-item/semi/wastes/${wasteId}`);
+// Perlengkapan (stock_supply_items): peralatan, operasional, promosi.
+export const getSupplyItems = () => axiosWrapper.get("/api/stock-item/supply");
+export const addSupplyItem = (data) => axiosWrapper.post("/api/stock-item/supply", data);
+export const updateSupplyItem = ({ supplyItemId, ...data }) =>
+  axiosWrapper.put(`/api/stock-item/supply/${supplyItemId}`, data);
+export const updateSupplyStock = ({ supplyItemId, stock }) =>
+  axiosWrapper.patch(`/api/stock-item/supply/${supplyItemId}/stock`, { stock });
+export const deleteSupplyItem = (supplyItemId) =>
+  axiosWrapper.delete(`/api/stock-item/supply/${supplyItemId}`);

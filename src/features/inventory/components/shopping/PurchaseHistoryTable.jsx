@@ -41,11 +41,17 @@ const PurchaseHistoryTable = ({ itemGroups, onOpen }) => (
                 <span className="mt-1 inline-flex rounded-md bg-[#262626] px-2 py-1 text-xs font-semibold text-[#ababab]">
                   {group.purchaseCount} history
                 </span>
+                {group.category && (
+                  <span className="ml-1 mt-1 inline-flex rounded-md bg-[#2b3a3a] px-2 py-1 text-xs font-semibold text-[#9fd6d2]">
+                    {group.category}
+                  </span>
+                )}
               </td>
               <td className="whitespace-nowrap p-3">
                 {String(item.purchaseDate).slice(0, 10)}
                 <p className="text-xs text-[#ababab]">
                   #{item.purchaseId} - {item.paymentMethod}
+                  {item.attachments?.length > 0 && ` · ${item.attachments.length} bukti`}
                 </p>
               </td>
               <td className="p-3">{item.supplierName}</td>

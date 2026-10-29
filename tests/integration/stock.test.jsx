@@ -1,26 +1,32 @@
-import { fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import * as api from "../../src/https/index";
 import { StockManagement } from "../../src/features/inventory";
+import StockCogsDialog from "../../src/features/inventory/components/stock/StockCogsDialog";
 import { renderWithProviders } from "../renderWithProviders";
 
 vi.mock("../../src/https/index", async (importOriginal) => ({
   ...(await importOriginal()),
+  addStockItem: vi.fn(),
   addSemiItem: vi.fn(),
   deleteSemiItem: vi.fn(),
   deleteSemiProduction: vi.fn(),
   deleteSemiWaste: vi.fn(),
   deleteStockItem: vi.fn(),
+  deleteSupplyItem: vi.fn(),
   getPurchases: vi.fn(),
   getSemiItems: vi.fn(),
   getSemiProductions: vi.fn(),
   getSemiWastes: vi.fn(),
   getShoppingSuppliers: vi.fn(),
   getStockItems: vi.fn(),
+  getSupplyItems: vi.fn(),
   recordSemiProduction: vi.fn(),
   recordSemiWaste: vi.fn(),
   updateSemiStock: vi.fn(),
   updateStockCogs: vi.fn(),
+  updateSupplyItem: vi.fn(),
+  updateSupplyStock: vi.fn(),
 }));
 
 const stockItem = (id, overrides = {}) => ({
@@ -39,7 +45,7 @@ const stockItem = (id, overrides = {}) => ({
 });
 
 // Bahan setengah jadi made from "Bahan 03" (1 pcs per recipe), served by its
-// own endpoint and never listed in Stok Barang.
+// own endpoint and never listed under Bahan Baku.
 const nasi = stockItem(20, {
   name: "Nasi",
   category: "Olahan",
@@ -72,6 +78,7 @@ describe("stock management", () => {
     api.getSemiItems.mockResolvedValue({ data: { data: [nasi] } });
     api.getPurchases.mockResolvedValue({ data: { data: { purchases: [], itemGroups: [], total: 0 } } });
     api.getShoppingSuppliers.mockResolvedValue({ data: { data: [] } });
+    api.getSupplyItems.mockResolvedValue({ data: { data: [] } });
   });
 
   it("lists stock with status, value and cost per unit, paginated and searchable", async () => {
@@ -96,11 +103,64 @@ describe("stock management", () => {
     expect(screen.getByText("No stock data found")).toBeInTheDocument();
   });
 
-  it("recomputes COGS from a package price and saves it", async () => {
-    api.updateStockCogs.mockResolvedValue({ data: { success: true } });
+  it("adds a stock item from Tambah Stok", async () => {
+    api.addStockItem.mockResolvedValue({ data: { success: true } });
     renderWithProviders(<StockManagement />, { preloadedState: asAdmin });
 
-    fireEvent.click(within(await findRow("Susu Segar")).getByRole("button", { name: "Ubah" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Tambah Stok" }));
+    const dialog = screen.getByRole("dialog", { name: "Tambah Stok" });
+    fireEvent.change(within(dialog).getByLabelText("Bahan"), { target: { value: "  Sirup   Vanila " } });
+    fireEvent.change(within(dialog).getByLabelText("Kategori"), { target: { value: "Sirup" } });
+    fireEvent.change(within(dialog).getByLabelText("Satuan"), { target: { value: "ML" } });
+    fireEvent.change(within(dialog).getByLabelText("Minimum"), { target: { value: "250" } });
+    fireEvent.change(within(dialog).getByLabelText("Supplier"), { target: { value: "Toko Sirup" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Tambah Stok" }));
+
+    await waitFor(() =>
+      expect(api.addStockItem.mock.calls[0][0]).toEqual({
+        name: "Sirup Vanila",
+        category: "Sirup",
+        unit: "ml",
+        stock: 0,
+        minimumStock: 250,
+        supplier: "Toko Sirup",
+        isUnlimited: false,
+      })
+    );
+    expect(await screen.findByText("Bahan berhasil ditambahkan.")).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Tambah Stok" })).not.toBeInTheDocument());
+  });
+
+  it("validates Tambah Stok and shows the server message for a taken name", async () => {
+    api.addStockItem.mockRejectedValue({ response: { data: { message: "Bahan Susu Segar sudah ada di Stok → Bahan Baku." } } });
+    renderWithProviders(<StockManagement />, { preloadedState: asAdmin });
+
+    fireEvent.click(await screen.findByRole("button", { name: "Tambah Stok" }));
+    const dialog = screen.getByRole("dialog", { name: "Tambah Stok" });
+    fireEvent.change(within(dialog).getByLabelText("Bahan"), { target: { value: "Susu Segar" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Tambah Stok" }));
+    expect(await screen.findByText("Bahan, kategori, dan satuan wajib diisi.")).toBeInTheDocument();
+    expect(api.addStockItem).not.toHaveBeenCalled();
+
+    fireEvent.change(within(dialog).getByLabelText("Kategori"), { target: { value: "Dairy" } });
+    fireEvent.change(within(dialog).getByLabelText("Satuan"), { target: { value: "ml" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Tambah Stok" }));
+    expect(await screen.findByText("Bahan Susu Segar sudah ada di Stok → Bahan Baku.")).toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: "Tambah Stok" })).toBeInTheDocument();
+  });
+
+  it("hides Ubah on Bahan Baku but keeps Hapus", async () => {
+    renderWithProviders(<StockManagement />, { preloadedState: asAdmin });
+
+    const row = await findRow("Susu Segar");
+    expect(within(row).queryByRole("button", { name: "Ubah" })).not.toBeInTheDocument();
+    expect(within(row).getByRole("button", { name: "Hapus" })).toBeInTheDocument();
+  });
+
+  // The COGS dialog stays for when Ubah is shown again.
+  it("recomputes COGS from a package price and saves it", async () => {
+    const onSave = vi.fn();
+    render(<StockCogsDialog item={items[0]} onSave={onSave} onCancel={vi.fn()} isSaving={false} />);
     const dialog = screen.getByText("Ubah COGS Awal").closest("form");
     expect(within(dialog).getByPlaceholderText("Contoh: 800 ml")).toHaveValue("800");
     expect(within(dialog).getByPlaceholderText("Contoh: 169000")).toHaveValue("20.488");
@@ -111,22 +171,18 @@ describe("stock management", () => {
     fireEvent.change(within(dialog).getByPlaceholderText("Contoh: Setup COGS Awal"), { target: { value: "Setup" } });
     fireEvent.click(within(dialog).getByRole("button", { name: "Simpan" }));
 
-    await waitFor(() =>
-      expect(api.updateStockCogs.mock.calls[0][0]).toEqual({ stockItemId: 1, averageCost: 30, supplier: "Setup" })
-    );
-    expect(await screen.findByText("COGS awal berhasil diubah.")).toBeInTheDocument();
+    expect(onSave).toHaveBeenCalledWith({ averageCost: 30, supplier: "Setup" });
   });
 
   it("rejects an invalid package quantity", async () => {
-    renderWithProviders(<StockManagement />, { preloadedState: asAdmin });
-
-    fireEvent.click(within(await findRow("Air Galon")).getByRole("button", { name: "Ubah" }));
+    const onSave = vi.fn();
+    renderWithProviders(<StockCogsDialog item={items[1]} onSave={onSave} onCancel={vi.fn()} isSaving={false} />);
     const dialog = screen.getByText("Ubah COGS Awal").closest("form");
     fireEvent.change(within(dialog).getByPlaceholderText("Contoh: 800 pcs"), { target: { value: "0" } });
     fireEvent.click(within(dialog).getByRole("button", { name: "Simpan" }));
 
     expect(await screen.findByText("Gramasi kemasan tidak valid.")).toBeInTheDocument();
-    expect(api.updateStockCogs).not.toHaveBeenCalled();
+    expect(onSave).not.toHaveBeenCalled();
   });
 
   it("deletes after confirmation and hides admin actions from cashiers", async () => {
@@ -142,10 +198,11 @@ describe("stock management", () => {
     renderWithProviders(<StockManagement />, { preloadedState: asCashier });
     await screen.findByText("Air Galon");
     expect(screen.queryByRole("button", { name: "Ubah" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Tambah Stok" })).not.toBeInTheDocument();
     expect(screen.queryByText("Aksi")).not.toBeInTheDocument();
   });
 
-  it("lists bahan setengah jadi in their own tab, not in Stok Barang", async () => {
+  it("lists bahan setengah jadi in their own tab, not under Bahan Baku", async () => {
     renderWithProviders(<StockManagement />, { preloadedState: asAdmin });
 
     await findRow("Susu Segar");
@@ -342,5 +399,82 @@ describe("stock management", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: "Batalkan" }));
     fireEvent.click(within(dialog).getByRole("button", { name: "Ya, kembalikan ke stok" }));
     await waitFor(() => expect(api.deleteSemiWaste.mock.calls[0][0]).toBe(12));
+  });
+});
+
+describe("perlengkapan tab", () => {
+  const supplies = [
+    stockItem(31, { name: "Gas LPG", category: "Operasional", unit: "tabung", stock: 3, minimumStock: 1, averageCost: 22000, stockValue: 66000, status: "AMAN" }),
+    stockItem(32, { name: "Blender", category: "Peralatan", unit: "unit", stock: 1, minimumStock: 1, averageCost: 700000, stockValue: 700000, status: "HARUS ORDER" }),
+    stockItem(33, { name: "Iklan IG", category: "Promosi", unit: "paket", stockValue: 0, isUnlimited: true, status: "BEBAS STOK" }),
+  ];
+  const openSupplyTab = async (preloadedState = asAdmin) => {
+    renderWithProviders(<StockManagement />, { preloadedState });
+    fireEvent.click(screen.getByRole("button", { name: "Perlengkapan" }));
+    return findRow("Gas LPG");
+  };
+
+  beforeEach(() => {
+    api.getStockItems.mockResolvedValue({ data: { data: items } });
+    api.getSemiItems.mockResolvedValue({ data: { data: [] } });
+    api.getSupplyItems.mockResolvedValue({ data: { data: supplies } });
+  });
+
+  it("lists perlengkapan by category with their value and no separate create button", async () => {
+    const gas = await openSupplyTab();
+    expect(gas).toHaveTextContent("Operasional");
+    expect(gas).toHaveTextContent("Rp 66.000");
+    expect(rowOf("Iklan IG")).toHaveTextContent("Bebas Stok");
+    expect(screen.getByText(/Nilai perlengkapan/)).toHaveTextContent("Rp 766.000");
+    expect(screen.queryByRole("button", { name: /Tambah/ })).not.toBeInTheDocument();
+    // Bahan baku never show up in Perlengkapan.
+    expect(screen.queryByText("Susu Segar")).not.toBeInTheDocument();
+
+    fireEvent.click(within(screen.getByRole("group", { name: "Kategori perlengkapan" })).getByRole("button", { name: "Peralatan" }));
+    expect(screen.queryByText("Gas LPG")).not.toBeInTheDocument();
+    expect(rowOf("Blender")).toHaveTextContent("HARUS ORDER");
+    expect(screen.getByText(/Nilai perlengkapan/)).toHaveTextContent("Rp 700.000");
+  });
+
+  it("adjusts the counted stock, edits and deletes a perlengkapan", async () => {
+    api.updateSupplyStock.mockResolvedValue({ data: { success: true } });
+    api.updateSupplyItem.mockResolvedValue({ data: { success: true } });
+    api.deleteSupplyItem.mockResolvedValue({ data: { success: true } });
+    const gas = await openSupplyTab();
+
+    fireEvent.click(within(gas).getByRole("button", { name: "Sesuaikan" }));
+    const adjust = screen.getByRole("dialog", { name: "Sesuaikan Gas LPG" });
+    fireEvent.change(within(adjust).getByLabelText("Stok Sekarang (tabung)"), { target: { value: "1" } });
+    expect(adjust).toHaveTextContent("Rp 22.000");
+    fireEvent.click(within(adjust).getByRole("button", { name: "Simpan" }));
+    await waitFor(() => expect(api.updateSupplyStock.mock.calls[0][0]).toEqual({ supplyItemId: 31, stock: 1 }));
+
+    fireEvent.click(within(rowOf("Gas LPG")).getByRole("button", { name: "Ubah" }));
+    const edit = screen.getByRole("dialog", { name: "Ubah Perlengkapan" });
+    fireEvent.change(within(edit).getByLabelText("Nama"), { target: { value: "Gas LPG 3 kg" } });
+    fireEvent.change(within(edit).getByLabelText("Minimum"), { target: { value: "2" } });
+    fireEvent.click(within(edit).getByRole("button", { name: "Simpan" }));
+    await waitFor(() =>
+      expect(api.updateSupplyItem.mock.calls[0][0]).toEqual({
+        supplyItemId: 31,
+        name: "Gas LPG 3 kg",
+        category: "Operasional",
+        unit: "tabung",
+        minimumStock: 2,
+        supplier: "",
+        isUnlimited: false,
+      })
+    );
+
+    fireEvent.click(within(rowOf("Blender")).getByRole("button", { name: "Hapus" }));
+    fireEvent.click(within(screen.getByText("Hapus bahan?").parentElement).getByRole("button", { name: "Hapus" }));
+    await waitFor(() => expect(api.deleteSupplyItem.mock.calls[0][0]).toBe(32));
+  });
+
+  it("lets cashiers count perlengkapan but not change them", async () => {
+    const gas = await openSupplyTab(asCashier);
+    expect(within(gas).getByRole("button", { name: "Sesuaikan" })).toBeInTheDocument();
+    expect(within(gas).queryByRole("button", { name: "Ubah" })).not.toBeInTheDocument();
+    expect(within(gas).queryByRole("button", { name: "Hapus" })).not.toBeInTheDocument();
   });
 });
