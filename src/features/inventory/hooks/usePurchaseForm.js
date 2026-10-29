@@ -234,10 +234,13 @@ const usePurchaseForm = ({
       return;
     }
 
-    if (!isPurchaseFormComplete(form, rows)) {
-      enqueueSnackbar("Lengkapi toko, barang, gramasi, satuan, dan harga total.", {
-        variant: "error",
-      });
+    if (!isPurchaseFormComplete(form, rows, { requireUnit: kind.showUnits })) {
+      enqueueSnackbar(
+        kind.showUnits
+          ? "Lengkapi toko, barang, gramasi, satuan, dan harga total."
+          : "Lengkapi toko, barang, qty, dan harga total.",
+        { variant: "error" }
+      );
       return;
     }
 
@@ -245,7 +248,7 @@ const usePurchaseForm = ({
       kind.key === "supply" &&
       rows.some((row) => String(row.stockItemId).startsWith("draft:") && !row.category)
     ) {
-      enqueueSnackbar("Pilih kategori untuk perlengkapan baru.", { variant: "error" });
+      enqueueSnackbar("Pilih kategori untuk barang baru.", { variant: "error" });
       return;
     }
 
@@ -305,7 +308,7 @@ const usePurchaseForm = ({
         status === "draft"
           ? "Draft nota tersimpan. Stok dan saldo berubah setelah diposting admin."
           : kind.key === "supply"
-            ? "Belanja perlengkapan tersimpan dan stok perlengkapan bertambah."
+            ? "Belanja lainnya tersimpan dan stoknya bertambah."
             : "Belanja tersimpan dan stok berhasil ditambahkan.",
         { variant: "success" }
       );
@@ -315,7 +318,9 @@ const usePurchaseForm = ({
           { variant: "warning" }
         );
       }
-      onSaved(kind.key, status);
+      // Barang Lainnya: the kategori of the first line, so the history opens on its tab.
+      const firstItem = itemOptions.find((option) => String(option.id) === String(rows[0]?.stockItemId));
+      onSaved(kind.key, status, kind.key === "supply" ? rows[0]?.category || firstItem?.category || "" : "");
       reset();
     } catch (error) {
       enqueueSnackbar(

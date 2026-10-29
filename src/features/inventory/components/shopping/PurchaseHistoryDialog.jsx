@@ -14,7 +14,9 @@ const StatCard = ({ label, children, valueClassName = "" }) => (
   </div>
 );
 
-// Purchase history and activity log of one item. Escape or a backdrop click closes it.
+// Purchase history and activity log of one item. costLabel names the moving
+// average: COGS for bahan baku, Harga Rata-rata for barang Lainnya (never in
+// HPP). Escape or a backdrop click closes it.
 const PurchaseHistoryDialog = ({
   group,
   isAdmin,
@@ -23,8 +25,13 @@ const PurchaseHistoryDialog = ({
   onDeleteItem,
   isDeleting,
   onOpenReceipts,
+  showUnits = true,
+  costLabel = "COGS",
 }) => {
   const [tab, setTab] = useState("history");
+  // Barang Lainnya (showUnits false) are counted per piece.
+  const qty = (value, unit) => quantityDisplay(value, showUnits ? unit : "");
+  const cost = (value, unit) => (showUnits ? costDisplay(value, unit) : currency(value));
 
   useEffect(() => {
     const handleKeyDown = (event) => {
@@ -79,11 +86,11 @@ const PurchaseHistoryDialog = ({
         </div>
         <div className="mb-4 grid grid-cols-1 gap-2 text-sm sm:grid-cols-3">
           <StatCard label="Stok Sekarang">
-            {group.stock == null ? "-" : quantityDisplay(group.stock, group.stockUnit)}
+            {group.stock == null ? "-" : qty(group.stock, group.stockUnit)}
           </StatCard>
           <StatCard label="Nilai Asset">{currency(group.stockValue)}</StatCard>
-          <StatCard label="COGS Sekarang" valueClassName="text-[#f6d365]">
-            {costDisplay(group.averageCost, group.stockUnit)}
+          <StatCard label={`${costLabel} Sekarang`} valueClassName="text-[#f6d365]">
+            {cost(group.averageCost, group.stockUnit)}
           </StatCard>
         </div>
         <div className="mb-4 flex w-fit rounded-lg bg-[#181818] p-1 text-sm font-semibold">
@@ -102,11 +109,11 @@ const PurchaseHistoryDialog = ({
                 <tr>
                   <th className="p-2">Tanggal</th>
                   <th className="p-2">Toko</th>
-                  <th className="p-2">Gramasi</th>
-                  <th className="p-2 text-right">Harga Satuan</th>
+                  <th className="p-2">{showUnits ? "Gramasi" : "Qty"}</th>
+                  <th className="p-2 text-right">{showUnits ? "Harga Satuan" : "Harga per Barang"}</th>
                   <th className="p-2 text-right">Jumlah</th>
                   <th className="p-2 text-right">Masuk Stok</th>
-                  <th className="p-2 text-right">COGS Setelah</th>
+                  <th className="p-2 text-right">{costLabel} Setelah</th>
                   {isAdmin && <th className="p-2 text-right">Aksi</th>}
                 </tr>
               </thead>
@@ -129,7 +136,7 @@ const PurchaseHistoryDialog = ({
                       )}
                     </td>
                     <td className="p-2">{item.supplierName}</td>
-                    <td className="p-2">{quantityDisplay(item.quantity, item.unit)}</td>
+                    <td className="p-2">{qty(item.quantity, item.unit)}</td>
                     <td className="p-2 text-right">{currency(item.unitPrice)}</td>
                     <td className="p-2 text-right">
                       {currency(item.total)}
@@ -140,10 +147,10 @@ const PurchaseHistoryDialog = ({
                       )}
                     </td>
                     <td className="p-2 text-right">
-                      {quantityDisplay(item.stockQuantity, item.stockUnit)}
+                      {qty(item.stockQuantity, item.stockUnit)}
                     </td>
                     <td className="p-2 text-right">
-                      {costDisplay(item.stockAverageCost, item.stockUnit)}
+                      {cost(item.stockAverageCost, item.stockUnit)}
                       <p className="text-xs text-[#ababab]">Nilai: {currency(item.stockValueAfter)}</p>
                     </td>
                     {isAdmin && (

@@ -5,39 +5,30 @@ import { SUPPLY_CATEGORIES } from "../../utils/purchaseKinds";
 const inputClass =
   "mt-2 w-full rounded-lg bg-[#262626] px-4 py-3 text-sm text-[#f5f5f5] outline-none focus:ring-1 focus:ring-[#a79981]";
 
-// "Ubah" of a perlengkapan: name, category, unit, minimum, supplier and Bebas
-// Stok. The stock itself changes through belanja or "Sesuaikan".
+// "Ubah" of a barang Lainnya: name, category and supplier. It has no unit (the
+// server keeps the one it has), no minimum and no Bebas Stok: these are not
+// bahan to restock, sending neither leaves both off. The qty itself changes
+// through belanja or "Sesuaikan".
 const SupplyItemDialog = ({ item, onSave, onCancel, isSaving }) => {
   const [form, setForm] = useState(() => ({
     name: item.name || "",
-    category: item.category || SUPPLY_CATEGORIES[0],
-    unit: item.unit || "",
-    minimumStock: String(item.minimumStock ?? 0),
+    category: SUPPLY_CATEGORIES.includes(item.category) ? item.category : SUPPLY_CATEGORIES[0],
     supplier: item.supplier || "",
-    isUnlimited: Boolean(item.isUnlimited),
   }));
-  const setField = (field) => (event) =>
-    setForm((current) => ({
-      ...current,
-      [field]: event.target.type === "checkbox" ? event.target.checked : event.target.value,
-    }));
+  const setField = (field) => (event) => setForm((current) => ({ ...current, [field]: event.target.value }));
 
   const handleSubmit = (event) => {
     event.preventDefault();
     if (isSaving) return;
     const name = form.name.trim().replace(/\s+/g, " ");
-    const unit = form.unit.trim().toLowerCase();
-    if (!name || !unit) {
-      enqueueSnackbar("Nama dan satuan wajib diisi.", { variant: "warning" });
+    if (!name) {
+      enqueueSnackbar("Nama wajib diisi.", { variant: "warning" });
       return;
     }
     onSave({
       name,
       category: form.category,
-      unit,
-      minimumStock: Math.max(Number(String(form.minimumStock).replace(",", ".")) || 0, 0),
       supplier: form.supplier.trim(),
-      isUnlimited: form.isUnlimited,
     });
   };
 
@@ -50,10 +41,10 @@ const SupplyItemDialog = ({ item, onSave, onCancel, isSaving }) => {
     >
       <form onSubmit={handleSubmit} className="w-full max-w-xl rounded-lg bg-[#1f1f1f] p-5 text-[#f5f5f5] shadow-2xl">
         <h3 id="supply-item-dialog-title" className="text-lg font-bold">
-          Ubah Perlengkapan
+          Ubah Barang Lainnya
         </h3>
         <p className="mt-1 text-sm text-[#ababab]">
-          Stok {item.stock} {item.unit}. Stok berubah lewat belanja atau Sesuaikan.
+          Qty {item.stock}. Qty berubah lewat belanja atau Sesuaikan.
         </p>
 
         <fieldset disabled={isSaving} className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -71,36 +62,9 @@ const SupplyItemDialog = ({ item, onSave, onCancel, isSaving }) => {
               ))}
             </select>
           </label>
-          <label className="text-sm font-semibold text-[#ababab]">
-            Satuan
-            <input value={form.unit} onChange={setField("unit")} maxLength={30} className={inputClass} />
-            <span className="mt-1 block text-xs font-normal text-[#888]">
-              Ganti gr ↔ kg atau ml ↔ liter ikut mengonversi stok.
-            </span>
-          </label>
-          <label className="text-sm font-semibold text-[#ababab]">
-            Minimum
-            <input
-              value={form.minimumStock}
-              onChange={setField("minimumStock")}
-              type="number"
-              min="0"
-              step="0.01"
-              className={inputClass}
-            />
-          </label>
           <label className="text-sm font-semibold text-[#ababab] sm:col-span-2">
             Supplier
             <input value={form.supplier} onChange={setField("supplier")} maxLength={150} className={inputClass} />
-          </label>
-          <label className="flex items-center gap-3 rounded-lg bg-[#262626] px-4 py-3 text-sm font-semibold text-[#ababab] sm:col-span-2">
-            <input
-              checked={form.isUnlimited}
-              onChange={setField("isUnlimited")}
-              type="checkbox"
-              className="h-4 w-4 accent-[#a79981]"
-            />
-            Bebas Stok (jasa atau biaya tanpa stok, mis. iklan, listrik)
           </label>
         </fieldset>
 

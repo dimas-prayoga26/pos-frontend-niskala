@@ -9,9 +9,9 @@ const REFERENCE_LABELS = {
   purchase: "Belanja",
   purchase_edit: "Ubah item belanja",
   purchase_delete: "Hapus item belanja",
-  supply_purchase: "Belanja perlengkapan",
-  supply_purchase_edit: "Ubah item belanja perlengkapan",
-  supply_purchase_delete: "Hapus item belanja perlengkapan",
+  supply_purchase: "Belanja lainnya",
+  supply_purchase_edit: "Ubah item belanja lainnya",
+  supply_purchase_delete: "Hapus item belanja lainnya",
 };
 
 export const getMutationLabel = (mutation) =>

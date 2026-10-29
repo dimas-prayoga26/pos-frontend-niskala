@@ -77,6 +77,8 @@ export const getShoppingSuppliers = () => axiosWrapper.get("/api/shopping/suppli
 export const addSupplier = (data) => axiosWrapper.post("/api/shopping/suppliers", data);
 export const updateSupplier = ({ id, ...data }) => axiosWrapper.put(`/api/shopping/suppliers/${id}`, data);
 export const getPurchases = (params) => axiosWrapper.get("/api/shopping/purchases", { params });
+// The "Per Nota" history: posted nota with all their lines.
+export const getPurchaseNotas = (params) => axiosWrapper.get("/api/shopping/purchases/notas", { params });
 export const savePurchase = (data) => axiosWrapper.post("/api/shopping/purchases", data);
 // Draft nota: saved by staff, posted (approved) by an admin.
 export const getPurchaseDrafts = () => axiosWrapper.get("/api/shopping/purchases/drafts");
@@ -99,6 +101,8 @@ export const deletePurchaseAttachment = (attachmentId) =>
 // Belanja perlengkapan (peralatan, operasional, promosi): the same nota form.
 export const getSupplyPurchases = (params) =>
   axiosWrapper.get("/api/shopping/supply-purchases", { params });
+export const getSupplyPurchaseNotas = (params) =>
+  axiosWrapper.get("/api/shopping/supply-purchases/notas", { params });
 export const saveSupplyPurchase = (data) => axiosWrapper.post("/api/shopping/supply-purchases", data);
 export const getSupplyPurchaseDrafts = () => axiosWrapper.get("/api/shopping/supply-purchases/drafts");
 export const updateSupplyPurchaseDraft = ({ id, ...data }) =>

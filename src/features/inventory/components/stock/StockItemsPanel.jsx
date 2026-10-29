@@ -93,7 +93,9 @@ const StockItemsPanel = ({ stockItems, searchQuery, onSearchChange, isAdmin, onA
                   </span>
                 </td>
                 <td className="p-4 text-right">
-                  <span className="whitespace-nowrap font-semibold">{currency(item.stockValue)}</span>
+                  <span className="whitespace-nowrap font-semibold">
+                    {item.isUnlimited ? "-" : currency(item.stockValue)}
+                  </span>
                 </td>
                 <td className="p-4 text-right">
                   <span className="whitespace-nowrap font-semibold text-[#f6d365]">
