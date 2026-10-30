@@ -99,7 +99,7 @@ describe("settings: sumber pembayaran", () => {
     const dialog = screen.getByRole("dialog", { name: "Riwayat Saldo Kasir (Tunai)" });
 
     const purchaseRow = (await within(dialog).findByText("Belanja #14 - Toko Beras")).closest("tr");
-    expect(purchaseRow).toHaveTextContent("2026-10-02");
+    expect(purchaseRow).toHaveTextContent("2 Oktober 2026");
     expect(purchaseRow).toHaveTextContent("Belanja");
     expect(purchaseRow).toHaveTextContent("Rp 15.000");
     expect(purchaseRow).toHaveTextContent("Rp 85.000");

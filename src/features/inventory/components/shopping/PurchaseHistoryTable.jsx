@@ -1,8 +1,21 @@
+import { formatDayMonthYear } from "../../../../shared/lib/dates";
 import { costDisplay, currency, quantityDisplay } from "../../utils/format";
+import { packedQuantityLabel } from "../../utils/shopping";
 
-// One row per item showing its most recent purchase; clicking opens the detail.
-// costLabel names the moving average (COGS, or Harga Rata-rata for Lainnya).
-const PurchaseHistoryTable = ({ itemGroups, onOpen, showUnits = true, costLabel = "COGS" }) => {
+// The "Per Item" history: one row per item showing its most recent purchase;
+// clicking opens the detail. costLabel names the moving average (COGS, or
+// Harga Rata-rata for Lainnya). TOTAL PENGELUARAN closes the table, under
+// Jumlah: what every purchase of the tab, period and search cost (with its
+// share of ongkir/diskon/PPN), on all pages (itemCount items).
+const PurchaseHistoryTable = ({
+  itemGroups,
+  itemCount = itemGroups.length,
+  totalSpending,
+  periodText = "",
+  onOpen,
+  showUnits = true,
+  costLabel = "COGS",
+}) => {
   // Barang Lainnya (showUnits false) are counted per piece.
   const qty = (value, unit) => quantityDisplay(value, showUnits ? unit : "");
   const cost = (value, unit) => (showUnits ? costDisplay(value, unit) : currency(value));
@@ -49,14 +62,16 @@ const PurchaseHistoryTable = ({ itemGroups, onOpen, showUnits = true, costLabel 
                   </span>
                 </td>
                 <td className="whitespace-nowrap p-3">
-                  {String(item.purchaseDate).slice(0, 10)}
+                  {formatDayMonthYear(item.purchaseDate)}
                   <p className="text-xs text-[#ababab]">
                     #{item.purchaseId} - {item.paymentMethod}
                     {item.attachments?.length > 0 && ` · ${item.attachments.length} bukti`}
                   </p>
                 </td>
                 <td className="p-3">{item.supplierName}</td>
-                <td className="p-3">{qty(item.quantity, item.unit)}</td>
+                <td className="p-3">
+                  {showUnits ? packedQuantityLabel(item.quantity, item.unit, item.packSize, item.stockUnit) : qty(item.quantity, item.unit)}
+                </td>
                 <td className="p-3 text-right">{currency(item.unitPrice)}</td>
                 <td className="p-3 text-right">{currency(item.total)}</td>
                 <td className="p-3 text-right">
@@ -70,6 +85,22 @@ const PurchaseHistoryTable = ({ itemGroups, onOpen, showUnits = true, costLabel 
             );
           })}
         </tbody>
+        {totalSpending != null && (
+          <tfoot className="border-t-2 border-[#a79981]/60 bg-[#202020]">
+            <tr>
+              <td colSpan={5} className="p-3">
+                <strong className="text-base tracking-wide">TOTAL PENGELUARAN</strong>
+                <span className="ml-2 text-xs text-[#ababab]">
+                  {itemCount} item{periodText && ` · ${periodText}`}
+                </span>
+              </td>
+              <td className="whitespace-nowrap p-3 text-right text-lg font-bold text-[#f6d365]" data-testid="total-spending">
+                {currency(totalSpending)}
+              </td>
+              <td colSpan={2} />
+            </tr>
+          </tfoot>
+        )}
       </table>
     </div>
   );

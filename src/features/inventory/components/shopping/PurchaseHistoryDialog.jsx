@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
+import { formatDayMonthYear } from "../../../../shared/lib/dates";
 import { costDisplay, currency, quantityDisplay } from "../../utils/format";
-import { getLogActionLabel, getLogDetail } from "../../utils/shopping";
+import { getLogActionLabel, getLogDetail, packedQuantityLabel } from "../../utils/shopping";
 
 const tabClass = (isActive) =>
   `rounded-md px-4 py-2 transition-colors ${
@@ -121,7 +122,7 @@ const PurchaseHistoryDialog = ({
                 {group.histories.map((item) => (
                   <tr key={item.id} className="border-t border-[#444]">
                     <td className="whitespace-nowrap p-2">
-                      {String(item.purchaseDate).slice(0, 10)}
+                      {formatDayMonthYear(item.purchaseDate)}
                       <p className="text-xs text-[#ababab]">
                         #{item.purchaseId} - {item.paymentMethod}
                       </p>
@@ -136,7 +137,9 @@ const PurchaseHistoryDialog = ({
                       )}
                     </td>
                     <td className="p-2">{item.supplierName}</td>
-                    <td className="p-2">{qty(item.quantity, item.unit)}</td>
+                    <td className="p-2">
+                      {showUnits ? packedQuantityLabel(item.quantity, item.unit, item.packSize, item.stockUnit) : qty(item.quantity, item.unit)}
+                    </td>
                     <td className="p-2 text-right">{currency(item.unitPrice)}</td>
                     <td className="p-2 text-right">
                       {currency(item.total)}

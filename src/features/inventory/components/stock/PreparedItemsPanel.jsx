@@ -57,7 +57,9 @@ const PreparedItemsPanel = ({
             <th className="p-3 text-center">Hasil Terakhir</th>
             <th className="p-3 text-center">Stok</th>
             <th className="p-3 text-right">Nilai Asset</th>
-            <th className="p-3 text-right">COGS Sekarang</th>
+            <th className="p-3 text-right" title="Nilai Asset ÷ Stok: rata-rata semua porsi yang masih ada">
+              COGS Sekarang
+            </th>
             <th className="p-3 text-center">Status</th>
             <th className="p-3 text-center">Aksi</th>
           </tr>
@@ -65,6 +67,10 @@ const PreparedItemsPanel = ({
         <tbody>
           {preparedItems.map((item) => {
             const lastProduction = item.lastProduction;
+            // COGS Sekarang averages every portion in stock; it differs from the
+            // last cooking's cost while portions of an earlier one are left.
+            const mixesEarlierCooking =
+              lastProduction && Number(item.stock) > 0 && Number(item.averageCost) !== Number(lastProduction.unitCost);
 
             return (
               <tr key={item.id || item._id} className="border-b border-gray-600 hover:bg-[#333]">
@@ -73,7 +79,7 @@ const PreparedItemsPanel = ({
                     {item.name}
                     {item.resetDaily && (
                       <span
-                        title="Sisa porsi dibuang saat Rekap Harian disimpan"
+                        title="Sisa porsi dibuang saat hari ditutup (otomatis pukul 05.00 keesokan harinya, atau saat Rekap Harian disimpan)"
                         className="ml-2 rounded-md bg-[#333] px-2 py-0.5 text-xs font-semibold text-[#d6c7ae]"
                       >
                         Harian
@@ -94,6 +100,9 @@ const PreparedItemsPanel = ({
                       <span className="block font-semibold">
                         {quantityDisplay(item.yieldQuantity, item.unit)} / resep
                       </span>
+                      <span className="block text-xs text-[#d6c7ae]">
+                        Biaya {costDisplay(lastProduction.unitCost, item.unit)}
+                      </span>
                       <span className="mt-1 block text-xs text-[#ababab]">
                         {formatDateAndTime(lastProduction.producedAt)}
                       </span>
@@ -112,6 +121,11 @@ const PreparedItemsPanel = ({
                   <span className="whitespace-nowrap font-semibold text-[#f6d365]">
                     {costDisplay(item.averageCost, item.unit)}
                   </span>
+                  {mixesEarlierCooking && (
+                    <span className="mt-1 block text-xs text-[#ababab]">
+                      Rata-rata stok, ada sisa masak sebelumnya
+                    </span>
+                  )}
                 </td>
                 <td className="p-4 text-center">
                   <span

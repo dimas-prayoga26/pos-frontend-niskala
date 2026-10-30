@@ -204,10 +204,28 @@ const getCogsDisplay = (stockItem) => {
   return `COGS: ${formatCurrency(averageCost)} / ${stockItem.unit || "unit"}`;
 };
 
+// A bahan setengah jadi with a portion size (Nasi: 1 porsi = 150 gr) is
+// filled in gram in the recipe, like the COGS sheet, and saved in portions
+// (its stock unit). inputUnit "gr" marks a line typed in gram.
+const gramsPerPortion = (stockItem) =>
+  String(stockItem?.key || "").startsWith("semi:") && Number(stockItem?.portionSize) > 0
+    ? Number(stockItem.portionSize)
+    : 0;
+const inputUnitOf = (stockItem) => (gramsPerPortion(stockItem) ? "gr" : stockItem?.unit || "");
+const roundRecipeQuantity = (value) => Math.round((Number(value) || 0) * 10000) / 10000;
+
+// The quantity in the item's own unit: portions for a line typed in gram.
+const getRecipeQuantity = (ingredient, stockItem) => {
+  const quantity = Number(ingredient.quantity || 0);
+  const grams = gramsPerPortion(stockItem);
+
+  return ingredient.inputUnit === "gr" && grams ? quantity / grams : quantity;
+};
+
 const getIngredientCost = (ingredient, stockItem) => {
   if (!stockItem) return 0;
 
-  const quantity = Number(ingredient.quantity || 0);
+  const quantity = getRecipeQuantity(ingredient, stockItem);
   const averageCost = Number(stockItem.averageCost || 0);
 
   if (!Number.isFinite(quantity) || !Number.isFinite(averageCost)) return 0;
@@ -220,6 +238,13 @@ const getIngredientCostDescription = (ingredient, stockItem, cost) => {
 
   const quantity = Number(ingredient.quantity || 0);
   const averageCost = Number(stockItem.averageCost || 0);
+  const grams = gramsPerPortion(stockItem);
+
+  if (ingredient.inputUnit === "gr" && grams) {
+    return `${formatMoneyDisplay(quantity)} gr ÷ ${formatMoneyDisplay(grams)} gr = ${formatMoneyDisplay(
+      roundRecipeQuantity(quantity / grams)
+    )} ${stockItem.unit || "porsi"} x ${formatMoneyDisplay(averageCost)} = ${formatMoneyDisplay(cost)}`;
+  }
 
   return `${formatMoneyDisplay(averageCost)} x ${quantity || 0} ${stockItem.unit || ""} = ${formatMoneyDisplay(cost)}`;
 };
@@ -311,16 +336,20 @@ const MenuManagement = () => {
     () => [{ id: "", text: "Semua kategori" }, ...categorySelectOptions],
     [categorySelectOptions]
   );
-  const stockItemSelectOptions = useMemo(
-    () => [
+  // Only bahan resep are offered (Stok → Bahan Baku), plus what the form already uses.
+  const ingredientKeys = menuForm.ingredients.map((ingredient) => ingredient.itemKey).join("|");
+  const stockItemSelectOptions = useMemo(() => {
+    const selectedKeys = new Set(ingredientKeys.split("|"));
+    return [
       { id: "", text: "Pilih dari stok" },
-      ...stockItems.map((stockItem) => ({
-        id: stockItem.key,
-        text: stockItem.label,
-      })),
-    ],
-    [stockItems]
-  );
+      ...stockItems
+        .filter((stockItem) => stockItem.isRecipeIngredient !== false || selectedKeys.has(stockItem.key))
+        .map((stockItem) => ({
+          id: stockItem.key,
+          text: stockItem.label,
+        })),
+    ];
+  }, [stockItems, ingredientKeys]);
 
   useEffect(() => {
     if (!isCategoryFormOpen && !isMenuFormOpen) return undefined;
@@ -608,6 +637,7 @@ const MenuManagement = () => {
           ? {
               ...ingredient,
               itemKey,
+              inputUnit: inputUnitOf(selectedStockItem),
               ingredientName:
                 selectedStockItem?.name || ingredient.ingredientName || "",
             }
@@ -623,6 +653,7 @@ const MenuManagement = () => {
         ...current.ingredients,
         {
           itemKey: "",
+          inputUnit: "",
           ingredientName: "",
           quantity: "",
           note: "",
@@ -673,11 +704,11 @@ const MenuManagement = () => {
     event.preventDefault();
 
     // Recipe rows must reference a stock item; rows without one are not saved.
-    // Quantities are in the stock item's unit.
+    // Quantities are in the stock item's unit (Nasi typed in gram: portions).
     const ingredients = menuForm.ingredients
       .map((ingredient) => ({
         ...fromIngredientKey(ingredient.itemKey),
-        quantity: Number(ingredient.quantity) || 0,
+        quantity: roundRecipeQuantity(getRecipeQuantity(ingredient, findIngredientItem(ingredient.itemKey))),
         note: ingredient.note.trim(),
       }))
       .filter(
@@ -788,12 +819,23 @@ const MenuManagement = () => {
           : String(item.onlinePrice),
       hppCost: String(item.hppCost ?? item.hpp ?? ""),
       grossProfit: String(item.grossProfit ?? item.profit ?? ""),
-      ingredients: (item.ingredients || []).map((ingredient) => ({
-        itemKey: getIngredientKey(ingredient),
-        ingredientName: ingredient.ingredientName || ingredient.name || "",
-        quantity: String(ingredient.quantity ?? ""),
-        note: ingredient.note || "",
-      })),
+      ingredients: (item.ingredients || []).map((ingredient) => {
+        const itemKey = getIngredientKey(ingredient);
+        const stockItem = findIngredientItem(itemKey);
+        const grams = gramsPerPortion(stockItem);
+
+        return {
+          itemKey,
+          // Portions of Nasi are shown back in gram (1 porsi = 150 gr).
+          inputUnit: grams ? "gr" : stockItem?.unit || ingredient.unit || "",
+          ingredientName: ingredient.ingredientName || ingredient.name || "",
+          quantity:
+            grams && ingredient.quantity != null
+              ? String(Math.round(Number(ingredient.quantity) * grams * 100) / 100)
+              : String(ingredient.quantity ?? ""),
+          note: ingredient.note || "",
+        };
+      }),
       imageFile: null,
       imagePath: item.imagePath || "",
     });
@@ -1317,11 +1359,22 @@ const MenuManagement = () => {
                           type="number"
                           min="0"
                           step="0.001"
-                          placeholder="Gramasi"
+                          // Nasi is weighed (gram, saved as portions); a bahan setengah
+                          // jadi without a portion size is counted in portions.
+                          placeholder={
+                            String(ingredient.itemKey || "").startsWith("semi:") && ingredient.inputUnit !== "gr"
+                              ? "Jumlah porsi, mis. 1"
+                              : "Gramasi"
+                          }
+                          aria-label="Jumlah bahan"
                           className="min-w-0 rounded-lg bg-[#262626] px-3 py-3 text-sm text-[#f5f5f5] outline-none"
                         />
                         <input
-                          value={selectedIngredientStockItem?.unit || ""}
+                          value={
+                            ingredient.inputUnit === "gr" && gramsPerPortion(selectedIngredientStockItem)
+                              ? "gr"
+                              : selectedIngredientStockItem?.unit || ""
+                          }
                           disabled
                           placeholder="gr"
                           aria-label="Satuan bahan"
@@ -1362,12 +1415,24 @@ const MenuManagement = () => {
                           X
                         </button>
                       </div>
+                      {ingredient.inputUnit === "gr" && gramsPerPortion(selectedIngredientStockItem) > 0 && (
+                        <p className="mt-2 text-xs text-[#ababab]">
+                          1 porsi {selectedIngredientStockItem.name} ={" "}
+                          {formatMoneyDisplay(gramsPerPortion(selectedIngredientStockItem))} gr
+                          {Number(ingredient.quantity) > 0 &&
+                            `, jadi ${formatMoneyDisplay(ingredient.quantity)} gr = ${formatMoneyDisplay(
+                              roundRecipeQuantity(getRecipeQuantity(ingredient, selectedIngredientStockItem))
+                            )} porsi`}
+                          . Stok Nasi dipotong per porsi.
+                        </p>
+                      )}
                     </div>
                   );
                 })}
               </div>
               <p className="mt-2 text-xs text-[#777]">
-                Boleh kosong. Dipakai sebagai catatan resep dan pengurangan stok otomatis.
+                Boleh kosong. Dipakai sebagai catatan resep dan pengurangan stok otomatis. Bahan baku yang
+                muncul hanya yang bertanda Bahan Resep di Stok → Bahan Baku.
               </p>
             </div>
             <div className="mt-4">

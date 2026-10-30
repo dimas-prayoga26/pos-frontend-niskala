@@ -6,6 +6,7 @@ import { signedCurrency } from "../utils/format";
 import { DEFAULT_TAX_PERCENT, computeNotaTotals, parsePercent } from "../utils/notaTotals";
 import { PURCHASE_KINDS } from "../utils/purchaseKinds";
 import {
+  MAX_RECEIPTS_PER_PURCHASE,
   MAX_RECEIPTS_PER_UPLOAD,
   compressReceiptImage,
   createReceipt,
@@ -18,6 +19,7 @@ import {
   createRequestId,
   isPurchaseFormComplete,
   lineTotal,
+  parseShoppingQuantity,
 } from "../utils/shopping";
 
 const NO_ITEMS = [];
@@ -145,24 +147,47 @@ const usePurchaseForm = ({
   const addRow = () => setRows((current) => [...current, blankRow()]);
   const removeRow = (key) => setRows((current) => current.filter((item) => item.key !== key));
 
+  // Bukti already saved on the draft being changed: shown in the form and
+  // counted toward the limit of a belanja (MAX_RECEIPTS_PER_PURCHASE).
+  const savedReceipts = editingDraft?.attachments || NO_ITEMS;
+  const receiptLimit = Math.max(0, Math.min(MAX_RECEIPTS_PER_UPLOAD, MAX_RECEIPTS_PER_PURCHASE - savedReceipts.length));
   const addReceipts = async (files) => {
     const images = files.filter(isImageFile);
-    const room = MAX_RECEIPTS_PER_UPLOAD - receiptsRef.current.length;
+    const room = receiptLimit - receiptsRef.current.length;
 
     if (images.length < files.length) {
       enqueueSnackbar("Hanya file foto yang bisa dipakai sebagai bukti nota.", { variant: "warning" });
     }
     if (images.length > room) {
-      enqueueSnackbar(`Maksimal ${MAX_RECEIPTS_PER_UPLOAD} foto bukti per belanja.`, { variant: "warning" });
+      enqueueSnackbar(
+        savedReceipts.length
+          ? `Maksimal ${MAX_RECEIPTS_PER_PURCHASE} foto bukti per belanja, ${savedReceipts.length} sudah tersimpan.`
+          : `Maksimal ${MAX_RECEIPTS_PER_UPLOAD} foto bukti per belanja.`,
+        { variant: "warning" }
+      );
     }
     if (!images.length || room <= 0) return;
 
     setPreparingReceipts(true);
     try {
       const prepared = await Promise.all(images.slice(0, room).map(compressReceiptImage));
-      setReceipts((current) => [...current, ...prepared.map(createReceipt)].slice(0, MAX_RECEIPTS_PER_UPLOAD));
+      setReceipts((current) => [...current, ...prepared.map(createReceipt)].slice(0, receiptLimit));
     } finally {
       setPreparingReceipts(false);
+    }
+  };
+  // Deletes a saved bukti of the draft at once (as from its Bukti dialog).
+  const removeSavedReceipt = async (attachment, index) => {
+    if (!editingDraft || !window.confirm(`Hapus bukti nota ${index + 1} dari draft #${editingDraft.id}?`)) return;
+    try {
+      await PURCHASE_KINDS[editingDraft.kind].deleteAttachment(attachment.id);
+      setEditingDraft((current) =>
+        current && { ...current, attachments: current.attachments.filter((saved) => saved.id !== attachment.id) }
+      );
+      queryClient.invalidateQueries({ queryKey: ["purchase-drafts"] });
+      enqueueSnackbar("Bukti nota dihapus.", { variant: "success" });
+    } catch (error) {
+      enqueueSnackbar(error?.response?.data?.message || "Gagal menghapus bukti nota.", { variant: "error" });
     }
   };
   const removeReceipt = (key) => {
@@ -209,6 +234,8 @@ const usePurchaseForm = ({
         category: item.category || "",
         quantity: String(item.quantity),
         unit: item.unit,
+        packSize: item.packSize ? String(item.packSize) : "",
+        packUnit: item.packUnit || "",
         unitPrice: String(Math.round(Number(item.total || 0))),
       }))
     );
@@ -241,6 +268,16 @@ const usePurchaseForm = ({
           : "Lengkapi toko, barang, qty, dan harga total.",
         { variant: "error" }
       );
+      return;
+    }
+
+    const badPack = rows.some((row) => {
+      if (!String(row.packSize || "").trim()) return false;
+      const packSize = parseShoppingQuantity(row.packSize);
+      return !Number.isFinite(packSize) || packSize <= 0;
+    });
+    if (badPack) {
+      enqueueSnackbar("Isi per kemasan harus angka lebih dari 0, mis. 24.", { variant: "error" });
       return;
     }
 
@@ -300,6 +337,7 @@ const usePurchaseForm = ({
         queryClient.invalidateQueries({ queryKey: [kind.stockKey] }),
         queryClient.invalidateQueries({ queryKey: [kind.historyKey] }),
         queryClient.invalidateQueries({ queryKey: ["purchase-drafts"] }),
+        queryClient.invalidateQueries({ queryKey: ["purchase-summary"] }),
         queryClient.invalidateQueries({ queryKey: ["shopping-suppliers"] }),
         queryClient.invalidateQueries({ queryKey: ["payment-sources"] }),
         queryClient.invalidateQueries({ queryKey: ["payment-source-mutations"] }),
@@ -360,9 +398,12 @@ const usePurchaseForm = ({
     loadDraft,
     reset,
     receipts,
+    savedReceipts,
+    receiptLimit,
     preparingReceipts,
     addReceipts,
     removeReceipt,
+    removeSavedReceipt,
     createSupplier,
     createItem,
     submit,

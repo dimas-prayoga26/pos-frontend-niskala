@@ -10,7 +10,7 @@ const exportClass =
 // Bulan Ini, Tahun Ini, Semua Waktu, Custom Date) of the history and its TOTAL
 // PENGELUARAN, and the Excel / PDF export of what is shown. Custom Date uses
 // the same calendar picker as the orders. Peralatan are assets, so their tab
-// is lifetime: the period is off there.
+// is lifetime: the period is off there, with no range text.
 const PurchasePeriodBar = ({ period, onPeriodChange, customRange, onCustomRangeChange, rangeText, isLifetime, onExport, isExporting }) => (
   <div
     role="group"
@@ -42,9 +42,7 @@ const PurchasePeriodBar = ({ period, onPeriodChange, customRange, onCustomRangeC
           onChange={({ startDate, endDate }) => onCustomRangeChange({ from: startDate, to: endDate })}
         />
       )}
-      <span className="text-xs text-[#ababab]">
-        {isLifetime ? "Peralatan adalah aset: ditampilkan seumur hidup, tanpa filter periode." : rangeText}
-      </span>
+      {!isLifetime && <span className="text-xs text-[#ababab]">{rangeText}</span>}
     </div>
     <div className="flex gap-2">
       <button type="button" onClick={() => onExport("excel")} disabled={isExporting} className={exportClass}>

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { enqueueSnackbar } from "notistack";
 import { currency } from "../../utils/format";
 import { getComponentCost, toPreparedPayload } from "../../utils/preparedItems";
+import { isRecipeIngredient } from "../../utils/stockItems";
 
 const inputClass =
   "w-full min-w-0 rounded-lg border border-[#555] bg-[#1f1f1f] px-3 py-2 text-[#f5f5f5] outline-none focus:border-[#d6c7ae]";
@@ -175,11 +176,17 @@ const PreparedItemDialog = ({ item, rawItems, onSave, onCancel, isSaving }) => {
                     className={inputClass}
                   >
                     <option value="">Pilih bahan</option>
-                    {rawItems.map((rawItem) => (
-                      <option key={rawItem.id || rawItem._id} value={String(rawItem.id || rawItem._id)}>
-                        {rawItem.name}
-                      </option>
-                    ))}
+                    {rawItems
+                      .filter(
+                        (rawItem) =>
+                          isRecipeIngredient(rawItem) ||
+                          String(rawItem.id || rawItem._id) === component.stockItemId
+                      )
+                      .map((rawItem) => (
+                        <option key={rawItem.id || rawItem._id} value={String(rawItem.id || rawItem._id)}>
+                          {rawItem.name}
+                        </option>
+                      ))}
                   </select>
                   <input
                     type="text"

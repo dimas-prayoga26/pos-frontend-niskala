@@ -121,6 +121,15 @@ const OrderCard = ({
                     {onlineBadgeLabel}
                   </span>
                 )}
+                {/* Modul 2: a bahan olahan (Nasi, ...) waits for the Daily Prep. */}
+                {order.hppStatus === "pending" && (
+                  <span
+                    className="rounded-md bg-[#4a390b] px-2 py-1 text-xs font-bold text-[#f6d365]"
+                    title="HPP bahan olahan menunggu Daily Prep (Catat Masak) dan dikunci saat hari ditutup (otomatis pukul 05.00 keesokan harinya)."
+                  >
+                    HPP Pending
+                  </span>
+                )}
               </div>
               <p className="text-[#ababab] text-sm">
                 Order ID: {orderCode}

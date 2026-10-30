@@ -13,6 +13,7 @@ const emptyForm = {
   minimumStock: "0",
   supplier: "",
   isUnlimited: false,
+  isRecipeIngredient: true,
 };
 
 // "Tambah Stok": a new bahan baku (stock_raw_items). Its cost comes from
@@ -46,6 +47,7 @@ const StockItemDialog = ({ onSave, onCancel, isSaving }) => {
       minimumStock: Math.max(Number(String(form.minimumStock).replace(",", ".")) || 0, 0),
       supplier: form.supplier.trim(),
       isUnlimited: form.isUnlimited,
+      isRecipeIngredient: form.isRecipeIngredient,
     });
   };
 
@@ -160,6 +162,15 @@ const StockItemDialog = ({ onSave, onCancel, isSaving }) => {
               className="h-4 w-4 accent-[#a79981]"
             />
             Bebas Stok, tidak berkurang otomatis saat ada pesanan
+          </label>
+          <label className="flex items-center gap-3 rounded-lg bg-[#262626] px-4 py-3 text-sm font-semibold text-[#ababab] sm:col-span-2">
+            <input
+              checked={form.isRecipeIngredient}
+              onChange={setField("isRecipeIngredient")}
+              type="checkbox"
+              className="h-4 w-4 accent-[#a79981]"
+            />
+            Bahan Resep, muncul di pilihan resep menu dan bahan setengah jadi
           </label>
         </fieldset>
 

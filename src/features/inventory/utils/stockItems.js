@@ -9,6 +9,22 @@ export const STOCK_STATUS_CLASS_NAMES = {
   AMAN: "bg-[#2e4a40] text-green-400",
 };
 
+// Bahan Resep: the bahan baku offered in the recipe editors (menu resep and
+// bahan setengah jadi). Older payloads without the flag count as bahan resep.
+export const isRecipeIngredient = (item) => item?.isRecipeIngredient !== false;
+
+export const RECIPE_USE_FILTERS = [
+  { key: "all", label: "Semua" },
+  { key: "recipe", label: "Bahan Resep" },
+  { key: "other", label: "Bukan Resep" },
+];
+
+export const filterByRecipeUse = (stockItems, filterKey) => {
+  if (filterKey === "recipe") return stockItems.filter(isRecipeIngredient);
+  if (filterKey === "other") return stockItems.filter((item) => !isRecipeIngredient(item));
+  return stockItems;
+};
+
 const roundCurrency = (value) => Math.round((Number(value) || 0) * 100) / 100;
 const roundCost = (value) => Math.round((Number(value) || 0) * 10000) / 10000;
 

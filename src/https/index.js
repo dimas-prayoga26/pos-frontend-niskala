@@ -77,6 +77,8 @@ export const getShoppingSuppliers = () => axiosWrapper.get("/api/shopping/suppli
 export const addSupplier = (data) => axiosWrapper.post("/api/shopping/suppliers", data);
 export const updateSupplier = ({ id, ...data }) => axiosWrapper.put(`/api/shopping/suppliers/${id}`, data);
 export const getPurchases = (params) => axiosWrapper.get("/api/shopping/purchases", { params });
+// Summary cards of the Belanja page (?from=&to=).
+export const getShoppingSummary = (params) => axiosWrapper.get("/api/shopping/summary", { params });
 // The "Per Nota" history: posted nota with all their lines.
 export const getPurchaseNotas = (params) => axiosWrapper.get("/api/shopping/purchases/notas", { params });
 export const savePurchase = (data) => axiosWrapper.post("/api/shopping/purchases", data);
@@ -139,6 +141,11 @@ export const updateStockQuantity = ({ stockItemId, stock }) =>
   axiosWrapper.patch(`/api/stock-item/${stockItemId}/stock`, { stock });
 export const updateStockCogs = ({ stockItemId, ...data }) =>
   axiosWrapper.patch(`/api/stock-item/${stockItemId}/cogs`, data);
+export const updateStockRecipeUse = ({ stockItemId, isRecipeIngredient }) =>
+  axiosWrapper.patch(`/api/stock-item/${stockItemId}/recipe-use`, { isRecipeIngredient });
+// Konversi Satuan: 1 old unit = factor new units (1 galon = 19000 ml).
+export const updateStockUnit = ({ stockItemId, unit, factor }) =>
+  axiosWrapper.patch(`/api/stock-item/${stockItemId}/unit`, { unit, factor });
 export const deleteStockItem = (stockItemId) =>
   axiosWrapper.delete(`/api/stock-item/${stockItemId}`);
 // Bahan setengah jadi (stock_semi_items) and their cooking ("Catat Masak").
@@ -166,9 +173,3 @@ export const deleteSemiWaste = (wasteId) =>
 // Perlengkapan (stock_supply_items): peralatan, operasional, promosi.
 export const getSupplyItems = () => axiosWrapper.get("/api/stock-item/supply");
 export const addSupplyItem = (data) => axiosWrapper.post("/api/stock-item/supply", data);
-export const updateSupplyItem = ({ supplyItemId, ...data }) =>
-  axiosWrapper.put(`/api/stock-item/supply/${supplyItemId}`, data);
-export const updateSupplyStock = ({ supplyItemId, stock }) =>
-  axiosWrapper.patch(`/api/stock-item/supply/${supplyItemId}/stock`, { stock });
-export const deleteSupplyItem = (supplyItemId) =>
-  axiosWrapper.delete(`/api/stock-item/supply/${supplyItemId}`);

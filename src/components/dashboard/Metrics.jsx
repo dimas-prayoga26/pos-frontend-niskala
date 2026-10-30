@@ -510,7 +510,12 @@ const MetricCardSlider = ({ items, renderItem }) => {
   );
 };
 
-const ProfitFlow = ({ revenue, cost, grossProfit, netProfit, isLoading }) => {
+// pendingHppCount: notas whose HPP is still pending (Modul 2): their bahan
+// olahan already carry the day's cooking cost, locked when the day closes.
+const PENDING_HPP_NOTE =
+  " Nota berlabel HPP Pending sudah memakai biaya masak (Daily Prep) hari itu, tapi angkanya masih bisa berubah sampai hari ditutup (otomatis pukul 05.00 keesokan harinya).";
+
+const ProfitFlow = ({ revenue, cost, grossProfit, netProfit, isLoading, pendingHppCount = 0 }) => {
   const steps = [
     {
       label: "Penjualan Bersih",
@@ -524,8 +529,8 @@ const ProfitFlow = ({ revenue, cost, grossProfit, netProfit, isLoading }) => {
             label: "HPP",
             value: isLoading ? "..." : cost === null ? "-" : formatCurrency(cost),
             tone: "cost",
-            description:
-              "Modal bahan dari resep menu × jumlah menu yang terjual.",
+            description: `Modal bahan dari resep menu × jumlah menu yang terjual.${PENDING_HPP_NOTE}`,
+            note: !isLoading && pendingHppCount > 0 ? `Sementara: ${pendingHppCount} nota HPP Pending` : "",
           },
           {
             label: "Untung Kotor",
@@ -575,6 +580,7 @@ const ProfitFlow = ({ revenue, cost, grossProfit, netProfit, isLoading }) => {
                 <p className="truncate text-sm font-bold text-[#f5f5f5]">
                   {step.value}
                 </p>
+                {step.note && <p className="text-xs font-semibold text-[#f6d365]">{step.note}</p>}
               </div>
               {index < steps.length - 1 && (
                 <span className="ml-auto hidden text-[#666] md:block">-</span>
@@ -810,6 +816,7 @@ const Metrics = () => {
   // Same source as Rekap New: every order in the period, recapped or not.
   const netRevenueTotal = getOrdersNetRevenueTotal(filteredOrders);
   const materialSpendTotal = getOrdersHppTotal(filteredOrders, menuItems);
+  const pendingHppCount = filteredOrders.filter((order) => order.hppStatus === "pending").length;
   const grossProfitTotal = netRevenueTotal - materialSpendTotal;
   const netProfitTotal = grossProfitTotal - dailyExpenseTotal;
   const netCashTotal = cashRecordedTotal - dailyExpenseTotal;
@@ -921,7 +928,7 @@ const Metrics = () => {
             ? "..."
             : formatCurrency(materialSpendTotal),
           badge: activePeriod.badge,
-          description: "Modal bahan dari resep menu.",
+          description: `Modal bahan dari resep menu.${pendingHppCount ? PENDING_HPP_NOTE : ""}`,
           icon: FiPackage,
           tone: "cost",
         },
@@ -1384,6 +1391,7 @@ const Metrics = () => {
             grossProfit={grossProfitTotal}
             netProfit={netProfitTotal}
             isLoading={isLoading || isFinancialLoading}
+            pendingHppCount={pendingHppCount}
           />
         )}
 

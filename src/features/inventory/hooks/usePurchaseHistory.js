@@ -12,8 +12,9 @@ const groupKey = (group) => String(group.stockItemId || group.itemName);
 // in one of two views:
 // - "nota" (Per Struk): posted nota with their barang, plus the count and
 //   Grand Total of every matching nota (TOTAL PENGELUARAN, all pages);
-// - "item" (Per Bahan / Per Barang): one group per item, its purchases newest
-//   first, and the group whose detail dialog is open (kept in sync with
+// - "item" (Per Item): one group per item, its purchases newest first, the
+//   count of items and the cost of every matching line (TOTAL PENGELUARAN, all
+//   pages), and the group whose detail dialog is open (kept in sync with
 //   refetched data).
 const usePurchaseHistory = (kind = PURCHASE_KINDS.raw, { category = "", view = "nota", range = {} } = {}) => {
   const [search, setSearch] = useState("");
@@ -36,7 +37,8 @@ const usePurchaseHistory = (kind = PURCHASE_KINDS.raw, { category = "", view = "
   const notas = (isNota && historyData?.notas) || NO_ROWS;
   const itemGroups = (!isNota && historyData?.itemGroups) || NO_ROWS;
   const notaCount = isNota ? Number(historyData?.total || 0) : 0;
-  const totalSpending = isNota ? historyData?.totalSpending ?? null : null;
+  const itemCount = isNota ? 0 : Number(historyData?.groupTotal || 0);
+  const totalSpending = historyData?.totalSpending ?? null;
   const rowCount = isNota ? historyData?.total : historyData?.groupTotal;
   const totalPages = Math.max(1, Math.ceil(Number(rowCount || 0) / HISTORY_PAGE_SIZE));
 
@@ -63,6 +65,7 @@ const usePurchaseHistory = (kind = PURCHASE_KINDS.raw, { category = "", view = "
     notaCount,
     totalSpending,
     itemGroups,
+    itemCount,
     page,
     setPage,
     totalPages,

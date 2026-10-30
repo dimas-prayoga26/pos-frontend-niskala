@@ -107,6 +107,21 @@ export const formatJakartaReceiptDate = (value) => {
   return `${parts.day}/${parts.month}/${parts.year}`;
 };
 
+// "29 Oktober 2026" for a stored day ("YYYY-MM-DD", or the date part of a
+// "YYYY-MM-DD HH:mm:ss"), read as written so no time zone shifts the day.
+export const formatDayMonthYear = (value) => {
+  const key = String(value ?? "").slice(0, 10);
+
+  if (!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(key)) return value ? String(value) : "-";
+
+  return new Date(`${key}T00:00:00Z`).toLocaleDateString("id-ID", {
+    timeZone: "UTC",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+};
+
 export const formatDate = (date) => {
   return formatJakartaDate(date);
 };
