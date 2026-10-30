@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, fireEvent, render, renderHook, screen, waitFor, within } from "@testing-library/react";
+import $ from "jquery";
 import { SnackbarProvider } from "notistack";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as XLSX from "xlsx-js-style";
@@ -21,6 +22,7 @@ vi.mock("../../src/https/index", async (importOriginal) => ({
   getPurchaseDrafts: vi.fn(),
   getPurchaseNotas: vi.fn(),
   getPurchases: vi.fn(),
+  getShoppingSummary: vi.fn(),
   getShoppingSuppliers: vi.fn(),
   getSupplyPurchaseDrafts: vi.fn(),
   getSupplyPurchaseNotas: vi.fn(),
@@ -83,6 +85,7 @@ beforeEach(() => {
   api.getSupplyPurchaseDrafts.mockResolvedValue({ data: { data: [] } });
   api.getPurchaseNotas.mockResolvedValue({ data: { data: { notas: [], total: 0, page: 1 } } });
   api.getSupplyPurchaseNotas.mockResolvedValue({ data: { data: { notas: [], total: 0, page: 1 } } });
+  api.getShoppingSummary.mockResolvedValue({ data: { data: null } });
 });
 // A posted nota as listed by the Per Nota history.
 const postedNota = (id, overrides = {}) => ({
@@ -144,29 +147,32 @@ const stockItems = [{ id: 5, name: "Gula", unit: "gr" }];
 
 const renderShopping = (isAdmin = true) =>
   renderWithProviders(<ShoppingManagement stockItems={stockItems} isAdmin={isAdmin} />);
-// Opens the detail of Gula (stok, COGS, riwayat, log) from its line in nota #7.
+// Opens the detail of Gula (stok, COGS, riwayat, log): nota #7, then the
+// Riwayat of its Gula line in the Detail Struk.
 const openGulaDetail = async (isAdmin = true) => {
   api.getPurchaseNotas.mockResolvedValue({ data: { data: { notas: [postedNota(7)], total: 1, page: 1 } } });
   const view = renderShopping(isAdmin);
   const nota = await screen.findByRole("rowgroup", { name: "Nota #7 Pasar Uji" });
   fireEvent.click(within(nota).getByText("Gula").closest("tr"));
-  await screen.findByRole("dialog");
+  const struk = screen.getByRole("dialog", { name: "Detail Struk #7 Pasar Uji" });
+  fireEvent.click(within(struk).getByRole("button", { name: "Riwayat Gula" }));
+  await screen.findByRole("dialog", { name: "Gula" });
   return view;
 };
 
 describe("shopping history", () => {
   beforeEach(() => {
     api.getShoppingSuppliers.mockResolvedValue({ data: { data: [{ id: 1, name: "Pasar Uji" }] } });
-    api.getPurchases.mockResolvedValue({ data: { data: { purchases: [], itemGroups, groupTotal: 12, total: 2 } } });
+    api.getPurchases.mockResolvedValue({ data: { data: { purchases: [], itemGroups, groupTotal: 12, totalSpending: 30227345.6, total: 2 } } });
     api.getPaymentSources.mockResolvedValue({ data: { data: sources } });
     receiptImages.compressReceiptImage.mockImplementation(async (file) => file);
     URL.createObjectURL = vi.fn((file) => `blob:${file.name}`);
     URL.revokeObjectURL = vi.fn();
   });
 
-  it("lists Per Bahan: the latest purchase per item with its COGS, paged and searchable", async () => {
+  it("lists Per Item: the latest purchase per item with its COGS and the TOTAL PENGELUARAN, paged and searchable", async () => {
     renderShopping();
-    fireEvent.click(await screen.findByRole("button", { name: "Per Bahan" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Per Item" }));
 
     const row = (await screen.findByText("2 history")).closest("tr");
     expect(row).toHaveTextContent("Gula");
@@ -175,7 +181,14 @@ describe("shopping history", () => {
     expect(row).toHaveTextContent("Rp 30.000");
     expect(row).toHaveTextContent("Rp 15 / gr");
     expect(screen.getByRole("columnheader", { name: "COGS Setelah" })).toBeInTheDocument();
-    expect(screen.queryByText("TOTAL PENGELUARAN")).not.toBeInTheDocument();
+    // What every purchase of the 12 items cost (all pages) closes the table, under Jumlah.
+    const footer = screen.getByText("TOTAL PENGELUARAN").closest("tr");
+    expect(Array.from(footer.cells, (cell) => cell.textContent)).toEqual([
+      `TOTAL PENGELUARAN12 item · Bulan Ini (${rangeLabel(thisMonth)})`,
+      "Rp 30.227.346",
+      "",
+    ]);
+    expect([footer.cells[0].colSpan, footer.cells[2].colSpan]).toEqual([5, 2]);
     expect(screen.getByText("1 / 2")).toBeInTheDocument();
     expect(api.getPurchases).toHaveBeenLastCalledWith({ search: "", page: 1, ...thisMonth });
 
@@ -219,6 +232,8 @@ describe("shopping history", () => {
     fireEvent.click(within(screen.getByRole("dialog")).getAllByRole("button", { name: "Update" })[0]);
 
     const editForm = screen.getByText(/^Edit Belanja/).closest("form");
+    // A line bought without a package has no Isi per Kemasan.
+    expect(within(editForm).queryByLabelText("Isi per Kemasan")).not.toBeInTheDocument();
     const quantityInput = within(editForm).getByLabelText("Gramasi");
     const totalInput = within(editForm).getByLabelText("Harga Total");
     expect(totalInput).toHaveValue("30.000");
@@ -227,12 +242,15 @@ describe("shopping history", () => {
     fireEvent.click(within(editForm).getByRole("button", { name: "Simpan" }));
 
     await waitFor(() =>
-      expect(api.updatePurchaseItem.mock.calls[0][0]).toEqual({ id: 91, quantity: 2.5, unit: "gr", unitPrice: 16000 })
+      expect(api.updatePurchaseItem.mock.calls[0][0]).toEqual({ id: 91, quantity: 2.5, unit: "gr", unitPrice: 16000, total: 40000 })
     );
   });
 
   it("hides admin actions for cashiers and validates an empty purchase form", async () => {
     const { unmount } = await openGulaDetail(false);
+    expect(screen.queryByRole("button", { name: "Update" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Tutup" }));
+    // Back to the Detail Struk of the nota, without actions either.
     expect(screen.queryByRole("button", { name: "Update" })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Tutup" }));
     // Kasir may write a draft nota but not post it.
@@ -244,6 +262,8 @@ describe("shopping history", () => {
     renderShopping(true);
     fireEvent.click(await screen.findByRole("button", { name: "Tambah Belanja" }));
     const form = screen.getByRole("dialog");
+    // The gramasi is in the stock unit: no Isi per Kemasan to fill.
+    expect(within(form).queryByText("Isi per Kemasan")).not.toBeInTheDocument();
     fireEvent.change(within(form).getByLabelText("Catatan (opsional)"), { target: { value: "draft note" } });
     fireEvent.change(within(form).getByLabelText("Gramasi"), { target: { value: "1/2" } });
     fireEvent.change(within(form).getByLabelText("Harga Total"), { target: { value: "15000" } });
@@ -257,6 +277,26 @@ describe("shopping history", () => {
     fireEvent.click(screen.getByRole("button", { name: "Tutup form" }));
     fireEvent.click(screen.getByRole("button", { name: "Tambah Belanja" }));
     expect(screen.getByDisplayValue("draft note")).toBeInTheDocument();
+  });
+
+  it("offers only the Satuan that fit the bahan: a bahan stocked in galon is bought in galon", async () => {
+    renderWithProviders(
+      <ShoppingManagement stockItems={[...stockItems, { id: 9, name: "Air Isi Ulang", unit: "galon" }]} isAdmin />
+    );
+    fireEvent.click(await screen.findByRole("button", { name: "Tambah Belanja" }));
+    const form = screen.getByRole("dialog");
+    const unitOptions = () => Array.from(within(form).getByLabelText("Satuan").options, (option) => option.value).filter(Boolean);
+    // A new line takes any unit.
+    expect(unitOptions()).toEqual(["gr", "pcs", "ml"]);
+
+    // Picking the bahan sets its stock unit, the only one offered (ml cannot become galon).
+    const item = form.querySelector('select[aria-label="Cari atau buat barang"]');
+    act(() => {
+      $(item).val("9").trigger($.Event("select2:select", { params: { data: { id: "9", text: "Air Isi Ulang" } } }));
+    });
+    await waitFor(() => expect(within(form).getByLabelText("Satuan")).toHaveValue("galon"));
+    expect(unitOptions()).toEqual(["galon"]);
+    expect(form).toHaveTextContent("Satuan stok: galon. Isi gramasi sesuai satuan stok");
   });
 
   it("pays from the first payment source and shows its saldo after the purchase", async () => {
@@ -347,11 +387,11 @@ describe("shopping history", () => {
     renderShopping();
 
     const nota = await screen.findByRole("rowgroup", { name: "Nota #7 Pasar Uji" });
-    // Per Struk first; Per Bahan is the other view.
+    // Per Struk first; Per Item is the other view.
     const views = screen.getByRole("group", { name: "Tampilan riwayat" });
-    expect(within(views).getAllByRole("button").map((button) => button.textContent)).toEqual(["Per Struk", "Per Bahan"]);
+    expect(within(views).getAllByRole("button").map((button) => button.textContent)).toEqual(["Per Struk", "Per Item"]);
     expect(within(views).getByRole("button", { name: "Per Struk" })).toHaveAttribute("aria-pressed", "true");
-    expect(nota).toHaveTextContent("Pasar Uji2026-09-15 · Nota #7 · Dibuat Kasir Uji · Diposting Admin Uji");
+    expect(nota).toHaveTextContent("Pasar Uji15 September 2026 · Nota #7 · Dibuat Kasir Uji · Diposting Admin Uji");
     expect(nota).toHaveTextContent("Catatan: Belanja mingguan");
     expect(within(nota).getByRole("button", { name: "Bukti (2)" })).toBeInTheDocument();
     // Each barang on its own row; the sumber pembayaran once for the nota.
@@ -363,7 +403,7 @@ describe("shopping history", () => {
     expect(within(nota).getByText("Kopi").closest("tr")).toHaveTextContent("1 kgRp 50.000Rp 50.000");
     // The Grand Total of every nota (12, on 2 pages) closes the table, under Jumlah.
     const footer = screen.getByText("TOTAL PENGELUARAN").closest("tr");
-    expect(Array.from(footer.cells, (cell) => cell.textContent)).toEqual([`TOTAL PENGELUARAN12 nota · Bulan Ini (${rangeLabel(thisMonth)}), semua halaman`, "Rp 30.227.346"]);
+    expect(Array.from(footer.cells, (cell) => cell.textContent)).toEqual([`TOTAL PENGELUARAN12 nota · Bulan Ini (${rangeLabel(thisMonth)})`, "Rp 30.227.346"]);
     expect(footer.cells[0].colSpan).toBe(4);
     expect(within(nota).getAllByText("Kasir (Tunai)")).toHaveLength(1);
     expect(within(nota).getByText("Kopi").closest("tr")).toHaveTextContent("1 kgRp 50.000Rp 50.000");
@@ -382,49 +422,128 @@ describe("shopping history", () => {
     expect(api.getPurchases).not.toHaveBeenCalled();
   });
 
-  it("opens the barang detail with its COGS from a nota line", async () => {
+  it("opens the Detail Struk of a nota: its lines, ongkir, diskon, PPN and total, with admin actions", async () => {
+    vi.spyOn(window, "confirm").mockReturnValue(true);
     api.getPurchaseNotas.mockResolvedValue({
       data: { data: { notas: [postedNota(7, { attachments: receipts })], total: 1, page: 1 } },
     });
     api.updatePurchaseItem.mockResolvedValue({ data: { success: true } });
+    api.deletePurchaseItem.mockResolvedValue({ data: { success: true } });
     renderShopping();
     const nota = await screen.findByRole("rowgroup", { name: "Nota #7 Pasar Uji" });
-    fireEvent.click(within(nota).getByText("Gula").closest("tr"));
+    // Anywhere on the nota opens it, its Ongkir line too.
+    fireEvent.click(within(nota).getByText("Ongkir").closest("tr"));
 
-    // Stok, nilai, COGS, riwayat with COGS Setelah and log, kept to this barang.
-    const dialog = await screen.findByRole("dialog");
-    expect(api.getPurchases).toHaveBeenLastCalledWith({ itemId: 5, page: 1 });
-    expect(within(dialog).getByRole("heading", { name: "Gula" })).toBeInTheDocument();
-    expect(within(dialog).getByText("2 history pembelian")).toBeInTheDocument();
-    expect(dialog).toHaveTextContent("COGS Sekarang");
-    expect(dialog).toHaveTextContent("Rp 36.250");
-    expect(within(dialog).getByRole("columnheader", { name: "COGS Setelah" })).toBeInTheDocument();
-    expect(screen.queryByRole("dialog", { name: /^Nota #7/ })).not.toBeInTheDocument();
+    const dialog = screen.getByRole("dialog", { name: "Detail Struk #7 Pasar Uji" });
+    // Laid out like the struk: the toko, each barang (qty × harga, jumlah),
+    // subtotal, ongkir, diskon, PPN, the TOTAL, and how it was paid.
+    expect(within(dialog).getByRole("heading", { name: "Pasar Uji" })).toBeInTheDocument();
+    expect(dialog).toHaveTextContent("15 September 2026 · Nota #7");
+    const lines = within(within(dialog).getByRole("list", { name: "Daftar barang" })).getAllByRole("listitem");
+    expect(lines.map((line) => line.textContent)).toEqual([
+      "GulaRp 30.0002.000 gr × Rp 15RiwayatUbahHapus",
+      "KopiRp 50.0001 kg × Rp 50.000RiwayatUbahHapus",
+      "TehRp 15.000500 gr × Rp 30RiwayatUbahHapus",
+      "SusuRp 5.0001 liter × Rp 5.000RiwayatUbahHapus",
+    ]);
+    expect(dialog).toHaveTextContent(
+      "SubtotalRp 100.000OngkirRp 10.000Diskon Nota (10%)-Rp 10.000PPN 11%Rp 11.000TOTALRp 111.000"
+    );
+    expect(dialog).toHaveTextContent("Dibayar dari Kasir (Tunai)");
+    expect(dialog).toHaveTextContent("Dibuat Kasir Uji · Diposting Admin Uji");
+    expect(dialog).toHaveTextContent("Catatan: Belanja mingguan");
+    // Stok and COGS stay in the Riwayat of a barang, fetched only when asked for.
+    expect(dialog).not.toHaveTextContent("COGS");
+    expect(api.getPurchases).not.toHaveBeenCalledWith(expect.objectContaining({ itemId: 5 }));
 
-    fireEvent.click(within(dialog).getAllByRole("button", { name: "Update" })[0]);
+    // Lines change or go from here.
+    fireEvent.click(within(dialog).getByRole("button", { name: "Ubah Kopi" }));
     const editForm = screen.getByText(/^Edit Belanja/).closest("form");
-    fireEvent.change(within(editForm).getByLabelText("Harga Total"), { target: { value: "40000" } });
+    fireEvent.change(within(editForm).getByLabelText("Harga Total"), { target: { value: "60000" } });
     fireEvent.click(within(editForm).getByRole("button", { name: "Simpan" }));
     await waitFor(() =>
-      expect(api.updatePurchaseItem.mock.calls[0][0]).toEqual({ id: 91, quantity: 2000, unit: "gr", unitPrice: 20 })
+      expect(api.updatePurchaseItem.mock.calls[0][0]).toEqual({ id: 72, quantity: 1, unit: "kg", unitPrice: 60000, total: 60000 })
     );
-    fireEvent.click(within(dialog).getByRole("button", { name: "Log Aktivitas" }));
-    expect(dialog).toHaveTextContent("400 gr -> 500 gr, Rp 20 -> Rp 15");
-    fireEvent.click(within(dialog).getByRole("button", { name: "Tutup" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Hapus Teh" }));
+    expect(window.confirm).toHaveBeenCalledWith("Hapus belanja Teh ini?");
+    await waitFor(() => expect(api.deletePurchaseItem.mock.calls[0][0]).toBe(73));
+
+    // Its bukti open on top; Escape closes only them.
+    fireEvent.click(within(dialog).getByRole("button", { name: "Bukti (2)" }));
+    expect(within(screen.getByRole("dialog", { name: "Bukti Nota #7" })).getByText("kuitansi.jpg")).toBeInTheDocument();
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(screen.queryByRole("dialog", { name: "Bukti Nota #7" })).not.toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: "Detail Struk #7 Pasar Uji" })).toBeInTheDocument();
+
+    // Riwayat opens the barang across every nota (stok, COGS, riwayat, log),
+    // kept to this barang; closing it comes back to the struk.
+    fireEvent.click(within(dialog).getByRole("button", { name: "Riwayat Gula" }));
+    const item = await screen.findByRole("dialog", { name: "Gula" });
+    expect(api.getPurchases).toHaveBeenLastCalledWith({ itemId: 5, page: 1 });
+    expect(within(item).getByText("2 history pembelian")).toBeInTheDocument();
+    expect(item).toHaveTextContent("COGS Sekarang");
+    expect(item).toHaveTextContent("Rp 36.250");
+    expect(within(item).getByRole("columnheader", { name: "COGS Setelah" })).toBeInTheDocument();
+    expect(screen.queryByRole("dialog", { name: "Detail Struk #7 Pasar Uji" })).not.toBeInTheDocument();
+    fireEvent.click(within(item).getByRole("button", { name: "Tutup" }));
+    expect(screen.getByRole("dialog", { name: "Detail Struk #7 Pasar Uji" })).toBeInTheDocument();
+    fireEvent.keyDown(window, { key: "Escape" });
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
 
-    // The bukti of the nota open from its heading.
+    // The bukti button on the nota heading opens only the bukti.
     fireEvent.click(within(nota).getByRole("button", { name: "Bukti (2)" }));
-    expect(within(screen.getByRole("dialog", { name: "Bukti Nota #7" })).getByText("kuitansi.jpg")).toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: "Bukti Nota #7" })).toBeInTheDocument();
+    expect(screen.queryByRole("dialog", { name: "Detail Struk #7 Pasar Uji" })).not.toBeInTheDocument();
   });
 
-  it("lets kasir open a barang from a nota without admin actions", async () => {
+  it("shows a line bought by the dus with its isi and lets admins change the isi", async () => {
+    const aquaLine = { id: 95, stockItemId: 6, itemName: "Aqua 600ml", quantity: 2, unit: "dus", packSize: 24, packUnit: "botol", unitPrice: 50000, total: 100000, costTotal: 100000, stockQuantity: 48, stockUnit: "botol" };
+    api.getPurchaseNotas.mockResolvedValue({
+      data: { data: { notas: [postedNota(9, { subtotal: 100000, shippingCost: 0, discountAmount: 0, discountValue: 0, taxPercent: 0, taxAmount: 0, total: 100000, items: [aquaLine] })], total: 1, page: 1 } },
+    });
+    const aquaGroup = {
+      ...itemGroups[0],
+      stockItemId: 6,
+      itemName: "Aqua 600ml",
+      stock: 48,
+      stockUnit: "botol",
+      purchaseCount: 1,
+      histories: [history(95, { itemName: "Aqua 600ml", quantity: 2, unit: "dus", packSize: 24, unitPrice: 50000, total: 100000, stockQuantity: 48, stockUnit: "botol", stockAverageCost: 2083, stockValueAfter: 100000 })],
+      logs: [],
+    };
+    api.getPurchases.mockResolvedValue({ data: { data: { purchases: [], itemGroups: [aquaGroup], groupTotal: 1, total: 1 } } });
+    api.updatePurchaseItem.mockResolvedValue({ data: { success: true } });
+    renderShopping();
+
+    const nota = await screen.findByRole("rowgroup", { name: "Nota #9 Pasar Uji" });
+    const row = within(nota).getByText("Aqua 600ml").closest("tr");
+    expect(row).toHaveTextContent("2 dus (isi 24 botol)");
+    fireEvent.click(row);
+    const dialog = await screen.findByRole("dialog");
+    expect(dialog).toHaveTextContent("2 dus (isi 24 botol) × Rp 50.000");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Ubah Aqua 600ml" }));
+
+    const editForm = screen.getByText(/^Edit Belanja/).closest("form");
+    expect(editForm).toHaveTextContent("Isi per Kemasan (botol)");
+    expect(within(editForm).getByLabelText("Isi per Kemasan")).toHaveValue("24");
+    fireEvent.change(within(editForm).getByLabelText("Isi per Kemasan"), { target: { value: "12" } });
+    fireEvent.click(within(editForm).getByRole("button", { name: "Simpan" }));
+    await waitFor(() =>
+      expect(api.updatePurchaseItem.mock.calls[0][0]).toEqual({ id: 95, quantity: 2, unit: "dus", packSize: 12, unitPrice: 50000, total: 100000 })
+    );
+  });
+
+  it("lets kasir open a nota and its barang without admin actions", async () => {
     api.getPurchaseNotas.mockResolvedValue({ data: { data: { notas: [postedNota(8)], total: 1, page: 1 } } });
     renderShopping(false);
     const nota = await screen.findByRole("rowgroup", { name: "Nota #8 Pasar Uji" });
     expect(within(nota).queryByRole("button", { name: "+ Bukti" })).not.toBeInTheDocument();
     fireEvent.click(within(nota).getByRole("button", { name: "Gula" }));
-    const dialog = await screen.findByRole("dialog");
+    const struk = screen.getByRole("dialog", { name: "Detail Struk #8 Pasar Uji" });
+    expect(within(struk).queryByRole("button", { name: "Ubah Gula" })).not.toBeInTheDocument();
+    expect(within(struk).queryByRole("button", { name: "Hapus Gula" })).not.toBeInTheDocument();
+    fireEvent.click(within(struk).getByRole("button", { name: "Riwayat Gula" }));
+    const dialog = await screen.findByRole("dialog", { name: "Gula" });
     expect(within(dialog).getByText("2 history pembelian")).toBeInTheDocument();
     expect(within(dialog).queryByRole("button", { name: "Update" })).not.toBeInTheDocument();
   });
@@ -451,6 +570,44 @@ describe("purchase form submit", () => {
     URL.createObjectURL = vi.fn((file) => `blob:${file.name}`);
     URL.revokeObjectURL = vi.fn();
     api.savePurchase.mockResolvedValue({ data: { data: { id: 44, total: 30000, balance: 55000 } } });
+  });
+
+  it("sends Isi per Kemasan: 2 dus isi 24 of an item, and the isi unit of a new one", async () => {
+    const { result } = renderHook(
+      () => usePurchaseForm({ suppliers: [{ id: 1, name: "Pasar Uji" }], stockItems, paymentSources: sources, onSaved: vi.fn() }),
+      { wrapper }
+    );
+    let draft;
+    act(() => {
+      draft = result.current.createItem("Aqua Dus Baru");
+    });
+    act(() => {
+      result.current.setForm((current) => ({ ...current, suplierId: 1 }));
+      result.current.updateRow(result.current.rows[0].key, { stockItemId: 5, quantity: "2", unit: "dus", packSize: "24", unitPrice: "100000" });
+      result.current.addRow();
+    });
+    act(() => {
+      result.current.updateRow(result.current.rows[1].key, {
+        stockItemId: draft.id,
+        quantity: "1",
+        unit: "dus",
+        packSize: "24",
+        packUnit: "botol",
+        unitPrice: "48000",
+      });
+    });
+    // A bad isi is refused before anything is sent.
+    act(() => result.current.updateRow(result.current.rows[0].key, { packSize: "dua" }));
+    await act(() => result.current.submit({ preventDefault() {} }));
+    expect(api.savePurchase).not.toHaveBeenCalled();
+    act(() => result.current.updateRow(result.current.rows[0].key, { packSize: "24" }));
+    await act(() => result.current.submit({ preventDefault() {} }));
+
+    expect(api.savePurchase.mock.calls[0][0].items).toEqual([
+      // The item keeps its stock unit (gr): no packUnit.
+      { stockItemId: 5, quantity: 2, unit: "dus", packSize: 24, unitPrice: 50000, total: 100000 },
+      { itemName: "Aqua Dus Baru", quantity: 1, unit: "dus", packSize: 24, packUnit: "botol", unitPrice: 48000, total: 48000 },
+    ]);
   });
 
   it("sends the payment source and uploads the bukti nota after the purchase is saved", async () => {
@@ -597,7 +754,7 @@ describe("belanja lainnya in the same form", () => {
   beforeEach(() => {
     api.getShoppingSuppliers.mockResolvedValue({ data: { data: [{ id: 1, name: "Pasar Uji" }] } });
     api.getPurchases.mockResolvedValue({ data: { data: { purchases: [], itemGroups, groupTotal: 1, total: 1 } } });
-    api.getSupplyPurchases.mockResolvedValue({ data: { data: { itemGroups: supplyGroups, groupTotal: 1, page: 1 } } });
+    api.getSupplyPurchases.mockResolvedValue({ data: { data: { itemGroups: supplyGroups, groupTotal: 1, totalSpending: 46000, page: 1 } } });
     api.getPaymentSources.mockResolvedValue({ data: { data: sources } });
     receiptImages.compressReceiptImage.mockImplementation(async (file) => file);
     URL.createObjectURL = vi.fn((file) => `blob:${file.name}`);
@@ -642,10 +799,10 @@ describe("belanja lainnya in the same form", () => {
     expect(api.getSupplyPurchaseNotas).toHaveBeenLastCalledWith({ search: "", page: 1, category: "Perlengkapan", ...thisMonth });
     expect(api.getSupplyPurchases).not.toHaveBeenCalled();
 
-    // Barang Lainnya are not bahan: their per-item view is Per Barang, without units.
+    // Barang Lainnya have the same Per Item view, without units.
     const views = screen.getByRole("group", { name: "Tampilan riwayat" });
-    expect(within(views).getAllByRole("button").map((button) => button.textContent)).toEqual(["Per Struk", "Per Barang"]);
-    fireEvent.click(within(views).getByRole("button", { name: "Per Barang" }));
+    expect(within(views).getAllByRole("button").map((button) => button.textContent)).toEqual(["Per Struk", "Per Item"]);
+    fireEvent.click(within(views).getByRole("button", { name: "Per Item" }));
     const row = (await screen.findByText("Gas LPG")).closest("tr");
     expect(api.getSupplyPurchases).toHaveBeenLastCalledWith({ search: "", page: 1, category: "Perlengkapan", ...thisMonth });
     expect(row).toHaveTextContent("#21 - Kasir (Tunai)");
@@ -653,6 +810,7 @@ describe("belanja lainnya in the same form", () => {
     expect(screen.getByRole("columnheader", { name: "Qty" })).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: "Harga Rata-rata Setelah" })).toBeInTheDocument();
     expect(screen.queryByRole("columnheader", { name: "COGS Setelah" })).not.toBeInTheDocument();
+    expect(screen.getByTestId("total-spending")).toHaveTextContent("Rp 46.000");
   });
 
   it("shows a nota of barang lainnya under each kategori it holds, without units", async () => {
@@ -701,7 +859,11 @@ describe("belanja lainnya in the same form", () => {
       data: { data: { itemGroups: itemId === 42 ? [pisauGroup] : supplyGroups, groupTotal: 1, page: 1 } },
     }));
     fireEvent.click(within(row).getByText("Pisau").closest("tr"));
-    const dialog = await screen.findByRole("dialog");
+    const struk = screen.getByRole("dialog", { name: "Detail Struk #31 Toko Campur" });
+    // Barang Lainnya are counted per piece: no units.
+    expect(within(struk).getByText("Pisau").closest("li")).toHaveTextContent("PisauRp 30.0002 × Rp 15.000Riwayat");
+    fireEvent.click(within(struk).getByRole("button", { name: "Riwayat Pisau" }));
+    const dialog = await screen.findByRole("dialog", { name: "Pisau" });
     expect(api.getSupplyPurchases).toHaveBeenLastCalledWith({ itemId: 42, page: 1 });
     expect(within(dialog).getByRole("heading", { name: "Pisau" })).toBeInTheDocument();
     expect(dialog).toHaveTextContent("1 history pembelian · Peralatan");
@@ -760,7 +922,7 @@ describe("belanja lainnya in the same form", () => {
       .getAllByRole("row")
       .map((row) => Array.from(row.cells, (cell) => cell.textContent));
     expect(rows).toEqual([
-      ["Shopee2026-09-15 · Nota #40 · Dibuat Kasir Uji · Diposting Admin UjiCatatan: Belanja mingguan+ Bukti"],
+      ["Shopee15 September 2026 · Nota #40 · Dibuat Kasir Uji · Diposting Admin UjiCatatan: Belanja mingguan+ Bukti"],
       ["Spork (Sendok + Garpu) dengan Plastik Pembungkus untuk Makanan", "Niskala", "500", "Rp 275", "Rp 137.500"],
       ["Cutlery Set untuk Catering (Sendok, Garpu Tisu, tusuk Gigi)", "500", "Rp 505", "Rp 252.500"],
       ["Ongkir", "1", "Rp 336", "Rp 336"],
@@ -942,6 +1104,10 @@ describe("ringkasan and draft nota", () => {
     fireEvent.click(within(row).getByRole("button", { name: "Periksa & Posting" }));
     const form = screen.getByRole("dialog", { name: "Draft Nota #5" });
     expect(form).toHaveTextContent("1 bukti tersimpan");
+    // Its saved bukti show in the form too, and count toward the limit.
+    const saved = within(within(form).getByRole("list", { name: "Bukti nota tersimpan" })).getByAltText("Bukti tersimpan 1");
+    expect(saved.getAttribute("src").endsWith("/api/shopping/purchase-attachments/9")).toBe(true);
+    expect(form).toHaveTextContent("1 tersimpan + 0 baru, maksimal 10 foto per belanja.");
     expect(within(form).getByLabelText("Gramasi")).toHaveValue("2000");
     expect(within(form).getByLabelText("Harga Total")).toHaveValue("30.000");
     expect(within(form).getByLabelText("Ongkos Kirim / Ekspedisi")).toHaveValue("10.000");
@@ -982,6 +1148,15 @@ describe("ringkasan and draft nota", () => {
     const form = screen.getByRole("dialog", { name: "Draft Nota #5" });
     expect(within(form).getByRole("button", { name: "Simpan Draft" })).toBeInTheDocument();
     expect(within(form).queryByRole("button", { name: "Simpan & Posting" })).not.toBeInTheDocument();
+
+    // A saved bukti of the draft is deleted from the form.
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    api.deletePurchaseAttachment.mockResolvedValue({ data: { success: true } });
+    fireEvent.click(within(form).getByRole("button", { name: "Hapus bukti tersimpan 1" }));
+    expect(window.confirm).toHaveBeenCalledWith("Hapus bukti nota 1 dari draft #5?");
+    await waitFor(() => expect(api.deletePurchaseAttachment.mock.calls[0][0]).toBe(9));
+    await waitFor(() => expect(within(form).queryByRole("list", { name: "Bukti nota tersimpan" })).not.toBeInTheDocument());
+    expect(form).toHaveTextContent("0 / 5 foto.");
   });
 });
 
@@ -1040,7 +1215,7 @@ describe("period filter and export", () => {
     fireEvent.click(within(kinds()).getByRole("button", { name: "Peralatan" }));
     await waitFor(() => expect(api.getSupplyPurchaseNotas).toHaveBeenLastCalledWith({ search: "", page: 1, category: "Peralatan" }));
     expect(screen.getByLabelText("Periode")).toBeDisabled();
-    expect(screen.getByText(/Peralatan adalah aset/)).toBeInTheDocument();
+    expect(screen.queryByText(/Peralatan adalah aset/)).not.toBeInTheDocument();
     fireEvent.click(within(kinds()).getByRole("button", { name: "Promosi" }));
     await waitFor(() =>
       expect(api.getSupplyPurchaseNotas).toHaveBeenLastCalledWith({ search: "", page: 1, category: "Promosi", ...picked })
@@ -1049,6 +1224,65 @@ describe("period filter and export", () => {
     // Reset clears the custom range: no limits.
     fireEvent.click(screen.getByRole("button", { name: "Reset" }));
     await waitFor(() => expect(api.getSupplyPurchaseNotas).toHaveBeenLastCalledWith({ search: "", page: 1, category: "Promosi" }));
+  });
+
+  it("shows the summary cards of the period like Rekap (new), with the asset value for its whole lifetime", async () => {
+    // Rekap shows a period as 01/10/2026 - 31/10/2026.
+    const rekapLabel = ({ from, to }) => `${from.split("-").reverse().join("/")} - ${to.split("-").reverse().join("/")}`;
+    api.getShoppingSummary.mockResolvedValue({
+      data: {
+        data: {
+          bahanBaku: { total: 30227346, notas: 205 },
+          peralatan: { total: 41127038, notas: 32 },
+          perlengkapan: { total: 866110, notas: 12 },
+          promosi: { total: 611020, notas: 6 },
+          lainLain: { total: 18585781, notas: 49 },
+          asetPeralatan: { value: 41127038, items: 75 },
+        },
+      },
+    });
+    renderShopping();
+    const cards = await screen.findByRole("region", { name: "Ringkasan belanja" });
+    const card = (title) => within(cards).getByRole("group", { name: title });
+    // Title, the period on its own line, amount, detail.
+    const lines = (title) => Array.from(card(title).querySelectorAll("p"), (line) => line.textContent);
+    await waitFor(() => expect(card("Serapan Bahan Baku")).toHaveTextContent("Rp 30.227.346"));
+    expect(api.getShoppingSummary).toHaveBeenLastCalledWith(thisMonth);
+    expect(lines("Serapan Bahan Baku")).toEqual(["Serapan Bahan Baku", rekapLabel(thisMonth), "Rp 30.227.346", "205 nota"]);
+    expect(card("Serapan Bahan Baku")).toHaveStyle({ backgroundColor: "#025cca" });
+    // 1 card in view on phones, 2 on tablets (md), 4 on desktops (lg); a fixed basis so long titles wrap.
+    for (const group of within(cards).getAllByRole("group")) {
+      expect(group.className.split(" ")).toEqual(
+        expect.arrayContaining(["basis-full", "shrink-0", "grow-0", "md:basis-[calc((100%-1rem)/2)]", "lg:basis-[calc((100%-3rem)/4)]"])
+      );
+      expect(group.className).not.toMatch(/min-w-full|sm:/);
+    }
+    expect(card("Valuasi Aset (Statis/Lifetime)")).toHaveStyle({ backgroundColor: "#7f167f" });
+    expect(within(cards).getAllByRole("group").map((group) => group.getAttribute("aria-label"))).toEqual([
+      "Serapan Bahan Baku",
+      "Pengeluaran Peralatan (Habis Pakai)",
+      "Pengeluaran Perlengkapan (Habis Pakai)",
+      "Valuasi Aset (Statis/Lifetime)",
+      "Serapan Budget Promosi",
+      "Biaya Overhead Operasional",
+    ]);
+    expect(card("Serapan Bahan Baku")).toHaveTextContent("Rp 30.227.346205 nota");
+    expect(card("Pengeluaran Peralatan (Habis Pakai)")).toHaveTextContent("Rp 41.127.038");
+    expect(card("Pengeluaran Perlengkapan (Habis Pakai)")).toHaveTextContent("Rp 866.110");
+    // The asset value has no period in its title.
+    expect(lines("Valuasi Aset (Statis/Lifetime)")).toEqual(["Valuasi Aset (Statis/Lifetime)", "Seumur hidup", "Rp 41.127.038", "75 barang aktif"]);
+    expect(card("Serapan Budget Promosi")).toHaveTextContent("Rp 611.020");
+    expect(card("Biaya Overhead Operasional")).toHaveTextContent("Rp 18.585.781Lain-lain · 49 nota");
+
+    fireEvent.change(screen.getByLabelText("Periode"), { target: { value: "all" } });
+    await waitFor(() => expect(api.getShoppingSummary).toHaveBeenLastCalledWith({}));
+    expect(lines("Serapan Bahan Baku").slice(0, 2)).toEqual(["Serapan Bahan Baku", "Semua Tanggal"]);
+    // The Peralatan tab lists for a lifetime, the cards keep the selected period.
+    fireEvent.change(screen.getByLabelText("Periode"), { target: { value: "year" } });
+    await waitFor(() => expect(api.getShoppingSummary).toHaveBeenLastCalledWith(periodRange("year")));
+    fireEvent.click(within(kinds()).getByRole("button", { name: "Peralatan" }));
+    expect(api.getShoppingSummary).toHaveBeenLastCalledWith(periodRange("year"));
+    expect(lines("Serapan Budget Promosi").slice(0, 2)).toEqual(["Serapan Budget Promosi", rekapLabel(periodRange("year"))]);
   });
 
   it("exports every nota of the tab and period to Excel, laid out like the rekap sheet", async () => {
@@ -1066,7 +1300,7 @@ describe("period filter and export", () => {
     expect(rows[1][0]).toBe(`Periode: Bulan Ini (${rangeLabel(thisMonth)})`);
     expect(rows[3]).toEqual(["Tanggal", "Nota", "Toko", "Barang", "Sumber Pembayaran", "Gramasi", "Satuan", "Harga Satuan", "Jumlah"]);
     expect(rows.slice(4, 12)).toEqual([
-      ["2026-09-15", "#7", "Pasar Uji", "Gula", "Kasir (Tunai)", 2000, "gr", 15, 30000],
+      ["15 September 2026", "#7", "Pasar Uji", "Gula", "Kasir (Tunai)", 2000, "gr", 15, 30000],
       ["", "", "", "Kopi", "", 1, "kg", 50000, 50000],
       ["", "", "", "Teh", "", 500, "gr", 30, 15000],
       ["", "", "", "Susu", "", 1, "liter", 5000, 5000],
@@ -1075,7 +1309,7 @@ describe("period filter and export", () => {
       ["", "", "", "PPN 11%", "", "", "", "", 11000],
       ["", "", "", "Total", "", "", "", "", 111000],
     ]);
-    expect(rows[12].slice(0, 3)).toEqual(["2026-10-02", "#8", "Pasar Uji"]);
+    expect(rows[12].slice(0, 3)).toEqual(["2 Oktober 2026", "#8", "Pasar Uji"]);
     expect(rows.at(-1)).toEqual(["TOTAL PENGELUARAN", "", "", "2 nota", "", "", "", "", 222000]);
   });
 

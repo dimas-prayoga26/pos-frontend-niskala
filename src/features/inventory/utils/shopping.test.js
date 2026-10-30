@@ -50,8 +50,9 @@ describe("shopping utils", () => {
       note: "",
       suplierName: "Pasar",
       items: [
-        { stockItemId: 5, quantity: 2, unit: "gr", unitPrice: 15000 },
-        { itemName: "Cup", quantity: 0.5, unit: "pcs", unitPrice: 1000 },
+        // The harga total goes as typed (Rp 1.000 for 1/2 pcs, not 0,5 x harga).
+        { stockItemId: 5, quantity: 2, unit: "gr", unitPrice: 15000, total: 30000 },
+        { itemName: "Cup", quantity: 0.5, unit: "pcs", unitPrice: 1000, total: 1000 },
       ],
     });
   });

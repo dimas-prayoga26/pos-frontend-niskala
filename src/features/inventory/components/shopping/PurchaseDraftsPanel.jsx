@@ -1,5 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { enqueueSnackbar } from "notistack";
+import { formatDayMonthYear } from "../../../../shared/lib/dates";
 import { currency } from "../../utils/format";
 import { PURCHASE_KINDS } from "../../utils/purchaseKinds";
 
@@ -51,7 +52,7 @@ const PurchaseDraftsPanel = ({ drafts, canPost, onOpen, onOpenReceipts, onDelete
             {drafts.map((draft) => (
               <tr key={`${draft.kind}-${draft.id}`} className="border-t border-[#444]">
                 <td className="whitespace-nowrap p-2">
-                  {String(draft.date).slice(0, 10)}
+                  {formatDayMonthYear(draft.date)}
                   <p className="text-xs text-[#ababab]">#{draft.id}</p>
                 </td>
                 <td className="p-2">{PURCHASE_KINDS[draft.kind]?.label}</td>

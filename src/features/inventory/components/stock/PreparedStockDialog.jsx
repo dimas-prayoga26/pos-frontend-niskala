@@ -7,8 +7,9 @@ import { parseCostInput } from "../../utils/stockItems";
 const inputClass =
   "w-full rounded-lg border border-[#555] bg-[#1f1f1f] px-3 py-2 text-[#f5f5f5] outline-none focus:border-[#d6c7ae]";
 
-// Sets the portions actually left (a recount). The asset value scales with
-// the stock; portions missing from a lower count are kept as kerugian.
+// Sets the portions actually left (a recount), at the same cost per portion:
+// portions missing from a lower count are kerugian, extra ones of a higher
+// count a selisih lebih that lowers it (Penyesuaian both ways).
 const PreparedStockDialog = ({ item, onSave, onCancel, isSaving }) => {
   const [stock, setStock] = useState(String(Math.max(Number(item.stock || 0), 0)));
   const counted = parseCostInput(stock);
@@ -53,6 +54,13 @@ const PreparedStockDialog = ({ item, onSave, onCancel, isSaving }) => {
           <p className="mt-2 rounded-lg bg-[#1f1f1f] p-3 text-xs text-[#ababab]">
             Kurang {quantityDisplay(missing, item.unit)} dicatat sebagai kerugian (Penyesuaian):{" "}
             <strong className="text-red-400">{currency(getWasteCost(item, missing))}</strong>
+          </p>
+        )}
+        {missing < 0 && (
+          <p className="mt-2 rounded-lg bg-[#1f1f1f] p-3 text-xs text-[#ababab]">
+            Lebih {quantityDisplay(-missing, item.unit)} dicatat sebagai selisih lebih (Penyesuaian), mengurangi
+            kerugian; COGS per {item.unit || "porsi"} tetap:{" "}
+            <strong className="text-green-400">+{currency(getWasteCost(item, -missing))}</strong>
           </p>
         )}
 

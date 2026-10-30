@@ -1,21 +1,23 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { enqueueSnackbar } from "notistack";
-import { getPaymentSources, getShoppingSuppliers } from "../api";
+import { getPaymentSources, getShoppingSummary, getShoppingSuppliers } from "../api";
 import usePurchaseForm from "../hooks/usePurchaseForm";
 import usePurchaseHistory from "../hooks/usePurchaseHistory";
 import usePurchaseItemActions from "../hooks/usePurchaseItemActions";
 import usePurchaseItemDetail from "../hooks/usePurchaseItemDetail";
 import { DEFAULT_PERIOD, PERIOD_OPTIONS, periodRange, rangeLabel, rangeParams } from "../utils/periods";
 import { exportRekapToExcel, fetchAllNotas, openPrintWindow, printRekap } from "../utils/purchaseExport";
-import { HISTORY_TABS, PURCHASE_KINDS, historyTabOf, historyViewsOf } from "../utils/purchaseKinds";
+import { HISTORY_TABS, HISTORY_VIEWS, PURCHASE_KINDS, historyTabOf } from "../utils/purchaseKinds";
 import PurchaseDraftsPanel from "./shopping/PurchaseDraftsPanel";
 import PurchaseFormDialog from "./shopping/PurchaseFormDialog";
 import PurchaseHistoryDialog from "./shopping/PurchaseHistoryDialog";
 import PurchaseHistoryTable from "./shopping/PurchaseHistoryTable";
 import PurchaseItemEditDialog from "./shopping/PurchaseItemEditDialog";
+import PurchaseNotaDialog from "./shopping/PurchaseNotaDialog";
 import PurchaseNotaTable from "./shopping/PurchaseNotaTable";
 import PurchasePeriodBar from "./shopping/PurchasePeriodBar";
+import PurchaseSummaryCards from "./shopping/PurchaseSummaryCards";
 import PurchaseReceiptsDialog from "./shopping/PurchaseReceiptsDialog";
 import { buttonClass, inputClass } from "./shopping/styles";
 
@@ -30,12 +32,14 @@ const toggleClass = (active) =>
 // Belanja (bahan baku, lainnya), the draft nota waiting to be posted, and
 // the searchable history, in tabs Bahan Baku and the kategori of barang
 // Lainnya (Peralatan, Perlengkapan, Promosi, Lain-lain), shown Per Struk (each
-// nota with its barang and the TOTAL PENGELUARAN) or Per Bahan / Per Barang
-// (one row per item with its latest purchase and COGS, or Harga Rata-rata for
-// Lainnya). Clicking a barang in either opens its detail: stok, COGS, riwayat
-// and log, where admins change or delete a line. A period filter (default
+// nota with its barang) or Per Item (one row per item with its latest purchase
+// and COGS, or Harga Rata-rata for Lainnya), both closed by TOTAL PENGELUARAN.
+// Clicking a nota opens its Detail Struk (its lines, where admins change or
+// delete one); a Per Item row, or the Riwayat of a line, opens the barang
+// detail: stok, COGS, riwayat and log, with the same actions. A period filter (default
 // Bulan Ini) narrows the history and its TOTAL PENGELUARAN, except Peralatan
-// (assets, lifetime), and exports it to Excel or PDF. Every staff member may
+// (assets, lifetime), and exports it to Excel or PDF. Summary cards show the
+// spending of the period per kind and the lifetime value of the assets. Every staff member may
 // save a draft; only admins post. See SHOPPING.md in pos-backend.
 export default function ShoppingManagement({ stockItems, supplyItems = NO_ITEMS, isAdmin }) {
   const [showForm, setShowForm] = useState(false);
@@ -47,12 +51,22 @@ export default function ShoppingManagement({ stockItems, supplyItems = NO_ITEMS,
   const [isExporting, setIsExporting] = useState(false);
   // Peralatan are assets: their tab always shows the whole lifetime.
   const isLifetime = historyTab.kindKey === "supply" && historyTab.category === "Peralatan";
-  const range = isLifetime ? {} : periodRange(period, customRange);
-  const periodText = isLifetime
-    ? "Seumur hidup (aset)"
-    : `${PERIOD_OPTIONS.find((option) => option.key === period)?.label}${period === "all" ? "" : ` (${rangeLabel(range)})`}`;
+  const selectedRange = periodRange(period, customRange);
+  const selectedPeriodText = `${PERIOD_OPTIONS.find((option) => option.key === period)?.label}${
+    period === "all" ? "" : ` (${rangeLabel(selectedRange)})`
+  }`;
+  const range = isLifetime ? {} : selectedRange;
+  const periodText = isLifetime ? "Seumur hidup (aset)" : selectedPeriodText;
+  // The summary cards follow the selected period on every tab.
+  const summaryParams = rangeParams(selectedRange);
+  const summary = useQuery({
+    queryKey: ["purchase-summary", summaryParams.from || "", summaryParams.to || ""],
+    queryFn: () => getShoppingSummary(summaryParams),
+  });
   const [receiptPurchaseId, setReceiptPurchaseId] = useState(null);
-  // The barang of a Per Nota line whose detail is open: { itemId, itemName }.
+  // The nota whose Detail Struk is open (Per Struk), by id.
+  const [openNotaId, setOpenNotaId] = useState(null);
+  // The barang whose Riwayat was opened from a line of it: { itemId, itemName }.
   const [notaLine, setNotaLine] = useState(null);
   // Bukti of a draft nota: { kind, id }.
   const [draftReceipts, setDraftReceipts] = useState(null);
@@ -81,6 +95,7 @@ export default function ShoppingManagement({ stockItems, supplyItems = NO_ITEMS,
     notaCount,
     totalSpending,
     itemGroups,
+    itemCount,
     page,
     setPage,
     totalPages,
@@ -88,13 +103,16 @@ export default function ShoppingManagement({ stockItems, supplyItems = NO_ITEMS,
     setSelectedGroup,
   } = historyState;
   const isNotaView = historyView === "nota";
+  // Read from the refetched page, so a changed or deleted line shows at once.
+  const openNota = openNotaId == null ? null : notas.find((nota) => nota.id === openNotaId) || null;
   const itemDetail = usePurchaseItemDetail(historyKind, notaLine);
-  // The barang whose detail is open: a line of a struk, or a Per Bahan row.
+  // The barang whose detail is open: a line of a struk, or a Per Item row.
   const openGroup = notaLine ? itemDetail.group : selectedGroup;
   const itemActions = usePurchaseItemActions(historyKind);
   const showHistoryOf = (tab, view = historyView) => {
     setHistoryTab(tab);
     setHistoryView(view);
+    setOpenNotaId(null);
     setNotaLine(null);
     setSelectedGroup(null);
     setPage(1);
@@ -160,7 +178,7 @@ export default function ShoppingManagement({ stockItems, supplyItems = NO_ITEMS,
 
   // Lock page scrolling while any dialog is open.
   useEffect(() => {
-    if (!showForm && !openGroup && !editingItem) return undefined;
+    if (!showForm && !openGroup && !openNota && !editingItem) return undefined;
 
     const previous = document.body.style.overflow;
     document.body.style.overflow = "hidden";
@@ -168,7 +186,12 @@ export default function ShoppingManagement({ stockItems, supplyItems = NO_ITEMS,
     return () => {
       document.body.style.overflow = previous;
     };
-  }, [showForm, openGroup, editingItem]);
+  }, [showForm, openGroup, openNota, editingItem]);
+
+  // The open nota left the page (another period, search or page): close it.
+  useEffect(() => {
+    if (openNotaId != null && !openNota && !history.isFetching) setOpenNotaId(null);
+  }, [history.isFetching, openNota, openNotaId]);
 
   // The barang opened from a nota lost its last line, or could not be loaded.
   useEffect(() => {
@@ -182,6 +205,11 @@ export default function ShoppingManagement({ stockItems, supplyItems = NO_ITEMS,
     setEditingItem(null);
     setReceiptPurchaseId(null);
   }, [setEditingItem, setSelectedGroup]);
+  const closeNotaDetail = useCallback(() => {
+    setOpenNotaId(null);
+    setEditingItem(null);
+    setReceiptPurchaseId(null);
+  }, [setEditingItem]);
   const closeReceipts = useCallback(() => setReceiptPurchaseId(null), []);
   // Read from the refetched group or nota so added or deleted photos show at once.
   const receiptAttachments = openGroup
@@ -194,7 +222,7 @@ export default function ShoppingManagement({ stockItems, supplyItems = NO_ITEMS,
         <div>
           <h3 className="text-lg font-bold">Nota Belanja</h3>
           <p className="mt-1 text-sm text-[#ababab]">
-            Belanja bahan baku dan lainnya, riwayatnya per struk atau per bahan. Klik barang untuk melihat detailnya.
+            Belanja bahan baku dan lainnya, riwayatnya per struk atau per item. Klik struk atau item untuk melihat detailnya.
           </p>
         </div>
         <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
@@ -225,6 +253,13 @@ export default function ShoppingManagement({ stockItems, supplyItems = NO_ITEMS,
         isLifetime={isLifetime}
         onExport={exportRekap}
         isExporting={isExporting}
+      />
+
+      <PurchaseSummaryCards
+        summary={summary.data?.data?.data}
+        range={selectedRange}
+        isLoading={summary.isPending}
+        isError={summary.isError}
       />
 
       <PurchaseDraftsPanel
@@ -261,7 +296,7 @@ export default function ShoppingManagement({ stockItems, supplyItems = NO_ITEMS,
           aria-label="Tampilan riwayat"
           className="flex w-fit gap-1 rounded-lg bg-[#181818] p-1 text-sm font-semibold"
         >
-          {historyViewsOf(historyKind).map((option) => (
+          {HISTORY_VIEWS.map((option) => (
             <button
               key={option.key}
               type="button"
@@ -297,7 +332,7 @@ export default function ShoppingManagement({ stockItems, supplyItems = NO_ITEMS,
           totalSpending={totalSpending}
           periodText={periodText}
           isAdmin={isAdmin}
-          onOpenItem={(item) => setNotaLine({ itemId: item[historyKind.itemIdKey] || null, itemName: item.itemName })}
+          onOpenNota={(nota) => setOpenNotaId(nota.id)}
           onOpenReceipts={setReceiptPurchaseId}
           showUnits={historyKind.showUnits}
         />
@@ -305,6 +340,9 @@ export default function ShoppingManagement({ stockItems, supplyItems = NO_ITEMS,
       {!history.isPending && !history.isError && !isNotaView && itemGroups.length > 0 && (
         <PurchaseHistoryTable
           itemGroups={itemGroups}
+          itemCount={itemCount}
+          totalSpending={totalSpending}
+          periodText={periodText}
           onOpen={setSelectedGroup}
           showUnits={historyKind.showUnits}
           costLabel={historyKind.costLabel}
@@ -332,6 +370,21 @@ export default function ShoppingManagement({ stockItems, supplyItems = NO_ITEMS,
           Berikutnya
         </button>
       </div>
+
+      {/* Hidden while the Riwayat of one of its barang is open, back after. */}
+      {openNota && !openGroup && (
+        <PurchaseNotaDialog
+          nota={openNota}
+          isAdmin={isAdmin}
+          onClose={closeNotaDetail}
+          onOpenItem={(item) => setNotaLine({ itemId: item[historyKind.itemIdKey] || null, itemName: item.itemName })}
+          onEditItem={itemActions.startEdit}
+          onDeleteItem={itemActions.removeItem}
+          isDeleting={itemActions.isDeleting}
+          onOpenReceipts={setReceiptPurchaseId}
+          showUnits={historyKind.showUnits}
+        />
+      )}
 
       {openGroup && (
         <PurchaseHistoryDialog
@@ -376,6 +429,8 @@ export default function ShoppingManagement({ stockItems, supplyItems = NO_ITEMS,
           onClose={() => setEditingItem(null)}
           isSaving={itemActions.isSaving}
           showUnits={historyKind.showUnits}
+          hasPack={editingItem.packSize != null}
+          packUnit={editingItem.stockUnit || ""}
         />
       )}
 

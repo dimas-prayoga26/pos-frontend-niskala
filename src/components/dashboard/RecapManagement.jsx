@@ -613,6 +613,16 @@ const RecapManagement = () => {
   });
 
   const orders = ordersRes?.data?.data || [];
+  // Notas of the day being closed whose bahan olahan still wait for the Daily Prep.
+  const pendingRecapDateKey = pendingDailyRecapPayload
+    ? getDateKey(getLocalDate(pendingDailyRecapPayload.date))
+    : "";
+  const pendingHppOrderCount = pendingRecapDateKey
+    ? orders.filter(
+        (order) =>
+          order.hppStatus === "pending" && getDateKey(getLocalDate(order.orderDate)) === pendingRecapDateKey
+      ).length
+    : 0;
   const savedRecaps = savedRecapsRes?.data?.data || [];
   const dailyRecapsSource = dailyRecapsSourceRes?.data?.data || [];
   const wasteTotalByDate = useMemo(
@@ -1415,7 +1425,27 @@ const RecapManagement = () => {
       // The recap wrote off the leftover of daily bahan setengah jadi.
       queryClient.invalidateQueries({ queryKey: ["semi-items"] });
       queryClient.invalidateQueries({ queryKey: ["semi-wastes"] });
+      // ...and locked the HPP of its notas (Modul 2).
+      queryClient.invalidateQueries({ queryKey: ["orders"] });
       enqueueSnackbar("Rekap harian berhasil disimpan", { variant: "success" });
+      const hppClosed = response?.data?.data?.hppClosed;
+      if (hppClosed?.closedOrders > 0) {
+        enqueueSnackbar(
+          `HPP ${hppClosed.closedOrders} nota dikunci${
+            hppClosed.items?.length
+              ? `: ${hppClosed.items
+                  .map(
+                    (item) =>
+                      `${item.name} ${formatCurrency(item.unitCost)}/${item.unit || "porsi"} (${
+                        item.source === "dapur" ? "Daily Prep" : "HPP saat dijual"
+                      })`
+                  )
+                  .join(", ")}`
+              : ""
+          }.`,
+          { variant: "info" }
+        );
+      }
       const writtenOff = response?.data?.data?.writtenOff || [];
       if (writtenOff.length) {
         enqueueSnackbar(
@@ -2437,6 +2467,12 @@ const RecapManagement = () => {
                 <p className="mt-1 text-sm text-[#ababab]">
                   Setelah disimpan, pesanan pada tanggal ini akan dikunci.
                 </p>
+                {pendingHppOrderCount > 0 && (
+                  <p className="mt-2 rounded-md bg-[#26210f] px-3 py-2 text-xs text-[#f6d365]">
+                    {pendingHppOrderCount} nota HPP-nya masih pending (bahan olahan). Saat disimpan, HPP dikunci memakai
+                    Daily Prep (Catat Masak) tanggal ini, atau HPP saat dijual bila dapur belum mencatat.
+                  </p>
+                )}
               </div>
               <button
                 type="button"

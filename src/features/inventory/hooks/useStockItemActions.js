@@ -1,9 +1,9 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { enqueueSnackbar } from "notistack";
-import { addStockItem, deleteStockItem, updateStockCogs } from "../api";
+import { addStockItem, deleteStockItem, updateStockCogs, updateStockRecipeUse, updateStockUnit } from "../api";
 
 // Admin actions on stock items. Callers pass onSuccess to close their dialog.
-const useStockItemActions = ({ onCreated = () => {}, onDeleted, onCogsSaved }) => {
+const useStockItemActions = ({ onCreated = () => {}, onDeleted, onCogsSaved, onUnitSaved = () => {} }) => {
   const queryClient = useQueryClient();
   const refreshStockItems = () => {
     queryClient.invalidateQueries({ queryKey: ["stock-items"] });
@@ -47,6 +47,35 @@ const useStockItemActions = ({ onCreated = () => {}, onDeleted, onCogsSaved }) =
     },
   });
 
+  // Bahan Resep on/off. The backend refuses "Tidak" while a recipe uses the bahan.
+  const recipeUseMutation = useMutation({
+    mutationFn: updateStockRecipeUse,
+    onSuccess: (response) => {
+      refreshStockItems();
+      enqueueSnackbar(response?.data?.message || "Bahan Resep berhasil diubah.", { variant: "success" });
+    },
+    onError: (error) => {
+      enqueueSnackbar(error?.response?.data?.message || "Gagal mengubah Bahan Resep.", {
+        variant: "error",
+      });
+    },
+  });
+
+  // Konversi Satuan converts the recipes and the purchase lines too.
+  const unitMutation = useMutation({
+    mutationFn: updateStockUnit,
+    onSuccess: (response) => {
+      refreshStockItems();
+      queryClient.invalidateQueries({ queryKey: ["purchases"] });
+      queryClient.invalidateQueries({ queryKey: ["semi-items"] });
+      enqueueSnackbar(response?.data?.message || "Satuan bahan berhasil dikonversi.", { variant: "success" });
+      onUnitSaved();
+    },
+    onError: (error) => {
+      enqueueSnackbar(error?.response?.data?.message || "Gagal mengonversi satuan bahan.", { variant: "error" });
+    },
+  });
+
   return {
     createItem: (payload) => createMutation.mutate(payload),
     isCreating: createMutation.isPending,
@@ -55,6 +84,11 @@ const useStockItemActions = ({ onCreated = () => {}, onDeleted, onCogsSaved }) =
     saveCogs: (item, { averageCost, supplier }) =>
       cogsMutation.mutate({ stockItemId: item.id || item._id, averageCost, supplier }),
     isSavingCogs: cogsMutation.isPending,
+    setRecipeUse: (item, isRecipeIngredient) =>
+      recipeUseMutation.mutate({ stockItemId: item.id || item._id, isRecipeIngredient }),
+    recipeUsePendingId: recipeUseMutation.isPending ? recipeUseMutation.variables?.stockItemId : null,
+    convertUnit: (item, { unit, factor }) => unitMutation.mutate({ stockItemId: item.id || item._id, unit, factor }),
+    isConvertingUnit: unitMutation.isPending,
   };
 };
 

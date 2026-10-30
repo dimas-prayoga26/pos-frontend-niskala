@@ -1,4 +1,5 @@
 import { currency, quantityDisplay } from "./format";
+import { areConvertible } from "./units";
 
 // Purchase (belanja) helpers. The form asks for the TOTAL price of a line; the
 // API expects a unit price, so it is derived as total / quantity.
@@ -8,15 +9,25 @@ export const HISTORY_PAGE_SIZE = 10;
 let rowKey = 0;
 
 // stockItemId holds the chosen item of either Jenis Belanja; category is only
-// asked for a new perlengkapan.
+// asked for a new barang lainnya. packSize/packUnit (Isi per Kemasan, bahan
+// baku: the qty is packages of packSize packUnit each) are no longer asked by
+// the form; they only stay on a draft saved with them.
 export const blankRow = () => ({
   key: ++rowKey,
   stockItemId: "",
   category: "",
   quantity: "",
   unit: "",
+  packSize: "",
+  packUnit: "",
   unitPrice: "",
 });
+
+// "1 dus (isi 24 botol)", or "2.000 gr" for a line bought without isi.
+export const packedQuantityLabel = (quantity, unit, packSize, packUnit) =>
+  packSize
+    ? `${quantityDisplay(quantity, unit)} (isi ${quantityDisplay(packSize, packUnit)})`
+    : quantityDisplay(quantity, unit);
 
 // Random id sent with a purchase; the server ignores replays of the same id.
 export const createRequestId = () =>
@@ -50,6 +61,29 @@ export const purchaseUnitForStockUnit = (unit) => {
   if (["ml", "milliliter", "mililiter"].includes(normalizedUnit)) return "ml";
 
   return unit || "";
+};
+
+// The Satuan a line of a bahan may be bought in: its stock unit (galon, pack,
+// ... from the rekap import too) and the units the server converts into it
+// (gr and kg, ml and liter), plus the unit the line already has (a draft or a
+// line bought by the package). A new bahan (no stock unit) takes any of
+// UNIT_OPTIONS. Cached, so the select keeps the same options between renders.
+const unitOptionsCache = new Map();
+export const unitOptionsFor = (stockUnit, currentUnit = "") => {
+  const stock = purchaseUnitForStockUnit(String(stockUnit || "").trim().toLowerCase());
+  const current = String(currentUnit || "").trim();
+  if (!stock && !current) return UNIT_OPTIONS;
+  const key = `${stock}|${current}`;
+  if (!unitOptionsCache.has(key)) {
+    const units = stock
+      ? [stock, ...UNIT_OPTIONS.map((option) => option.id).filter((unit) => areConvertible(unit, stock))]
+      : UNIT_OPTIONS.map((option) => option.id);
+    unitOptionsCache.set(
+      key,
+      [...new Set([...units, ...(current ? [current] : [])])].map((unit) => ({ id: unit, text: unit }))
+    );
+  }
+  return unitOptionsCache.get(key);
 };
 
 // A row's "unitPrice" field holds the line total typed by the user.
@@ -87,7 +121,7 @@ export const buildPurchasePayload = (
   return {
     ...details,
     ...(supplierDraft ? { suplierName: supplierDraft.name } : { suplierId }),
-    items: rows.map(({ stockItemId, category, quantity, unit, unitPrice }) => {
+    items: rows.map(({ stockItemId, category, quantity, unit, packSize, packUnit, unitPrice }) => {
       const draft = extraItems.find((item) => item.id === stockItemId);
       const parsedQuantity = parseShoppingQuantity(quantity);
 
@@ -98,7 +132,15 @@ export const buildPurchasePayload = (
         quantity: parsedQuantity,
         // Lines without unit (barang Lainnya) take their item's unit on the server.
         ...(unit && { unit }),
+        // Isi per Kemasan; packUnit only for a new item (an item keeps its stock unit).
+        ...(String(packSize || "").trim() && {
+          packSize: parseShoppingQuantity(packSize),
+          ...(draft && packUnit && { packUnit }),
+        }),
         unitPrice: unitPriceFromTotal(parsedQuantity, unitPrice),
+        // The harga total as typed: the server keeps it even when the price per
+        // gr or ml has more than 2 decimals (19.000 ml for Rp 8.000).
+        total: lineTotal({ unitPrice }),
       };
     }),
   };

@@ -13,6 +13,7 @@ vi.mock("../../src/https/index", async (importOriginal) => ({
   getPurchaseNotas: vi.fn(),
   getPurchases: vi.fn(),
   getSemiItems: vi.fn(),
+  getShoppingSummary: vi.fn(),
   getShoppingSuppliers: vi.fn(),
   getStockItems: vi.fn(),
   getSupplyItems: vi.fn(),
@@ -52,6 +53,7 @@ describe("dashboard menus: Stok holds what is on hand, Belanja the purchases", (
     api.getPurchaseNotas.mockResolvedValue({ data: { data: { notas: [], total: 0, page: 1 } } });
     api.getSupplyPurchaseNotas.mockResolvedValue({ data: { data: { notas: [], total: 0, page: 1 } } });
     api.getShoppingSuppliers.mockResolvedValue({ data: { data: [] } });
+    api.getShoppingSummary.mockResolvedValue({ data: { data: null } });
     api.getPaymentSources.mockResolvedValue({ data: { data: [] } });
     api.getPurchaseDrafts.mockResolvedValue({ data: { data: [draft(5, "raw")] } });
     api.getSupplyPurchaseDrafts.mockResolvedValue({ data: { data: [draft(6, "supply")] } });
@@ -88,14 +90,16 @@ describe("dashboard menus: Stok holds what is on hand, Belanja the purchases", (
     expect(await screen.findByRole("button", { name: "Stok 2" })).toBeInTheDocument();
   });
 
-  it("keeps only bahan baku, bahan setengah jadi and lainnya under Stok", async () => {
+  it("keeps only bahan baku and bahan setengah jadi under Stok", async () => {
     renderWithProviders(<Dashboard />, { preloadedState: user("Admin") });
     fireEvent.click(screen.getByRole("button", { name: /^Stok/ }));
 
     const page = screen.getByRole("heading", { name: "Stok Management" }).closest("div.container");
-    for (const tab of ["Bahan Baku", "Bahan Setengah Jadi", "Lainnya"]) {
+    for (const tab of ["Bahan Baku", "Bahan Setengah Jadi"]) {
       expect(within(page).getByRole("button", { name: tab })).toBeInTheDocument();
     }
+    // Barang Lainnya are seen in the Belanja menu.
+    expect(within(page).queryByRole("button", { name: "Lainnya" })).not.toBeInTheDocument();
     expect(within(page).queryByRole("button", { name: "Bahan Belanjaan" })).not.toBeInTheDocument();
     expect(within(page).queryByRole("button", { name: "Tambah Belanja" })).not.toBeInTheDocument();
   });

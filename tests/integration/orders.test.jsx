@@ -30,7 +30,8 @@ const makeOrder = (id, name, orderDate, totalWithTax, extra = {}) => ({
 const orders = [
   makeOrder(1, "Pelanggan Lama", "2026-01-05 09:00:00", 40000),
   makeOrder(2, "Pagi Ini", `${today} 08:00:00`, 25000),
-  makeOrder(3, "Siang Ini", `${today} 12:30:00`, 30000),
+  // A bahan olahan waits for the Daily Prep (Modul 2).
+  makeOrder(3, "Siang Ini", `${today} 12:30:00`, 30000, { hppStatus: "pending" }),
   makeOrder(4, "Catering DP", `${today} 10:00:00`, 500000, {
     cateringDetails: { paymentPlan: "DP", isPaid: false, dp: 200000 },
   }),
@@ -54,6 +55,9 @@ describe("orders page", () => {
     expect(revenueCard).toHaveTextContent(/Rp\s255\.000$/);
     const countCard = screen.getByText(/^Total Orderan/).closest("div").parentElement;
     expect(countCard).toHaveTextContent(/3$/);
+    // Only the nota whose HPP is still pending is flagged.
+    expect(screen.getAllByText("HPP Pending")).toHaveLength(1);
+    expect(screen.getByText("Siang Ini").parentElement).toHaveTextContent("HPP Pending");
   });
 
   it("shows every order grouped by day after reset", async () => {

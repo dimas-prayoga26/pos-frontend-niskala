@@ -47,12 +47,14 @@ const useRealtimeData = () => {
     const refreshStockData = () => {
       queryClient.invalidateQueries({ queryKey: ["stock-items"] });
       queryClient.invalidateQueries({ queryKey: ["supply-items"] });
+      queryClient.invalidateQueries({ queryKey: ["purchase-summary"] });
     };
     // Purchases also move the saldo of their payment source.
     const refreshShoppingData = () => {
       queryClient.invalidateQueries({ queryKey: ["purchases"] });
       queryClient.invalidateQueries({ queryKey: ["supply-purchases"] });
       queryClient.invalidateQueries({ queryKey: ["purchase-drafts"] });
+      queryClient.invalidateQueries({ queryKey: ["purchase-summary"] });
       queryClient.invalidateQueries({ queryKey: ["shopping-suppliers"] });
       queryClient.invalidateQueries({ queryKey: ["payment-sources"] });
       queryClient.invalidateQueries({ queryKey: ["payment-source-mutations"] });

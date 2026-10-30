@@ -1,4 +1,5 @@
 import * as XLSX from "xlsx-js-style";
+import { formatDayMonthYear } from "../../../shared/lib/dates";
 import { currency, quantityDisplay, signedCurrency } from "./format";
 import { notaFooterLines } from "./shopping";
 
@@ -26,7 +27,7 @@ export const fetchAllNotas = async (kind, params) => {
 export const buildRekapRows = (notas, totalSpending, { showUnits = true } = {}) => {
   const rows = [];
   notas.forEach((nota) => {
-    const head = [String(nota.date).slice(0, 10), `#${nota.id}`, nota.supplierName];
+    const head = [formatDayMonthYear(nota.date), `#${nota.id}`, nota.supplierName];
     nota.items.forEach((item, index) => {
       rows.push({
         kind: "item",
@@ -35,7 +36,9 @@ export const buildRekapRows = (notas, totalSpending, { showUnits = true } = {}) 
           item.itemName,
           index === 0 ? nota.paymentMethod : "",
           item.quantity,
-          ...(showUnits ? [item.unit || ""] : []),
+          ...(showUnits
+            ? [item.packSize ? `${item.unit} (isi ${quantityDisplay(item.packSize, item.packUnit)})` : item.unit || ""]
+            : []),
           item.unitPrice,
           item.total,
         ],

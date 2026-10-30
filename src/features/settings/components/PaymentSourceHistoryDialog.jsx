@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { formatDayMonthYear } from "../../../shared/lib/dates";
 import { getPaymentSourceMutations } from "../api";
 import { formatSaldo, getMutationLabel } from "../utils/paymentSources";
 
@@ -90,7 +91,7 @@ const PaymentSourceHistoryDialog = ({ source, onClose }) => {
               <tbody>
                 {mutations.map((mutation) => (
                   <tr key={mutation.id} className="border-t border-[#444]">
-                    <td className="whitespace-nowrap p-2">{String(mutation.date).slice(0, 10)}</td>
+                    <td className="whitespace-nowrap p-2">{formatDayMonthYear(mutation.date)}</td>
                     <td className="p-2">
                       {mutation.note || "-"}
                       <p className="text-xs text-[#ababab]">{getMutationLabel(mutation)}</p>

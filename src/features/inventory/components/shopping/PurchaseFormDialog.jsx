@@ -1,9 +1,11 @@
-import { FiTrash2 } from "react-icons/fi";
+import { FiTrash2, FiX } from "react-icons/fi";
+import { backendBaseUrl } from "../../../../shared/api/backendUrl";
 import CreatableSelect2 from "../../../../shared/ui/CreatableSelect2";
 import { currency, formatRupiahInput, signedCurrency } from "../../utils/format";
 import { PURCHASE_KIND_LIST, SUPPLY_CATEGORY_OPTIONS } from "../../utils/purchaseKinds";
-import { MAX_RECEIPTS_PER_UPLOAD } from "../../utils/receiptImages";
-import { UNIT_OPTIONS, lineTotal, purchaseUnitForStockUnit } from "../../utils/shopping";
+import { MAX_RECEIPTS_PER_PURCHASE } from "../../utils/receiptImages";
+import { lineTotal, purchaseUnitForStockUnit, unitOptionsFor } from "../../utils/shopping";
+import { isKnownUnit } from "../../utils/units";
 import NotaSummary from "./NotaSummary";
 import ReceiptPicker from "./ReceiptPicker";
 import { buttonClass, inputClass } from "./styles";
@@ -37,9 +39,12 @@ const PurchaseFormDialog = ({ purchaseForm, onClose }) => {
     reset,
     saveDraft,
     receipts,
+    savedReceipts,
+    receiptLimit,
     preparingReceipts,
     addReceipts,
     removeReceipt,
+    removeSavedReceipt,
     createSupplier,
     createItem,
     submit,
@@ -239,8 +244,9 @@ const PurchaseFormDialog = ({ purchaseForm, onClose }) => {
                     {kind.showUnits && (
                       <div>
                         <span className="mb-1 block text-sm">Satuan</span>
+                        {/* Only units that fit the bahan's stock unit: no galon bought in ml. */}
                         <CreatableSelect2
-                          options={UNIT_OPTIONS}
+                          options={unitOptionsFor(selectedItem?.unit, row.unit)}
                           value={row.unit}
                           onSelect={(option) => updateRow(row.key, { unit: option?.id || "" })}
                           placeholder="Pilih satuan"
@@ -271,6 +277,8 @@ const PurchaseFormDialog = ({ purchaseForm, onClose }) => {
                     <p className="mt-2 text-xs text-[#ababab]">
                       Satuan stok: {selectedItem.unit}. Isi gramasi sesuai satuan stok; COGS dihitung otomatis dari
                       harga total.
+                      {!isKnownUnit(selectedItem.unit) &&
+                        ` Mau diisi gramasi (ml, gr, pcs)? Konversikan satuannya di Stok → Bahan Baku → Konversi Satuan (1 ${selectedItem.unit} = berapa ml/gr/pcs).`}
                     </p>
                   )}
                 </div>
@@ -309,13 +317,47 @@ const PurchaseFormDialog = ({ purchaseForm, onClose }) => {
             <p className="mb-2 text-xs text-[#ababab]">
               Foto nota fisik atau kuitansi untuk audit keuangan.
             </p>
+            {/* A draft's bukti already on the server, then the new ones to upload. */}
+            {savedReceipts.length > 0 && (
+              <ul className="mb-3 flex flex-wrap gap-3" aria-label="Bukti nota tersimpan">
+                {savedReceipts.map((attachment, index) => (
+                  <li key={attachment.id} className="relative">
+                    <a href={`${backendBaseUrl}${attachment.url}`} target="_blank" rel="noreferrer">
+                      <img
+                        src={`${backendBaseUrl}${attachment.url}`}
+                        alt={`Bukti tersimpan ${index + 1}`}
+                        loading="lazy"
+                        className="h-24 w-24 rounded-lg border border-[#a79981]/50 bg-[#181818] object-cover"
+                      />
+                    </a>
+                    <span className="absolute bottom-1 left-1 rounded bg-black/70 px-1.5 text-[10px] font-semibold text-[#d6c7ae]">
+                      Tersimpan
+                    </span>
+                    <button
+                      type="button"
+                      disabled={saving}
+                      onClick={() => removeSavedReceipt(attachment, index)}
+                      aria-label={`Hapus bukti tersimpan ${index + 1}`}
+                      className="absolute -right-2 -top-2 flex h-7 w-7 items-center justify-center rounded-full bg-red-500 text-white shadow disabled:opacity-50"
+                    >
+                      <FiX size={14} aria-hidden="true" />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
             <ReceiptPicker
               receipts={receipts}
               onAdd={addReceipts}
               onRemove={removeReceipt}
-              max={MAX_RECEIPTS_PER_UPLOAD}
+              max={receiptLimit}
               disabled={saving}
               busy={preparingReceipts}
+              hint={
+                savedReceipts.length > 0
+                  ? `${savedReceipts.length} tersimpan + ${receipts.length} baru, maksimal ${MAX_RECEIPTS_PER_PURCHASE} foto per belanja. JPG, PNG, atau WEBP.`
+                  : undefined
+              }
             />
           </div>
         </fieldset>

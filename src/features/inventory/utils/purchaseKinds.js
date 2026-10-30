@@ -35,8 +35,6 @@ export const PURCHASE_KINDS = {
     hint: "Masuk Stok → Bahan Baku, dipakai resep menu dan HPP.",
     // Bahan baku are bought in gr, ml, pcs, ... and converted to their stock unit.
     showUnits: true,
-    // The per-item view of the Belanja history.
-    itemViewLabel: "Per Bahan",
     // The moving average cost per stock unit: it is the COGS (HPP) of menus.
     costLabel: "COGS",
     itemIdKey: "stockItemId",
@@ -56,10 +54,9 @@ export const PURCHASE_KINDS = {
   supply: {
     key: "supply",
     label: "Lainnya",
-    hint: "Peralatan, perlengkapan, promosi, dan lain-lain. Masuk Stok → Lainnya, tidak masuk HPP.",
+    hint: "Peralatan, perlengkapan, promosi, dan lain-lain. Tidak masuk HPP; qty dan nilainya terlihat di riwayat Belanja Lainnya.",
     // Counted per piece: no unit is asked or shown.
     showUnits: false,
-    itemViewLabel: "Per Barang",
     // Never in HPP: the moving average is only the average purchase price
     // (it values the stock), not a COGS.
     costLabel: "Harga Rata-rata",
@@ -85,11 +82,11 @@ export const HISTORY_TABS = [
   { key: "raw", kindKey: "raw", label: PURCHASE_KINDS.raw.label, category: "" },
   ...SUPPLY_CATEGORIES.map((category) => ({ key: `supply:${category}`, kindKey: "supply", label: category, category })),
 ];
-// Views of the Belanja history: Per Struk (each nota with its barang, the
-// default) or per item (Per Bahan for bahan baku, Per Barang for Lainnya).
-export const historyViewsOf = (kind) => [
+// Views of the Belanja history, for every tab: Per Struk (each nota with its
+// barang, the default) or Per Item (one row per bahan or barang).
+export const HISTORY_VIEWS = [
   { key: "nota", label: "Per Struk" },
-  { key: "item", label: kind.itemViewLabel },
+  { key: "item", label: "Per Item" },
 ];
 export const historyTabOf = (kindKey, category = "") =>
   HISTORY_TABS.find((tab) => tab.kindKey === kindKey && (kindKey !== "supply" || tab.category === category)) ||

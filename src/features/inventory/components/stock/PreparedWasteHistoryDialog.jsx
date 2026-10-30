@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { formatDateAndTime } from "../../../../shared/lib/dates";
 import { getSemiWastes } from "../../api";
-import { currency, quantityDisplay } from "../../utils/format";
+import { quantityDisplay, signedCurrency } from "../../utils/format";
 
 const REASON_CLASS_NAMES = {
   "Sisa akhir hari": "bg-[#3b3b3b] text-[#d6c7ae]",
@@ -72,7 +72,9 @@ const PreparedWasteHistoryDialog = ({ isAdmin, onUndo, isUndoing, onClose }) => 
             {dailyTotals.slice(0, 7).map((day) => (
               <div key={day.date} className="flex justify-between gap-3 py-1">
                 <span className="text-[#ababab]">{formatDay(day.date)}</span>
-                <span className="font-semibold text-red-400">{currency(day.cost)}</span>
+                <span className={`font-semibold ${day.cost < 0 ? "text-green-400" : "text-red-400"}`}>
+                  {signedCurrency(day.cost)}
+                </span>
               </div>
             ))}
           </div>
@@ -84,7 +86,11 @@ const PreparedWasteHistoryDialog = ({ isAdmin, onUndo, isUndoing, onClose }) => 
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <div>
                   <p className="font-semibold">
-                    {waste.itemName} · {quantityDisplay(waste.quantity, waste.unit)}
+                    {waste.itemName} ·{" "}
+                    {/* A recount above the stock: a selisih lebih, not a loss. */}
+                    {waste.quantity < 0
+                      ? `lebih ${quantityDisplay(-waste.quantity, waste.unit)}`
+                      : quantityDisplay(waste.quantity, waste.unit)}
                   </p>
                   <p className="mt-1 text-xs text-[#ababab]">
                     {formatDay(waste.wasteDate)} · dicatat {formatDateAndTime(waste.createdAt)}
@@ -92,7 +98,9 @@ const PreparedWasteHistoryDialog = ({ isAdmin, onUndo, isUndoing, onClose }) => 
                   </p>
                 </div>
                 <div className="text-right">
-                  <p className="font-semibold text-red-400">{currency(waste.cost)}</p>
+                  <p className={`font-semibold ${waste.cost < 0 ? "text-green-400" : "text-red-400"}`}>
+                    {signedCurrency(waste.cost)}
+                  </p>
                   <span
                     className={`mt-1 inline-block rounded-md px-2 py-0.5 text-xs font-semibold ${
                       REASON_CLASS_NAMES[waste.reason] || "bg-[#4a2e2e] text-red-300"

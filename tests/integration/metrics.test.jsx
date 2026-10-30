@@ -27,7 +27,8 @@ const makeOrder = (id, totalWithTax, extra = {}) => ({
 
 const orders = [
   makeOrder(1, 100000, { paymentMethod: "QRIS" }),
-  makeOrder(2, 50000),
+  // A bahan olahan waits for the day to close (Modul 2).
+  makeOrder(2, 50000, { hppStatus: "pending" }),
   makeOrder(3, 90000, {
     orderType: "Online",
     orderPlatform: "ShopeeFood",
@@ -69,5 +70,7 @@ describe("dashboard metrics", () => {
     expect(
       screen.getByText("Penjualan Bersih").closest(".min-w-0")
     ).toHaveTextContent(/Rp\s438\.600$/);
+    // Its HPP is counted, marked as provisional until the day closes.
+    expect(screen.getByText("Sementara: 1 nota HPP Pending")).toBeInTheDocument();
   });
 });

@@ -8,6 +8,7 @@ import {
   getUsageCost,
 } from "../../utils/preparedItems";
 import { parseCostInput } from "../../utils/stockItems";
+import { getJakartaDateKey } from "../../../../shared/lib/dates";
 
 const inputClass =
   "w-full rounded-lg border border-[#555] bg-[#1f1f1f] px-3 py-2 text-[#f5f5f5] outline-none focus:border-[#d6c7ae]";
@@ -16,10 +17,15 @@ const modeButtonClass = (active) =>
     active ? "bg-[#a79981] text-[#101010]" : "text-[#ababab] hover:bg-[#2f2f2f]"
   }`;
 
-// "Catat Masak": how many recipes were cooked and what came out, weighed
-// (result / portion size) or counted. Shows the raw items it will use.
+// "Catat Masak", the kitchen's Daily Prep: how many recipes were cooked and
+// what came out, weighed (result / portion size) or counted, on which business
+// day (today, or yesterday for a shift recorded after midnight). Shows the raw
+// items it will use. Its cost per portion goes to that day's notas whose HPP
+// is still pending (Modul 2).
 const PreparedProductionDialog = ({ item, stockItems, onSave, onCancel, isSaving }) => {
+  const today = getJakartaDateKey();
   const [form, setForm] = useState({
+    producedDate: today,
     batchQuantity: "1",
     mode: item.portionSize > 0 ? "weight" : "count",
     outputWeight: "",
@@ -42,7 +48,7 @@ const PreparedProductionDialog = ({ item, stockItems, onSave, onCancel, isSaving
       return;
     }
     if (form.mode === "weight" && !(item.portionSize > 0)) {
-      enqueueSnackbar("Isi takaran 1 porsi lewat Ubah, atau hitung porsi langsung.", {
+      enqueueSnackbar("Isi takaran 1 porsi lewat Ubah, atau pakai Jumlah Porsi.", {
         variant: "error",
       });
       return;
@@ -52,11 +58,17 @@ const PreparedProductionDialog = ({ item, stockItems, onSave, onCancel, isSaving
       return;
     }
 
-    onSave(
-      form.mode === "weight"
+    if (!form.producedDate || form.producedDate > today) {
+      enqueueSnackbar("Tanggal masak tidak boleh setelah hari ini.", { variant: "error" });
+      return;
+    }
+
+    onSave({
+      ...(form.mode === "weight"
         ? { batchQuantity: batch, outputWeight: parseCostInput(form.outputWeight), note: form.note }
-        : { batchQuantity: batch, portionQuantity: portions, note: form.note }
-    );
+        : { batchQuantity: batch, portionQuantity: portions, note: form.note }),
+      producedDate: form.producedDate,
+    });
   };
 
   return (
@@ -72,7 +84,23 @@ const PreparedProductionDialog = ({ item, stockItems, onSave, onCancel, isSaving
           <p className="mt-1 text-sm text-[#ababab]">
             1 resep: {describeComposition(item.components) || "-"}
           </p>
+          <p className="mt-1 text-xs text-[#ababab]">
+            Daily Prep: HPP per porsi hari itu dibagikan ke nota yang HPP-nya masih pending, lalu dikunci saat hari
+            ditutup (otomatis pukul 05.00 keesokan harinya). Shift yang selesai lewat tengah malam masih bisa
+            mencatat untuk tanggal kemarin sampai jam itu.
+          </p>
         </div>
+
+        <label className="mb-3 block">
+          <span className="mb-1 block text-sm font-semibold">Tanggal Masak</span>
+          <input
+            type="date"
+            value={form.producedDate}
+            max={today}
+            onChange={setField("producedDate")}
+            className={inputClass}
+          />
+        </label>
 
         <label className="mb-3 block">
           <span className="mb-1 block text-sm font-semibold">Berapa Resep Dimasak</span>
@@ -92,20 +120,20 @@ const PreparedProductionDialog = ({ item, stockItems, onSave, onCancel, isSaving
             onClick={() => setForm((current) => ({ ...current, mode: "weight" }))}
             className={modeButtonClass(form.mode === "weight")}
           >
-            Timbang Hasil
+            Berat Matang
           </button>
           <button
             type="button"
             onClick={() => setForm((current) => ({ ...current, mode: "count" }))}
             className={modeButtonClass(form.mode === "count")}
           >
-            Hitung Porsi
+            Jumlah Porsi
           </button>
         </div>
 
         {form.mode === "weight" ? (
           <label className="mb-3 block">
-            <span className="mb-1 block text-sm font-semibold">Berat Hasil Masak (gr)</span>
+            <span className="mb-1 block text-sm font-semibold">Berat Matang (gr)</span>
             <input
               type="text"
               inputMode="decimal"
@@ -117,7 +145,7 @@ const PreparedProductionDialog = ({ item, stockItems, onSave, onCancel, isSaving
             <span className="mt-1 block text-xs text-[#ababab]">
               {item.portionSize > 0
                 ? `Takaran 1 porsi ${quantityDisplay(item.portionSize, "gr")}.`
-                : "Takaran 1 porsi belum diisi. Isi lewat Ubah, atau pakai Hitung Porsi."}
+                : "Takaran 1 porsi belum diisi. Isi lewat Ubah, atau pakai Jumlah Porsi."}
             </span>
           </label>
         ) : (

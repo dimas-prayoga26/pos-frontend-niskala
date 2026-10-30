@@ -1,10 +1,23 @@
 import CreatableSelect2 from "../../../../shared/ui/CreatableSelect2";
 import { formatRupiahInput } from "../../utils/format";
-import { UNIT_OPTIONS } from "../../utils/shopping";
+import { unitOptionsFor } from "../../utils/shopping";
 import { buttonClass, inputClass } from "./styles";
 
-// showUnits false (barang Lainnya): no unit; the line keeps its own.
-const PurchaseItemEditDialog = ({ itemName, form, onChange, onSubmit, onClose, isSaving, showUnits = true }) => (
+// showUnits false (barang Lainnya): no unit; the line keeps its own. A bahan
+// baku line bought by the package before (hasPack, e.g. from the rekap import)
+// also shows its Isi per Kemasan, in the stock unit (packUnit); new lines have
+// none, their gramasi is in the stock unit.
+const PurchaseItemEditDialog = ({
+  itemName,
+  form,
+  onChange,
+  onSubmit,
+  onClose,
+  isSaving,
+  showUnits = true,
+  hasPack = false,
+  packUnit = "",
+}) => (
   <div
     className="fixed inset-0 z-[110] flex items-center justify-center bg-black/70 p-3"
     role="dialog"
@@ -26,7 +39,7 @@ const PurchaseItemEditDialog = ({ itemName, form, onChange, onSubmit, onClose, i
           Tutup
         </button>
       </div>
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className={`grid gap-3 ${showUnits ? "sm:grid-cols-2" : "sm:grid-cols-3"}`}>
         <label>
           <span className="mb-1 block text-sm">{showUnits ? "Gramasi" : "Qty"}</span>
           <input
@@ -41,7 +54,7 @@ const PurchaseItemEditDialog = ({ itemName, form, onChange, onSubmit, onClose, i
           <div>
             <span className="mb-1 block text-sm">Satuan</span>
             <CreatableSelect2
-              options={UNIT_OPTIONS}
+              options={unitOptionsFor(packUnit, form.unit)}
               value={form.unit}
               onSelect={(option) => onChange({ unit: option?.id || "" })}
               placeholder="Pilih satuan"
@@ -49,6 +62,20 @@ const PurchaseItemEditDialog = ({ itemName, form, onChange, onSubmit, onClose, i
               disabled={isSaving}
             />
           </div>
+        )}
+        {showUnits && hasPack && (
+          <label>
+            <span className="mb-1 block text-sm">Isi per Kemasan{packUnit ? ` (${packUnit})` : ""}</span>
+            <input
+              value={form.packSize ?? ""}
+              onChange={(event) => onChange({ packSize: event.target.value })}
+              type="text"
+              inputMode="decimal"
+              placeholder="kosong jika tanpa kemasan"
+              aria-label="Isi per Kemasan"
+              className={inputClass}
+            />
+          </label>
         )}
         <label>
           <span className="mb-1 block text-sm">Harga Total</span>

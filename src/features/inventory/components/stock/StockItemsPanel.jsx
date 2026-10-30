@@ -1,22 +1,64 @@
 import { useEffect, useMemo, useState } from "react";
 import { costDisplay, currency } from "../../utils/format";
 import {
+  RECIPE_USE_FILTERS,
   STOCK_PAGE_SIZE,
   STOCK_STATUS_CLASS_NAMES,
+  filterByRecipeUse,
   filterStockItems,
+  isRecipeIngredient,
 } from "../../utils/stockItems";
 
 const pagerButtonClass =
   "rounded-lg bg-[#262626] px-3 py-2 font-semibold text-[#f5f5f5] disabled:cursor-not-allowed disabled:opacity-40";
 
+// Ya/Tidak; a switch for admins.
+const RecipeUseCell = ({ item, onToggle, isPending }) => {
+  const isOn = isRecipeIngredient(item);
+  const label = isOn ? "Ya" : "Tidak";
+
+  if (!onToggle) {
+    return <span className={`font-semibold ${isOn ? "text-green-400" : "text-[#ababab]"}`}>{label}</span>;
+  }
+
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={isOn}
+      aria-label={`Bahan Resep ${item.name}`}
+      disabled={isPending}
+      onClick={() => onToggle(item, !isOn)}
+      className={`inline-flex min-w-[72px] items-center justify-center rounded-lg px-2 py-1 text-sm font-semibold transition disabled:cursor-wait disabled:opacity-60 ${
+        isOn ? "bg-[#2e4a40] text-green-400 hover:bg-[#365a4d]" : "bg-[#333] text-[#ababab] hover:bg-[#3d3d3d]"
+      }`}
+    >
+      {label}
+    </button>
+  );
+};
+
 // "Bahan Baku" tab: searchable, paged stock list. The page resets whenever
 // the tab is reopened or the search changes. "Ubah" only shows when
-// onEditCogs is given.
-const StockItemsPanel = ({ stockItems, searchQuery, onSearchChange, isAdmin, onAdd, onEditCogs, onDelete }) => {
+// onEditCogs is given. Admins switch "Bahan Resep" (offered in the recipe
+// editors) per bahan, and convert its unit (Konversi Satuan, onConvertUnit).
+const StockItemsPanel = ({
+  stockItems,
+  searchQuery,
+  onSearchChange,
+  isAdmin,
+  onAdd,
+  onEditCogs,
+  onDelete,
+  onConvertUnit,
+  onToggleRecipeUse,
+  recipeUsePendingId,
+}) => {
   const [currentPage, setCurrentPage] = useState(1);
+  const [recipeUse, setRecipeUse] = useState("all");
   const filteredItems = useMemo(
-    () => filterStockItems(stockItems, searchQuery),
-    [stockItems, searchQuery]
+    () => filterByRecipeUse(filterStockItems(stockItems, searchQuery), recipeUse),
+    [stockItems, searchQuery, recipeUse]
   );
   const totalPages = Math.max(Math.ceil(filteredItems.length / STOCK_PAGE_SIZE), 1);
   const paginatedItems = useMemo(() => {
@@ -26,7 +68,7 @@ const StockItemsPanel = ({ stockItems, searchQuery, onSearchChange, isAdmin, onA
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery]);
+  }, [searchQuery, recipeUse]);
 
   useEffect(() => {
     if (currentPage > totalPages) setCurrentPage(totalPages);
@@ -38,7 +80,8 @@ const StockItemsPanel = ({ stockItems, searchQuery, onSearchChange, isAdmin, onA
         <div>
           <h3 className="text-lg font-bold text-[#f5f5f5]">Bahan Baku</h3>
           <p className="mt-1 text-sm text-[#ababab]">
-            Daftar bahan, kategori, jumlah stok, dan status restock.
+            Daftar bahan, kategori, jumlah stok, dan status restock. Bahan Resep = muncul di pilihan resep
+            menu dan bahan setengah jadi.
           </p>
         </div>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
@@ -61,6 +104,24 @@ const StockItemsPanel = ({ stockItems, searchQuery, onSearchChange, isAdmin, onA
         </div>
       </div>
 
+      <div className="mb-3 flex flex-wrap gap-2" role="group" aria-label="Filter Bahan Resep">
+        {RECIPE_USE_FILTERS.map((filter) => (
+          <button
+            key={filter.key}
+            type="button"
+            onClick={() => setRecipeUse(filter.key)}
+            aria-pressed={recipeUse === filter.key}
+            className={`rounded-full px-3 py-1 text-xs font-bold transition ${
+              recipeUse === filter.key
+                ? "bg-[#a79981] text-[#101010]"
+                : "bg-[#262626] text-[#ababab] hover:bg-[#2f2f2f] hover:text-[#f5f5f5]"
+            }`}
+          >
+            {filter.label}
+          </button>
+        ))}
+      </div>
+
       <div className="overflow-x-auto">
         <table className="w-full text-left text-[#f5f5f5]">
           <thead className="bg-[#333] text-[#ababab]">
@@ -73,6 +134,7 @@ const StockItemsPanel = ({ stockItems, searchQuery, onSearchChange, isAdmin, onA
               <th className="p-3 text-right">COGS Sekarang</th>
               <th className="p-3 text-center">Minimum</th>
               <th className="p-3 text-center">Status</th>
+              <th className="p-3 text-center">Bahan Resep</th>
               {isAdmin && <th className="p-3 text-center">Aksi</th>}
             </tr>
           </thead>
@@ -112,6 +174,13 @@ const StockItemsPanel = ({ stockItems, searchQuery, onSearchChange, isAdmin, onA
                     {item.status}
                   </span>
                 </td>
+                <td className="p-4 text-center">
+                  <RecipeUseCell
+                    item={item}
+                    onToggle={isAdmin ? onToggleRecipeUse : undefined}
+                    isPending={String(recipeUsePendingId) === String(item.id || item._id)}
+                  />
+                </td>
                 {isAdmin && (
                   <td className="p-4">
                     <div className="flex items-center justify-center gap-4 text-sm font-semibold">
@@ -122,6 +191,16 @@ const StockItemsPanel = ({ stockItems, searchQuery, onSearchChange, isAdmin, onA
                           className="text-[#d6c7ae] hover:text-[#f5f5f5]"
                         >
                           Ubah
+                        </button>
+                      )}
+                      {onConvertUnit && (
+                        <button
+                          type="button"
+                          onClick={() => onConvertUnit(item)}
+                          aria-label={`Konversi satuan ${item.name}`}
+                          className="whitespace-nowrap text-[#d6c7ae] hover:text-[#f5f5f5]"
+                        >
+                          Konversi Satuan
                         </button>
                       )}
                       <button
@@ -138,7 +217,7 @@ const StockItemsPanel = ({ stockItems, searchQuery, onSearchChange, isAdmin, onA
             ))}
             {filteredItems.length === 0 && (
               <tr>
-                <td className="p-4 text-center text-[#ababab]" colSpan={isAdmin ? 9 : 8}>
+                <td className="p-4 text-center text-[#ababab]" colSpan={isAdmin ? 10 : 9}>
                   No stock data found
                 </td>
               </tr>
