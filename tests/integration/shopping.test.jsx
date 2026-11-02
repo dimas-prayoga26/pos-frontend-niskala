@@ -186,9 +186,12 @@ describe("shopping history", () => {
     expect(Array.from(footer.cells, (cell) => cell.textContent)).toEqual([
       `TOTAL PENGELUARAN12 item · Bulan Ini (${rangeLabel(thisMonth)})`,
       "Rp 30.227.346",
-      "",
     ]);
-    expect([footer.cells[0].colSpan, footer.cells[2].colSpan]).toEqual([5, 2]);
+    expect(footer.cells[0].colSpan).toBe(7);
+    // Jumlah is the last column.
+    const headers = screen.getAllByRole("columnheader").map((cell) => cell.textContent);
+    expect(headers.at(-1)).toBe("Jumlah");
+    expect(row.cells[7]).toHaveTextContent("Rp 30.000");
     expect(screen.getByText("1 / 2")).toBeInTheDocument();
     expect(api.getPurchases).toHaveBeenLastCalledWith({ search: "", page: 1, ...thisMonth });
 
@@ -200,12 +203,30 @@ describe("shopping history", () => {
     // A row opens the same detail as a line of a struk.
     fireEvent.click(screen.getByText("2 history").closest("tr"));
     expect(within(screen.getByRole("dialog")).getByText("2 history pembelian")).toBeInTheDocument();
+    expect(screen.getByRole("dialog")).toHaveTextContent("COGS Sekarang");
     fireEvent.click(screen.getByRole("button", { name: "Tutup" }));
 
     // Back to Per Struk.
     fireEvent.click(screen.getByRole("button", { name: "Per Struk" }));
     expect(await screen.findByText("Belum ada belanja bahan baku tersimpan.")).toBeInTheDocument();
     expect(api.getPurchaseNotas).toHaveBeenLastCalledWith({ search: "gul", page: 1, ...thisMonth });
+  });
+
+  it("shows no COGS for a bahan baku that is not a Bahan Resep", async () => {
+    renderWithProviders(
+      <ShoppingManagement stockItems={[{ id: 5, name: "Gula", unit: "gr", isRecipeIngredient: false }]} isAdmin />
+    );
+    fireEvent.click(await screen.findByRole("button", { name: "Per Item" }));
+    const row = (await screen.findByText("2 history")).closest("tr");
+    expect(row).not.toHaveTextContent("Rp 15 / gr");
+    expect(row.cells[6]).toHaveTextContent(/^-$/);
+
+    fireEvent.click(row);
+    const dialog = screen.getByRole("dialog");
+    expect(dialog).toHaveTextContent("Stok Sekarang");
+    expect(dialog).toHaveTextContent("Nilai Asset");
+    expect(dialog).toHaveTextContent("2 history pembelian · Bukan Bahan Resep");
+    expect(dialog).not.toHaveTextContent("COGS");
   });
 
   it("shows item detail with history, activity log and admin actions", async () => {
@@ -232,13 +253,20 @@ describe("shopping history", () => {
     fireEvent.click(within(screen.getByRole("dialog")).getAllByRole("button", { name: "Update" })[0]);
 
     const editForm = screen.getByText(/^Edit Belanja/).closest("form");
-    // A line bought without a package has no Isi per Kemasan.
-    expect(within(editForm).queryByLabelText("Isi per Kemasan")).not.toBeInTheDocument();
+    // A line bought without a package has no Isi 1 Kemasan.
+    expect(within(editForm).queryByLabelText("Isi 1 Kemasan")).not.toBeInTheDocument();
     const quantityInput = within(editForm).getByLabelText("Gramasi");
     const totalInput = within(editForm).getByLabelText("Harga Total");
     expect(totalInput).toHaveValue("30.000");
+    const result = within(editForm).getByLabelText("Masuk stok");
+    expect(result).toHaveTextContent("Masuk stok2.000 gr");
+    expect(result).toHaveTextContent("Harga per grRp 15");
+    expect(result).not.toHaveTextContent("Sebelumnya");
     fireEvent.change(quantityInput, { target: { value: "2,5" } });
     fireEvent.change(totalInput, { target: { value: "Rp 40.000" } });
+    expect(result).toHaveTextContent("Masuk stok2,5 gr");
+    expect(result).toHaveTextContent("Sebelumnya 2.000 gr");
+    expect(result).toHaveTextContent("Harga per grRp 16.000");
     fireEvent.click(within(editForm).getByRole("button", { name: "Simpan" }));
 
     await waitFor(() =>
@@ -459,6 +487,10 @@ describe("shopping history", () => {
     // Lines change or go from here.
     fireEvent.click(within(dialog).getByRole("button", { name: "Ubah Kopi" }));
     const editForm = screen.getByText(/^Edit Belanja/).closest("form");
+    // Kopi is stocked in gr; the line keeps the kg it was bought in.
+    const satuan = Array.from(within(editForm).getByLabelText("Satuan").options, (option) => option.value);
+    expect(satuan.filter(Boolean)).toEqual(["gr", "kg", "pcs"]);
+    expect(within(editForm).getByLabelText("Masuk stok")).toHaveTextContent("1 kg = 1.000 gr");
     fireEvent.change(within(editForm).getByLabelText("Harga Total"), { target: { value: "60000" } });
     fireEvent.click(within(editForm).getByRole("button", { name: "Simpan" }));
     await waitFor(() =>
@@ -524,12 +556,51 @@ describe("shopping history", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: "Ubah Aqua 600ml" }));
 
     const editForm = screen.getByText(/^Edit Belanja/).closest("form");
-    expect(editForm).toHaveTextContent("Isi per Kemasan (botol)");
-    expect(within(editForm).getByLabelText("Isi per Kemasan")).toHaveValue("24");
-    fireEvent.change(within(editForm).getByLabelText("Isi per Kemasan"), { target: { value: "12" } });
+    // dus cannot become botol: its isi is asked, and the result shows the sum.
+    expect(within(editForm).getByLabelText("Jumlah")).toHaveValue("2");
+    expect(within(editForm).getByLabelText("Satuan")).toHaveValue("dus");
+    expect(editForm).toHaveTextContent("Isi 1 dus (botol)");
+    expect(within(editForm).getByLabelText("Isi per satuan")).toHaveValue("24");
+    const result = within(editForm).getByLabelText("Masuk stok");
+    expect(result).toHaveTextContent("2 dus × 24 botol = 48 botol");
+    fireEvent.change(within(editForm).getByLabelText("Isi per satuan"), { target: { value: "12" } });
+    expect(result).toHaveTextContent("2 dus × 12 botol = 24 botol");
+    expect(result).toHaveTextContent("Sebelumnya 48 botol");
     fireEvent.click(within(editForm).getByRole("button", { name: "Simpan" }));
     await waitFor(() =>
       expect(api.updatePurchaseItem.mock.calls[0][0]).toEqual({ id: 95, quantity: 2, unit: "dus", packSize: 12, unitPrice: 50000, total: 100000 })
+    );
+  });
+
+  it("edits a minyak line saved as 10 ml isi 1.000 ml into 10 pcs isi 1.000 ml", async () => {
+    const minyakLine = { id: 96, stockItemId: 7, itemName: "Minyak", quantity: 10, unit: "ml", packSize: 1000, packUnit: "ml", unitPrice: 20200, total: 202000, costTotal: 202000, stockQuantity: 10000, stockUnit: "ml" };
+    api.getPurchaseNotas.mockResolvedValue({
+      data: { data: { notas: [postedNota(9, { subtotal: 202000, shippingCost: 0, discountAmount: 0, discountValue: 0, taxPercent: 0, taxAmount: 0, total: 202000, items: [minyakLine] })], total: 1, page: 1 } },
+    });
+    api.updatePurchaseItem.mockResolvedValue({ data: { success: true } });
+    renderShopping();
+
+    const nota = await screen.findByRole("rowgroup", { name: "Nota #9 Pasar Uji" });
+    fireEvent.click(within(nota).getByText("Minyak").closest("tr"));
+    fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Ubah Minyak" }));
+    const editForm = screen.getByText(/^Edit Belanja/).closest("form");
+    // ml needs no isi: the line opens as what it put into stock.
+    expect(within(editForm).getByLabelText("Gramasi")).toHaveValue("10000");
+    expect(within(editForm).queryByLabelText("Isi per satuan")).not.toBeInTheDocument();
+    const satuan = within(editForm).getByLabelText("Satuan");
+    expect(Array.from(satuan.options, (option) => option.value).filter(Boolean)).toEqual(["ml", "pcs"]);
+
+    act(() => {
+      $(satuan).val("pcs").trigger($.Event("select2:select", { params: { data: { id: "pcs", text: "pcs" } } }));
+    });
+    fireEvent.change(within(editForm).getByLabelText("Jumlah"), { target: { value: "10" } });
+    fireEvent.click(within(editForm).getByRole("button", { name: "Simpan" }));
+    expect(await screen.findByText("Isi 1 pcs wajib diisi, mis. 1000.")).toBeInTheDocument();
+    fireEvent.change(within(editForm).getByLabelText("Isi per satuan"), { target: { value: "1000" } });
+    expect(within(editForm).getByLabelText("Masuk stok")).toHaveTextContent("10 pcs × 1.000 ml = 10.000 ml");
+    fireEvent.click(within(editForm).getByRole("button", { name: "Simpan" }));
+    await waitFor(() =>
+      expect(api.updatePurchaseItem.mock.calls[0][0]).toEqual({ id: 96, quantity: 10, unit: "pcs", packSize: 1000, unitPrice: 20200, total: 202000 })
     );
   });
 
@@ -811,6 +882,16 @@ describe("belanja lainnya in the same form", () => {
     expect(screen.getByRole("columnheader", { name: "Harga Rata-rata Setelah" })).toBeInTheDocument();
     expect(screen.queryByRole("columnheader", { name: "COGS Setelah" })).not.toBeInTheDocument();
     expect(screen.getByTestId("total-spending")).toHaveTextContent("Rp 46.000");
+    // Perlengkapan are spent, not kept: no Masuk Stok or harga rata-rata.
+    expect(row.cells[5]).toHaveTextContent(/^-$/);
+    expect(row.cells[6]).toHaveTextContent(/^-$/);
+    fireEvent.click(row);
+    const dialog = screen.getByRole("dialog");
+    expect(dialog).toHaveTextContent("Jumlah Dibeli3");
+    expect(dialog).toHaveTextContent("Total BelanjaRp 66.000");
+    expect(dialog).not.toHaveTextContent("Nilai Asset");
+    expect(dialog).not.toHaveTextContent("Harga Rata-rata");
+    expect(within(dialog).queryByRole("columnheader", { name: "Masuk Stok" })).not.toBeInTheDocument();
   });
 
   it("shows a nota of barang lainnya under each kategori it holds, without units", async () => {
@@ -869,6 +950,8 @@ describe("belanja lainnya in the same form", () => {
     expect(dialog).toHaveTextContent("1 history pembelian · Peralatan");
     // Barang Lainnya never reach HPP: the average purchase price, not a COGS.
     expect(dialog).toHaveTextContent("Harga Rata-rata SekarangRp 15.000");
+    // Peralatan stay an asset.
+    expect(dialog).toHaveTextContent("Nilai Asset");
     expect(within(dialog).getByRole("columnheader", { name: "Harga Rata-rata Setelah" })).toBeInTheDocument();
     expect(dialog).not.toHaveTextContent("COGS");
     expect(within(dialog).getByRole("columnheader", { name: "Harga per Barang" })).toBeInTheDocument();

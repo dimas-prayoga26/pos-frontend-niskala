@@ -14,7 +14,6 @@ import PreparedWasteDialog from "./stock/PreparedWasteDialog";
 import PreparedWasteHistoryDialog from "./stock/PreparedWasteHistoryDialog";
 import StockCogsDialog from "./stock/StockCogsDialog";
 import StockItemDialog from "./stock/StockItemDialog";
-import StockUnitDialog from "./stock/StockUnitDialog";
 import StockItemsPanel from "./stock/StockItemsPanel";
 
 // "Ubah" (COGS awal) on Bahan Baku is hidden for now; set to true to show it again.
@@ -38,8 +37,6 @@ const StockManagement = () => {
   const [pendingDeleteItem, setPendingDeleteItem] = useState(null);
   const [pendingDeleteSemiItem, setPendingDeleteSemiItem] = useState(null);
   const [editingCogsItem, setEditingCogsItem] = useState(null);
-  // The bahan baku whose unit is being converted (Konversi Satuan).
-  const [convertingUnitItem, setConvertingUnitItem] = useState(null);
   // null = closed, {} = new semi item, otherwise the item being edited.
   const [editingSemiItem, setEditingSemiItem] = useState(null);
   const [producingItem, setProducingItem] = useState(null);
@@ -50,7 +47,6 @@ const StockManagement = () => {
     onCreated: () => setIsAddingStock(false),
     onDeleted: () => setPendingDeleteItem(null),
     onCogsSaved: () => setEditingCogsItem(null),
-    onUnitSaved: () => setConvertingUnitItem(null),
   });
   const semiActions = usePreparedItemActions({
     onSaved: () => setEditingSemiItem(null),
@@ -81,7 +77,6 @@ const StockManagement = () => {
       pendingDeleteItem ||
       pendingDeleteSemiItem ||
       editingCogsItem ||
-      convertingUnitItem ||
       editingSemiItem ||
       producingItem ||
       historyItem ||
@@ -150,18 +145,8 @@ const StockManagement = () => {
           onAdd={() => setIsAddingStock(true)}
           onEditCogs={SHOW_COGS_EDIT ? setEditingCogsItem : undefined}
           onDelete={setPendingDeleteItem}
-          onConvertUnit={setConvertingUnitItem}
           onToggleRecipeUse={stockActions.setRecipeUse}
           recipeUsePendingId={stockActions.recipeUsePendingId}
-        />
-      )}
-
-      {isAdmin && convertingUnitItem && (
-        <StockUnitDialog
-          item={convertingUnitItem}
-          onSave={(payload) => stockActions.convertUnit(convertingUnitItem, payload)}
-          onCancel={() => setConvertingUnitItem(null)}
-          isSaving={stockActions.isConvertingUnit}
         />
       )}
 

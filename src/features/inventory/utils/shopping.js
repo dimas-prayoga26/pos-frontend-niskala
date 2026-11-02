@@ -86,6 +86,16 @@ export const unitOptionsFor = (stockUnit, currentUnit = "") => {
   return unitOptionsCache.get(key);
 };
 
+// Edit Belanja also offers pcs for a bahan stocked in ml or gr (10 pcs isi
+// 1.000 ml); a pcs needs its isi then.
+const editUnitOptionsCache = new Map();
+export const editUnitOptionsFor = (stockUnit, currentUnit = "") => {
+  const options = unitOptionsFor(stockUnit, currentUnit);
+  if (options.some((option) => option.id === "pcs")) return options;
+  if (!editUnitOptionsCache.has(options)) editUnitOptionsCache.set(options, [...options, { id: "pcs", text: "pcs" }]);
+  return editUnitOptionsCache.get(options);
+};
+
 // A row's "unitPrice" field holds the line total typed by the user.
 export const lineTotal = (row) => Math.round(Number(row.unitPrice || 0) * 100) / 100;
 

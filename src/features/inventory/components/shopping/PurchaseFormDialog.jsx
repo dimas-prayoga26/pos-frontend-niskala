@@ -5,7 +5,7 @@ import { currency, formatRupiahInput, signedCurrency } from "../../utils/format"
 import { PURCHASE_KIND_LIST, SUPPLY_CATEGORY_OPTIONS } from "../../utils/purchaseKinds";
 import { MAX_RECEIPTS_PER_PURCHASE } from "../../utils/receiptImages";
 import { lineTotal, purchaseUnitForStockUnit, unitOptionsFor } from "../../utils/shopping";
-import { isKnownUnit } from "../../utils/units";
+import { isRecipeIngredient } from "../../utils/stockItems";
 import NotaSummary from "./NotaSummary";
 import ReceiptPicker from "./ReceiptPicker";
 import { buttonClass, inputClass } from "./styles";
@@ -275,10 +275,8 @@ const PurchaseFormDialog = ({ purchaseForm, onClose }) => {
                   </div>
                   {kind.showUnits && selectedItem?.unit && (
                     <p className="mt-2 text-xs text-[#ababab]">
-                      Satuan stok: {selectedItem.unit}. Isi gramasi sesuai satuan stok; COGS dihitung otomatis dari
-                      harga total.
-                      {!isKnownUnit(selectedItem.unit) &&
-                        ` Mau diisi gramasi (ml, gr, pcs)? Konversikan satuannya di Stok → Bahan Baku → Konversi Satuan (1 ${selectedItem.unit} = berapa ml/gr/pcs).`}
+                      Satuan stok: {selectedItem.unit}. Isi gramasi sesuai satuan stok
+                      {isRecipeIngredient(selectedItem) ? "; COGS dihitung otomatis dari harga total." : "."}
                     </p>
                   )}
                 </div>

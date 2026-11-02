@@ -23,6 +23,9 @@ import {
 
 // Kategori of barang "Lainnya" (pos-backend supply.repository SUPPLY_CATEGORIES).
 export const SUPPLY_CATEGORIES = ["Peralatan", "Perlengkapan", "Promosi", "Lain-lain"];
+// The only barang Lainnya kept as an asset (Valuasi Aset); the others (wifi,
+// promosi, ...) are spent, so they show no stok or nilai asset.
+export const ASSET_CATEGORY = "Peralatan";
 export const SUPPLY_CATEGORY_OPTIONS = SUPPLY_CATEGORIES.map((name) => ({ id: name, text: name }));
 
 // Jenis Belanja. Both are made from the same "Tambah Belanja" form

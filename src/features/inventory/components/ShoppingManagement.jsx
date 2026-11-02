@@ -8,7 +8,8 @@ import usePurchaseItemActions from "../hooks/usePurchaseItemActions";
 import usePurchaseItemDetail from "../hooks/usePurchaseItemDetail";
 import { DEFAULT_PERIOD, PERIOD_OPTIONS, periodRange, rangeLabel, rangeParams } from "../utils/periods";
 import { exportRekapToExcel, fetchAllNotas, openPrintWindow, printRekap } from "../utils/purchaseExport";
-import { HISTORY_TABS, HISTORY_VIEWS, PURCHASE_KINDS, historyTabOf } from "../utils/purchaseKinds";
+import { ASSET_CATEGORY, HISTORY_TABS, HISTORY_VIEWS, PURCHASE_KINDS, historyTabOf } from "../utils/purchaseKinds";
+import { isRecipeIngredient } from "../utils/stockItems";
 import PurchaseDraftsPanel from "./shopping/PurchaseDraftsPanel";
 import PurchaseFormDialog from "./shopping/PurchaseFormDialog";
 import PurchaseHistoryDialog from "./shopping/PurchaseHistoryDialog";
@@ -109,6 +110,26 @@ export default function ShoppingManagement({ stockItems, supplyItems = NO_ITEMS,
   // The barang whose detail is open: a line of a struk, or a Per Item row.
   const openGroup = notaLine ? itemDetail.group : selectedGroup;
   const itemActions = usePurchaseItemActions(historyKind);
+  // A bahan baku that is not a Bahan Resep never reaches an HPP: no COGS shown.
+  const noCostItemIds = useMemo(
+    () =>
+      new Set(
+        historyKind.showUnits
+          ? (stockItems || []).filter((item) => !isRecipeIngredient(item)).map((item) => String(item.id || item._id))
+          : []
+      ),
+    [historyKind.showUnits, stockItems]
+  );
+  // Barang Lainnya other than Peralatan are spent, not kept: no stok, nilai
+  // asset or harga rata-rata.
+  const hasStock = useCallback(
+    (group) => historyKind.showUnits || group?.category === ASSET_CATEGORY,
+    [historyKind.showUnits]
+  );
+  const hasCost = useCallback(
+    (group) => hasStock(group) && !noCostItemIds.has(String(group?.stockItemId)),
+    [hasStock, noCostItemIds]
+  );
   const showHistoryOf = (tab, view = historyView) => {
     setHistoryTab(tab);
     setHistoryView(view);
@@ -346,6 +367,8 @@ export default function ShoppingManagement({ stockItems, supplyItems = NO_ITEMS,
           onOpen={setSelectedGroup}
           showUnits={historyKind.showUnits}
           costLabel={historyKind.costLabel}
+          hasStock={hasStock}
+          hasCost={hasCost}
         />
       )}
 
@@ -397,6 +420,8 @@ export default function ShoppingManagement({ stockItems, supplyItems = NO_ITEMS,
           onOpenReceipts={setReceiptPurchaseId}
           showUnits={historyKind.showUnits}
           costLabel={historyKind.costLabel}
+          showStock={hasStock(openGroup)}
+          showCost={hasCost(openGroup)}
         />
       )}
 
@@ -429,8 +454,8 @@ export default function ShoppingManagement({ stockItems, supplyItems = NO_ITEMS,
           onClose={() => setEditingItem(null)}
           isSaving={itemActions.isSaving}
           showUnits={historyKind.showUnits}
-          hasPack={editingItem.packSize != null}
-          packUnit={editingItem.stockUnit || ""}
+          stockUnit={editingItem.stockUnit || ""}
+          previousStockQuantity={editingItem.stockQuantity}
         />
       )}
 

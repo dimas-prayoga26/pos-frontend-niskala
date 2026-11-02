@@ -41,7 +41,7 @@ const RecipeUseCell = ({ item, onToggle, isPending }) => {
 // "Bahan Baku" tab: searchable, paged stock list. The page resets whenever
 // the tab is reopened or the search changes. "Ubah" only shows when
 // onEditCogs is given. Admins switch "Bahan Resep" (offered in the recipe
-// editors) per bahan, and convert its unit (Konversi Satuan, onConvertUnit).
+// editors) per bahan.
 const StockItemsPanel = ({
   stockItems,
   searchQuery,
@@ -50,7 +50,6 @@ const StockItemsPanel = ({
   onAdd,
   onEditCogs,
   onDelete,
-  onConvertUnit,
   onToggleRecipeUse,
   recipeUsePendingId,
 }) => {
@@ -160,9 +159,16 @@ const StockItemsPanel = ({
                   </span>
                 </td>
                 <td className="p-4 text-right">
-                  <span className="whitespace-nowrap font-semibold text-[#f6d365]">
-                    {costDisplay(item.averageCost, item.unit)}
-                  </span>
+                  {/* Not a Bahan Resep: never in an HPP, so no COGS. */}
+                  {isRecipeIngredient(item) ? (
+                    <span className="whitespace-nowrap font-semibold text-[#f6d365]">
+                      {costDisplay(item.averageCost, item.unit)}
+                    </span>
+                  ) : (
+                    <span className="text-[#ababab]" title="Bukan Bahan Resep">
+                      -
+                    </span>
+                  )}
                 </td>
                 <td className="p-4 text-center">{item.isUnlimited ? "-" : item.minimumStock}</td>
                 <td className="p-4 text-center">
@@ -191,16 +197,6 @@ const StockItemsPanel = ({
                           className="text-[#d6c7ae] hover:text-[#f5f5f5]"
                         >
                           Ubah
-                        </button>
-                      )}
-                      {onConvertUnit && (
-                        <button
-                          type="button"
-                          onClick={() => onConvertUnit(item)}
-                          aria-label={`Konversi satuan ${item.name}`}
-                          className="whitespace-nowrap text-[#d6c7ae] hover:text-[#f5f5f5]"
-                        >
-                          Konversi Satuan
                         </button>
                       )}
                       <button

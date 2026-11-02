@@ -17,7 +17,10 @@ const StatCard = ({ label, children, valueClassName = "" }) => (
 
 // Purchase history and activity log of one item. costLabel names the moving
 // average: COGS for bahan baku, Harga Rata-rata for barang Lainnya (never in
-// HPP). Escape or a backdrop click closes it.
+// HPP). showStock false (barang Lainnya that are spent, e.g. wifi): what was
+// bought and spent instead of stok and nilai asset. showCost false (also a
+// bahan baku that is not a Bahan Resep): no COGS card or column. Escape or a
+// backdrop click closes it.
 const PurchaseHistoryDialog = ({
   group,
   isAdmin,
@@ -28,11 +31,16 @@ const PurchaseHistoryDialog = ({
   onOpenReceipts,
   showUnits = true,
   costLabel = "COGS",
+  showStock = true,
+  showCost = true,
 }) => {
   const [tab, setTab] = useState("history");
   // Barang Lainnya (showUnits false) are counted per piece.
   const qty = (value, unit) => quantityDisplay(value, showUnits ? unit : "");
   const cost = (value, unit) => (showUnits ? costDisplay(value, unit) : currency(value));
+  const withCost = showStock && showCost;
+  const bought = group.histories.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
+  const spent = group.histories.reduce((sum, item) => sum + Number(item.total || 0), 0);
 
   useEffect(() => {
     const handleKeyDown = (event) => {
@@ -74,6 +82,8 @@ const PurchaseHistoryDialog = ({
             <p className="mt-1 text-sm text-[#ababab]">
               {group.purchaseCount} history pembelian
               {group.category && ` · ${group.category}`}
+              {/* Why a bahan baku shows no COGS. */}
+              {showUnits && showStock && !showCost && " · Bukan Bahan Resep"}
             </p>
           </div>
           <button
@@ -85,14 +95,25 @@ const PurchaseHistoryDialog = ({
             Tutup
           </button>
         </div>
-        <div className="mb-4 grid grid-cols-1 gap-2 text-sm sm:grid-cols-3">
-          <StatCard label="Stok Sekarang">
-            {group.stock == null ? "-" : qty(group.stock, group.stockUnit)}
-          </StatCard>
-          <StatCard label="Nilai Asset">{currency(group.stockValue)}</StatCard>
-          <StatCard label={`${costLabel} Sekarang`} valueClassName="text-[#f6d365]">
-            {cost(group.averageCost, group.stockUnit)}
-          </StatCard>
+        <div className={`mb-4 grid grid-cols-1 gap-2 text-sm ${withCost ? "sm:grid-cols-3" : "sm:grid-cols-2"}`}>
+          {showStock ? (
+            <>
+              <StatCard label="Stok Sekarang">
+                {group.stock == null ? "-" : qty(group.stock, group.stockUnit)}
+              </StatCard>
+              <StatCard label="Nilai Asset">{currency(group.stockValue)}</StatCard>
+            </>
+          ) : (
+            <>
+              <StatCard label="Jumlah Dibeli">{qty(bought, group.stockUnit)}</StatCard>
+              <StatCard label="Total Belanja">{currency(spent)}</StatCard>
+            </>
+          )}
+          {withCost && (
+            <StatCard label={`${costLabel} Sekarang`} valueClassName="text-[#f6d365]">
+              {cost(group.averageCost, group.stockUnit)}
+            </StatCard>
+          )}
         </div>
         <div className="mb-4 flex w-fit rounded-lg bg-[#181818] p-1 text-sm font-semibold">
           <button type="button" onClick={() => setTab("history")} className={tabClass(tab === "history")}>
@@ -113,8 +134,8 @@ const PurchaseHistoryDialog = ({
                   <th className="p-2">{showUnits ? "Gramasi" : "Qty"}</th>
                   <th className="p-2 text-right">{showUnits ? "Harga Satuan" : "Harga per Barang"}</th>
                   <th className="p-2 text-right">Jumlah</th>
-                  <th className="p-2 text-right">Masuk Stok</th>
-                  <th className="p-2 text-right">{costLabel} Setelah</th>
+                  {showStock && <th className="p-2 text-right">Masuk Stok</th>}
+                  {withCost && <th className="p-2 text-right">{costLabel} Setelah</th>}
                   {isAdmin && <th className="p-2 text-right">Aksi</th>}
                 </tr>
               </thead>
@@ -149,13 +170,13 @@ const PurchaseHistoryDialog = ({
                         </p>
                       )}
                     </td>
-                    <td className="p-2 text-right">
-                      {qty(item.stockQuantity, item.stockUnit)}
-                    </td>
-                    <td className="p-2 text-right">
-                      {cost(item.stockAverageCost, item.stockUnit)}
-                      <p className="text-xs text-[#ababab]">Nilai: {currency(item.stockValueAfter)}</p>
-                    </td>
+                    {showStock && <td className="p-2 text-right">{qty(item.stockQuantity, item.stockUnit)}</td>}
+                    {withCost && (
+                      <td className="p-2 text-right">
+                        {cost(item.stockAverageCost, item.stockUnit)}
+                        <p className="text-xs text-[#ababab]">Nilai: {currency(item.stockValueAfter)}</p>
+                      </td>
+                    )}
                     {isAdmin && (
                       <td className="p-2 text-right">
                         <div className="flex justify-end gap-2">

@@ -4,9 +4,11 @@ import { packedQuantityLabel } from "../../utils/shopping";
 
 // The "Per Item" history: one row per item showing its most recent purchase;
 // clicking opens the detail. costLabel names the moving average (COGS, or
-// Harga Rata-rata for Lainnya). TOTAL PENGELUARAN closes the table, under
-// Jumlah: what every purchase of the tab, period and search cost (with its
-// share of ongkir/diskon/PPN), on all pages (itemCount items).
+// Harga Rata-rata for Lainnya). Jumlah is the last column, so TOTAL
+// PENGELUARAN closes the table right under it: what every purchase of the tab, period and search cost (with its
+// share of ongkir/diskon/PPN), on all pages (itemCount items). hasStock false
+// (barang Lainnya that are spent): no Masuk Stok or harga rata-rata; hasCost
+// false (also a bahan baku that is not a Bahan Resep): no COGS on its row.
 const PurchaseHistoryTable = ({
   itemGroups,
   itemCount = itemGroups.length,
@@ -15,6 +17,8 @@ const PurchaseHistoryTable = ({
   onOpen,
   showUnits = true,
   costLabel = "COGS",
+  hasStock = () => true,
+  hasCost = () => true,
 }) => {
   // Barang Lainnya (showUnits false) are counted per piece.
   const qty = (value, unit) => quantityDisplay(value, showUnits ? unit : "");
@@ -30,9 +34,9 @@ const PurchaseHistoryTable = ({
             <th className="p-3">Toko</th>
             <th className="p-3">{showUnits ? "Gramasi" : "Qty"}</th>
             <th className="p-3 text-right">{showUnits ? "Harga Satuan" : "Harga per Barang"}</th>
-            <th className="p-3 text-right">Jumlah</th>
             <th className="p-3 text-right">Masuk Stok</th>
             <th className="p-3 text-right">{costLabel} Setelah</th>
+            <th className="p-3 text-right">Jumlah</th>
           </tr>
         </thead>
         <tbody>
@@ -73,14 +77,20 @@ const PurchaseHistoryTable = ({
                   {showUnits ? packedQuantityLabel(item.quantity, item.unit, item.packSize, item.stockUnit) : qty(item.quantity, item.unit)}
                 </td>
                 <td className="p-3 text-right">{currency(item.unitPrice)}</td>
+                <td className="p-3 text-right">
+                  {hasStock(group) ? qty(item.stockQuantity, item.stockUnit) : <span className="text-[#ababab]">-</span>}
+                </td>
+                <td className="p-3 text-right">
+                  {hasCost(group) ? (
+                    <>
+                      {cost(item.stockAverageCost, item.stockUnit)}
+                      <p className="text-xs text-[#ababab]">Nilai: {currency(item.stockValueAfter)}</p>
+                    </>
+                  ) : (
+                    <span className="text-[#ababab]">-</span>
+                  )}
+                </td>
                 <td className="p-3 text-right">{currency(item.total)}</td>
-                <td className="p-3 text-right">
-                  {qty(item.stockQuantity, item.stockUnit)}
-                </td>
-                <td className="p-3 text-right">
-                  {cost(item.stockAverageCost, item.stockUnit)}
-                  <p className="text-xs text-[#ababab]">Nilai: {currency(item.stockValueAfter)}</p>
-                </td>
               </tr>
             );
           })}
@@ -88,7 +98,7 @@ const PurchaseHistoryTable = ({
         {totalSpending != null && (
           <tfoot className="border-t-2 border-[#a79981]/60 bg-[#202020]">
             <tr>
-              <td colSpan={5} className="p-3">
+              <td colSpan={7} className="p-3">
                 <strong className="text-base tracking-wide">TOTAL PENGELUARAN</strong>
                 <span className="ml-2 text-xs text-[#ababab]">
                   {itemCount} item{periodText && ` · ${periodText}`}
@@ -97,7 +107,6 @@ const PurchaseHistoryTable = ({
               <td className="whitespace-nowrap p-3 text-right text-lg font-bold text-[#f6d365]" data-testid="total-spending">
                 {currency(totalSpending)}
               </td>
-              <td colSpan={2} />
             </tr>
           </tfoot>
         )}
