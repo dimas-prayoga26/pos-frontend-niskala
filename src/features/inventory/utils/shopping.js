@@ -1,5 +1,5 @@
 import { currency, quantityDisplay } from "./format";
-import { areConvertible } from "./units";
+import { areConvertible, measuredBaseUnit } from "./units";
 
 // Purchase (belanja) helpers. The form asks for the TOTAL price of a line; the
 // API expects a unit price, so it is derived as total / quantity.
@@ -87,12 +87,18 @@ export const unitOptionsFor = (stockUnit, currentUnit = "") => {
 };
 
 // Edit Belanja also offers pcs for a bahan stocked in ml or gr (10 pcs isi
-// 1.000 ml); a pcs needs its isi then.
+// 1.000 ml); a pcs needs its isi then. A bahan counted in pcs (or botol, ...)
+// is offered gr and ml too: weighed from then on.
 const editUnitOptionsCache = new Map();
 export const editUnitOptionsFor = (stockUnit, currentUnit = "") => {
   const options = unitOptionsFor(stockUnit, currentUnit);
-  if (options.some((option) => option.id === "pcs")) return options;
-  if (!editUnitOptionsCache.has(options)) editUnitOptionsCache.set(options, [...options, { id: "pcs", text: "pcs" }]);
+  if (!editUnitOptionsCache.has(options)) {
+    const counted = Boolean(stockUnit) && !measuredBaseUnit(stockUnit);
+    const extra = ["pcs", ...(counted ? ["gr", "ml"] : [])].filter(
+      (unit) => !options.some((option) => option.id === unit)
+    );
+    editUnitOptionsCache.set(options, extra.length ? [...options, ...extra.map((unit) => ({ id: unit, text: unit }))] : options);
+  }
   return editUnitOptionsCache.get(options);
 };
 
