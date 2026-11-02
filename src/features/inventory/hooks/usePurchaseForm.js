@@ -5,6 +5,7 @@ import { getJakartaDateKey } from "../../../shared/lib/dates";
 import { signedCurrency } from "../utils/format";
 import { DEFAULT_TAX_PERCENT, computeNotaTotals, parsePercent } from "../utils/notaTotals";
 import { PURCHASE_KINDS } from "../utils/purchaseKinds";
+import { isRecipeIngredient } from "../utils/stockItems";
 import {
   MAX_RECEIPTS_PER_PURCHASE,
   MAX_RECEIPTS_PER_UPLOAD,
@@ -122,7 +123,7 @@ const usePurchaseForm = ({
     () => toOptions(suppliers, extraSuppliers, (item) => ({ id: item.id, text: item.name })),
     [suppliers, extraSuppliers]
   );
-  const itemOptions = useMemo(
+  const allItemOptions = useMemo(
     () =>
       toOptions(kind.key === "supply" ? supplyItems : stockItems, extraItems, (item) => ({
         id: item.id,
@@ -132,6 +133,19 @@ const usePurchaseForm = ({
       })),
     [kind.key, stockItems, supplyItems, extraItems]
   );
+  // Bahan Baku lists only Bahan Resep, plus a bahan already on a line (a
+  // draft). A name typed in still finds any bahan (createItem).
+  const rowItemIds = rows.map((row) => String(row.stockItemId)).join("|");
+  const itemOptions = useMemo(() => {
+    if (kind.key === "supply") return allItemOptions;
+    const onRows = new Set(rowItemIds.split("|"));
+    const hidden = new Set(
+      stockItems
+        .filter((item) => !isRecipeIngredient(item) && !onRows.has(String(item.id)))
+        .map((item) => String(item.id))
+    );
+    return hidden.size ? allItemOptions.filter((option) => !hidden.has(String(option.id))) : allItemOptions;
+  }, [kind.key, allItemOptions, stockItems, rowItemIds]);
 
   // Items differ per Jenis Belanja, so switching starts the item lines over;
   // the nota (tanggal, toko, pembayaran, catatan, bukti) stays.
@@ -245,7 +259,7 @@ const usePurchaseForm = ({
 
   const createSupplier = (name) =>
     findOrDraft(supplierOptions, extraSuppliers, setExtraSuppliers, name);
-  const createItem = (name) => findOrDraft(itemOptions, extraItems, setExtraItems, name, "");
+  const createItem = (name) => findOrDraft(allItemOptions, extraItems, setExtraItems, name, "");
 
   const save = async (status) => {
     if (lock.current || preparingReceipts) return;

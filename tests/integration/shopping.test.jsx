@@ -327,6 +327,15 @@ describe("shopping history", () => {
     expect(form).toHaveTextContent("Satuan stok: galon. Isi gramasi sesuai satuan stok");
   });
 
+  it("lists only Bahan Resep in Tambah Belanja Bahan Baku", async () => {
+    renderWithProviders(
+      <ShoppingManagement stockItems={[...stockItems, { id: 10, name: "Aqua Botol", unit: "pcs", isRecipeIngredient: false }]} isAdmin />
+    );
+    fireEvent.click(await screen.findByRole("button", { name: "Tambah Belanja" }));
+    const item = screen.getByRole("dialog").querySelector('select[aria-label="Cari atau buat barang"]');
+    expect(Array.from(item.options, (option) => option.text).filter(Boolean)).toEqual(["Gula"]);
+  });
+
   it("pays from the first payment source and shows its saldo after the purchase", async () => {
     renderShopping(true);
     fireEvent.click(await screen.findByRole("button", { name: "Tambah Belanja" }));
@@ -1253,6 +1262,17 @@ describe("ringkasan and draft nota", () => {
     fireEvent.click(within(screen.getByRole("region", { name: "Draft nota" })).getByRole("button", { name: "Hapus" }));
     expect(window.confirm).toHaveBeenCalledWith("Hapus draft nota #5 dari Pasar Uji?");
     await waitFor(() => expect(api.deletePurchaseDraft.mock.calls[0][0]).toBe(5));
+  });
+
+  it("keeps a draft's bahan that is not a Bahan Resep on its line", async () => {
+    api.getPurchaseDrafts.mockResolvedValue({ data: { data: [draft] } });
+    renderWithProviders(<ShoppingManagement stockItems={[{ ...stockItems[0], isRecipeIngredient: false }]} isAdmin />);
+    const panel = await screen.findByRole("region", { name: "Draft nota" });
+    fireEvent.click(within(panel).getByRole("button", { name: "Periksa & Posting" }));
+    const form = screen.getByRole("dialog", { name: "Draft Nota #5" });
+    const item = form.querySelector('select[aria-label="Cari atau buat barang"]');
+    expect(item).toHaveValue("5");
+    expect(Array.from(item.options, (option) => option.text).filter(Boolean)).toEqual(["Gula"]);
   });
 
   it("lets a kasir change a draft without posting it", async () => {

@@ -1,27 +1,14 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { enqueueSnackbar } from "notistack";
-import { addStockItem, deleteStockItem, updateStockCogs, updateStockRecipeUse } from "../api";
+import { deleteStockItem, updateStockCogs, updateStockRecipeUse } from "../api";
 
 // Admin actions on stock items. Callers pass onSuccess to close their dialog.
-const useStockItemActions = ({ onCreated = () => {}, onDeleted, onCogsSaved }) => {
+const useStockItemActions = ({ onDeleted, onCogsSaved }) => {
   const queryClient = useQueryClient();
   const refreshStockItems = () => {
     queryClient.invalidateQueries({ queryKey: ["stock-items"] });
   };
 
-  const createMutation = useMutation({
-    mutationFn: addStockItem,
-    onSuccess: () => {
-      refreshStockItems();
-      enqueueSnackbar("Bahan berhasil ditambahkan.", { variant: "success" });
-      onCreated();
-    },
-    onError: (error) => {
-      enqueueSnackbar(error?.response?.data?.message || "Gagal menambahkan bahan.", {
-        variant: "error",
-      });
-    },
-  });
   const deleteMutation = useMutation({
     mutationFn: deleteStockItem,
     onSuccess: () => {
@@ -62,8 +49,6 @@ const useStockItemActions = ({ onCreated = () => {}, onDeleted, onCogsSaved }) =
   });
 
   return {
-    createItem: (payload) => createMutation.mutate(payload),
-    isCreating: createMutation.isPending,
     deleteItem: (item) => deleteMutation.mutate(item.id || item._id),
     isDeleting: deleteMutation.isPending,
     saveCogs: (item, { averageCost, supplier }) =>
