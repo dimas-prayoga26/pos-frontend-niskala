@@ -25,10 +25,23 @@ export const areConvertible = (from, to) => {
 
 export const isSameUnit = (a, b) => unitKey(a) === unitKey(b);
 
+// gr or ml: the unit a weighed or measured bahan is kept in; "" for a counted
+// one (pcs, botol, pack, ...).
+export const measuredBaseUnit = (unit) =>
+  ({ mass: "gr", volume: "ml" })[UNIT_CONVERSIONS[unitKey(unit)]?.[0]] || "";
+
+// A line in gr or ml of a bahan counted in pcs (Cabai from the rekap import):
+// saving it moves the bahan to gr or ml (the server's Konversi Satuan).
+export const switchesStockUnit = (unit, stockUnit) =>
+  Boolean(stockUnit && measuredBaseUnit(unit)) && !measuredBaseUnit(stockUnit);
+
 // A purchase unit the stock unit cannot be converted from (pcs of minyak in
 // ml, dus of Aqua in botol) needs its isi: how much stock one of it holds.
 export const needsIsi = (unit, stockUnit) =>
-  Boolean(unit && stockUnit) && !isSameUnit(unit, stockUnit) && !areConvertible(unit, stockUnit);
+  Boolean(unit && stockUnit) &&
+  !isSameUnit(unit, stockUnit) &&
+  !areConvertible(unit, stockUnit) &&
+  !switchesStockUnit(unit, stockUnit);
 
 // quantity `from` expressed in `to` (20,2 liter = 20.200 ml), as the server
 // converts a purchase line into its stock unit; null when it would refuse.

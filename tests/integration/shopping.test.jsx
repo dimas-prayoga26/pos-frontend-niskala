@@ -604,6 +604,39 @@ describe("shopping history", () => {
     );
   });
 
+  it("weighs a cabai counted in pcs: 1 pcs edited to 250 gr moves its stock to gr", async () => {
+    const cabaiLine = { id: 97, stockItemId: 8, itemName: "Cabai", quantity: 1, unit: "pcs", unitPrice: 10000, total: 10000, costTotal: 10000, stockQuantity: 1, stockUnit: "pcs" };
+    api.getPurchaseNotas.mockResolvedValue({
+      data: { data: { notas: [postedNota(10, { subtotal: 10000, shippingCost: 0, discountAmount: 0, discountValue: 0, taxPercent: 0, taxAmount: 0, total: 10000, items: [cabaiLine] })], total: 1, page: 1 } },
+    });
+    api.updatePurchaseItem.mockResolvedValue({ data: { success: true } });
+    renderShopping();
+
+    const nota = await screen.findByRole("rowgroup", { name: "Nota #10 Pasar Uji" });
+    fireEvent.click(within(nota).getByText("Cabai").closest("tr"));
+    fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Ubah Cabai" }));
+    const editForm = screen.getByText(/^Edit Belanja/).closest("form");
+    const satuan = within(editForm).getByLabelText("Satuan");
+    expect(Array.from(satuan.options, (option) => option.value).filter(Boolean)).toEqual(["pcs", "gr", "ml"]);
+    expect(within(editForm).getByLabelText("Masuk stok")).not.toHaveTextContent("Satuan stok");
+
+    act(() => {
+      $(satuan).val("gr").trigger($.Event("select2:select", { params: { data: { id: "gr", text: "gr" } } }));
+    });
+    fireEvent.change(within(editForm).getByLabelText("Gramasi"), { target: { value: "250" } });
+    // gr asks no isi: the bahan moves to gr, 1 pcs = what this line weighs.
+    expect(within(editForm).queryByLabelText("Isi per satuan")).not.toBeInTheDocument();
+    const result = within(editForm).getByLabelText("Masuk stok");
+    expect(result).toHaveTextContent("Masuk stok250 gr");
+    expect(result).toHaveTextContent("Sebelumnya 1 pcs");
+    expect(result).toHaveTextContent("Satuan stokpcs → gr1 pcs = 250 gr");
+    expect(result).toHaveTextContent("Harga per grRp 40");
+    fireEvent.click(within(editForm).getByRole("button", { name: "Simpan" }));
+    await waitFor(() =>
+      expect(api.updatePurchaseItem.mock.calls[0][0]).toEqual({ id: 97, quantity: 250, unit: "gr", unitPrice: 40, total: 10000 })
+    );
+  });
+
   it("lets kasir open a nota and its barang without admin actions", async () => {
     api.getPurchaseNotas.mockResolvedValue({ data: { data: { notas: [postedNota(8)], total: 1, page: 1 } } });
     renderShopping(false);

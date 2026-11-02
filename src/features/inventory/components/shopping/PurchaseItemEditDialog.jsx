@@ -1,7 +1,7 @@
 import CreatableSelect2 from "../../../../shared/ui/CreatableSelect2";
 import { formatRupiahInput, quantityDisplay } from "../../utils/format";
 import { editUnitOptionsFor, parseShoppingQuantity } from "../../utils/shopping";
-import { convertQuantity, isSameUnit, needsIsi } from "../../utils/units";
+import { convertQuantity, isSameUnit, measuredBaseUnit, needsIsi, switchesStockUnit } from "../../utils/units";
 import { buttonClass, inputClass } from "./styles";
 
 const pricePerUnit = (total, quantity) =>
@@ -11,7 +11,8 @@ const pricePerUnit = (total, quantity) =>
 // false (barang Lainnya): a qty, no unit. A unit the stock unit cannot come
 // from (pcs of a bahan in ml, a dus) asks its isi too: 10 pcs × 1.000 ml.
 // "Masuk stok" shows what the line puts into stock, and what it was, so a
-// wrong gramasi or isi is seen before saving.
+// wrong gramasi or isi is seen before saving. gr or ml for a bahan counted in
+// pcs moves its satuan stok there, 1 pcs = what this line weighs.
 const PurchaseItemEditDialog = ({
   itemName,
   form,
@@ -24,7 +25,8 @@ const PurchaseItemEditDialog = ({
   previousStockQuantity,
 }) => {
   const quantity = parseShoppingQuantity(form.quantity);
-  const resultUnit = stockUnit || form.unit;
+  const switching = showUnits && switchesStockUnit(form.unit, stockUnit);
+  const resultUnit = switching ? measuredBaseUnit(form.unit) : stockUnit || form.unit;
   const withIsi = showUnits && needsIsi(form.unit, stockUnit);
   const isi = withIsi ? parseShoppingQuantity(form.packSize) : NaN;
   const stockQuantity = !(quantity > 0)
@@ -36,7 +38,9 @@ const PurchaseItemEditDialog = ({
       : convertQuantity(quantity, form.unit, resultUnit);
   const total = Number(form.unitPrice || 0);
   const hasChanged =
-    stockQuantity != null && previousStockQuantity != null && Math.abs(stockQuantity - previousStockQuantity) >= 0.005;
+    stockQuantity != null &&
+    previousStockQuantity != null &&
+    (switching || Math.abs(stockQuantity - previousStockQuantity) >= 0.005);
 
   return (
     <div
@@ -128,8 +132,21 @@ const PurchaseItemEditDialog = ({
                 </div>
                 {hasChanged && (
                   <p className="text-right text-xs text-[#ababab]">
-                    Sebelumnya {quantityDisplay(previousStockQuantity, resultUnit)}
+                    Sebelumnya {quantityDisplay(previousStockQuantity, stockUnit || resultUnit)}
                   </p>
+                )}
+                {switching && (
+                  <div className="mt-1 flex justify-between gap-3">
+                    <span className="text-[#ababab]">Satuan stok</span>
+                    <strong className="text-right">
+                      {stockUnit} → {resultUnit}
+                      {previousStockQuantity > 0 && (
+                        <span className="block text-xs font-normal text-[#ababab]">
+                          1 {stockUnit} = {quantityDisplay(stockQuantity / previousStockQuantity, resultUnit)}
+                        </span>
+                      )}
+                    </strong>
+                  </div>
                 )}
                 {total > 0 && stockQuantity > 0 && (
                   <div className="mt-1 flex justify-between gap-3">
