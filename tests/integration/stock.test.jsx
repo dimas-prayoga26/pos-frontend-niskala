@@ -23,7 +23,6 @@ vi.mock("../../src/https/index", async (importOriginal) => ({
   getSupplyItems: vi.fn(),
   recordSemiProduction: vi.fn(),
   recordSemiWaste: vi.fn(),
-  updateSemiStock: vi.fn(),
   updateStockCogs: vi.fn(),
   updateStockRecipeUse: vi.fn(),
   updateStockUnit: vi.fn(),
@@ -321,13 +320,18 @@ describe("stock management", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Bahan Setengah Jadi" }));
     const row = rowOf("Nasi");
-    expect(row).toHaveTextContent("1 resep: Bahan 03 1 pcs · Rp 1.000");
-    expect(row).toHaveTextContent("150 gr");
-    expect(row).toHaveTextContent("16 porsi / resep");
+    expect(row).toHaveTextContent("Tahan lama");
+    expect(row).toHaveTextContent("1x masak: Bahan 03 1 pcs · Harga bahan Rp 1.000");
+    expect(row).toHaveTextContent("1 porsi = 150 gr");
+    expect(row).toHaveTextContent("5x masak → 80 porsi");
+    // Recounting leftover portions (Sesuaikan) is not offered.
+    expect(within(row).queryByRole("button", { name: "Sesuaikan" })).not.toBeInTheDocument();
     // The last cooking's cost per portion; COGS Sekarang is the same (no older portions left).
-    expect(row).toHaveTextContent("Biaya Rp 875 / porsi");
+    expect(row).toHaveTextContent("COGS Rp 875 / porsi");
     expect(row).not.toHaveTextContent("ada sisa masak sebelumnya");
     expect(row).toHaveTextContent("78 porsi");
+    // No minimum stock: a status shows only once the stock is empty.
+    expect(row).not.toHaveTextContent("AMAN");
     expect(row).toHaveTextContent("Rp 68.250");
     expect(row).toHaveTextContent("Rp 875 / porsi");
 
@@ -337,6 +341,15 @@ describe("stock management", () => {
     fireEvent.click(within(screen.getByText("Hapus bahan?").parentElement).getByRole("button", { name: "Hapus" }));
     await waitFor(() => expect(api.deleteSemiItem.mock.calls[0][0]).toBe(20));
     expect(api.deleteStockItem).not.toHaveBeenCalled();
+  });
+
+  it("marks a bahan setengah jadi with no portions left as HARUS MASAK", async () => {
+    api.getSemiItems.mockResolvedValue({ data: { data: [{ ...nasi, stock: 0, stockValue: 0, status: "HARUS MASAK" }] } });
+    renderWithProviders(<StockManagement />, { preloadedState: asAdmin });
+
+    await findRow("Susu Segar");
+    fireEvent.click(screen.getByRole("button", { name: "Bahan Setengah Jadi" }));
+    expect(rowOf("Nasi")).toHaveTextContent("0 porsiHARUS MASAK");
   });
 
   it("adds a bahan setengah jadi from bahan baku only", async () => {
@@ -350,16 +363,32 @@ describe("stock management", () => {
     const ingredient = within(dialog).getByRole("combobox", { name: "Bahan 1" });
     expect(within(ingredient).queryByRole("option", { name: "Nasi" })).not.toBeInTheDocument();
 
-    fireEvent.change(within(dialog).getByPlaceholderText("Contoh: Nasi"), { target: { value: "Sambal" } });
+    fireEvent.change(within(dialog).getByRole("textbox", { name: "Nama" }), { target: { value: "Sambal" } });
     fireEvent.change(within(dialog).getByPlaceholderText("Contoh: 150"), { target: { value: "25" } });
     fireEvent.change(ingredient, { target: { value: "1" } });
-    fireEvent.change(within(dialog).getByRole("textbox", { name: "Takaran bahan 1" }), { target: { value: "500" } });
+    expect(dialog).toHaveTextContent("Stok sekarang: 800 ml");
+
+    // A bahan picked without its jumlah is not dropped silently.
+    fireEvent.click(within(dialog).getByRole("button", { name: "Simpan" }));
+    expect(await screen.findByText("Isi jumlah Susu Segar untuk 1x masak.")).toBeInTheDocument();
+    expect(api.addSemiItem).not.toHaveBeenCalled();
+
+    fireEvent.change(within(dialog).getByRole("textbox", { name: "Jumlah bahan 1" }), { target: { value: "500" } });
+    // A bahan already in the recipe is not offered again; an empty line is ignored.
+    fireEvent.click(within(dialog).getByRole("button", { name: "+ Tambah Bahan Baku" }));
+    const secondIngredient = within(dialog).getByRole("combobox", { name: "Bahan 2" });
+    expect(within(secondIngredient).queryByRole("option", { name: "Susu Segar" })).not.toBeInTheDocument();
+    expect(within(secondIngredient).getByRole("option", { name: "Bahan 03" })).toBeInTheDocument();
+
     // Sambal keeps for days: no daily write-off.
-    const resetDaily = within(dialog).getByRole("checkbox", { name: /Habis setiap hari/ });
-    expect(resetDaily).toBeChecked();
-    fireEvent.click(resetDaily);
+    expect(within(dialog).getByRole("radio", { name: /Dibuang tiap hari/ })).toBeChecked();
+    fireEvent.click(within(dialog).getByRole("radio", { name: /Disimpan untuk besok/ }));
     expect(dialog).toHaveTextContent("ml");
     expect(dialog).toHaveTextContent("Rp 12.805");
+    // Ingredient prices are not labelled "Biaya", which reads as COGS.
+    expect(dialog).toHaveTextContent("Total harga bahan");
+    expect(dialog).not.toHaveTextContent("Biaya");
+    expect(dialog).not.toHaveTextContent("Minimum Stok");
     fireEvent.click(within(dialog).getByRole("button", { name: "Simpan" }));
 
     await waitFor(() =>
@@ -375,7 +404,7 @@ describe("stock management", () => {
     expect(await screen.findByText("Bahan setengah jadi ditambahkan.")).toBeInTheDocument();
   });
 
-  it("lets cashiers record a cooking from the weighed result", async () => {
+  it("lets cashiers record a cooking with the portions counted", async () => {
     api.recordSemiProduction.mockResolvedValue({ data: { success: true } });
     renderWithProviders(<StockManagement />, { preloadedState: asCashier });
 
@@ -387,24 +416,44 @@ describe("stock management", () => {
 
     const dialog = screen.getByRole("form", { name: "Form catat masak" });
     fireEvent.change(within(dialog).getByPlaceholderText("Contoh: 5"), { target: { value: "20" } });
-    expect(dialog).toHaveTextContent("stok kurang, sisa 10 pcs");
+    expect(dialog).toHaveTextContent("Stok sekarang: 10 pcs (stok kurang)");
     expect(within(dialog).getByRole("button", { name: "Simpan" })).toBeDisabled();
 
-    // 5 recipes use 5 pcs (Rp 5.000); 3.000 gr / 150 gr = 20 portions.
+    // Portions are counted, never weighed.
+    expect(within(dialog).queryByRole("button", { name: "Timbang Hasil" })).not.toBeInTheDocument();
+    expect(within(dialog).queryByText(/Berat Matang/)).not.toBeInTheDocument();
+
+    // 5 recipes use 5 pcs (Rp 5.000) for 20 portions.
     fireEvent.change(within(dialog).getByPlaceholderText("Contoh: 5"), { target: { value: "5" } });
-    fireEvent.change(within(dialog).getByPlaceholderText("Contoh: 12000"), { target: { value: "3000" } });
+    fireEvent.change(within(dialog).getByRole("textbox", { name: "Jumlah Porsi Jadi (porsi)" }), { target: { value: "20" } });
     expect(dialog).toHaveTextContent("Bahan 03 5 pcs");
+    expect(dialog).toHaveTextContent("Stok sekarang: 10 pcs");
+    expect(dialog).not.toHaveTextContent("stok kurang");
     expect(dialog).toHaveTextContent("20 porsi");
-    expect(dialog).toHaveTextContent("4 porsi / resep");
+    expect(dialog).toHaveTextContent("4 porsi / 1x masak");
     expect(dialog).toHaveTextContent("Rp 5.000");
     expect(dialog).toHaveTextContent("Rp 250");
+    expect(dialog).toHaveTextContent("COGS per porsi");
+
+    // Saving takes bahan baku out of stock, so it asks once more.
     fireEvent.click(within(dialog).getByRole("button", { name: "Simpan" }));
+    expect(dialog).toHaveTextContent("Stok bahan baku berkurang: Bahan 03 5 pcs. Stok Nasi bertambah 20 porsi.");
+    expect(api.recordSemiProduction).not.toHaveBeenCalled();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Kembali" }));
+    expect(within(dialog).queryByRole("button", { name: "Ya, Simpan" })).not.toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Simpan" }));
+    // Editing a field asks again.
+    fireEvent.change(within(dialog).getByPlaceholderText("Opsional"), { target: { value: "x" } });
+    expect(within(dialog).queryByRole("button", { name: "Ya, Simpan" })).not.toBeInTheDocument();
+    fireEvent.change(within(dialog).getByPlaceholderText("Opsional"), { target: { value: "" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Simpan" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Ya, Simpan" }));
 
     await waitFor(() =>
       expect(api.recordSemiProduction.mock.calls[0][0]).toEqual({
         semiItemId: 20,
         batchQuantity: 5,
-        outputWeight: 3000,
+        portionQuantity: 20,
         note: "",
         // The Daily Prep's business day: today unless picked.
         producedDate: getJakartaDateKey(),
@@ -431,7 +480,7 @@ describe("stock management", () => {
 
     const dialog = await screen.findByRole("dialog", { name: "Riwayat masak Nasi" });
     expect(await within(dialog).findByText("dibagi langsung")).toBeInTheDocument();
-    expect(dialog).toHaveTextContent("5 resep → 80 porsi");
+    expect(dialog).toHaveTextContent("5x masak → 80 porsi");
     expect(dialog).toHaveTextContent("ditimbang 12.000 gr");
     expect(within(dialog).getAllByRole("button", { name: "Batalkan" })).toHaveLength(1);
 
@@ -483,29 +532,8 @@ describe("stock management", () => {
     await findRow("Susu Segar");
     fireEvent.click(screen.getByRole("button", { name: "Bahan Setengah Jadi" }));
     const row = rowOf("Nasi");
-    expect(row).toHaveTextContent("Biaya Rp 3.193 / porsi");
+    expect(row).toHaveTextContent("COGS Rp 3.193 / porsi");
     expect(row).toHaveTextContent("Rp 3.659 / porsiRata-rata stok, ada sisa masak sebelumnya");
-  });
-
-  it("warns that a lower stock count becomes kerugian", async () => {
-    api.updateSemiStock.mockResolvedValue({ data: { success: true } });
-    renderWithProviders(<StockManagement />, { preloadedState: asAdmin });
-
-    await findRow("Susu Segar");
-    fireEvent.click(screen.getByRole("button", { name: "Bahan Setengah Jadi" }));
-    fireEvent.click(within(rowOf("Nasi")).getByRole("button", { name: "Sesuaikan" }));
-
-    const dialog = screen.getByRole("form", { name: "Form sesuaikan stok" });
-    fireEvent.change(within(dialog).getByRole("textbox"), { target: { value: "70" } });
-    expect(dialog).toHaveTextContent("Kurang 8 porsi dicatat sebagai kerugian (Penyesuaian): Rp 7.000");
-    // A higher count is a selisih lebih at the same cost per portion.
-    fireEvent.change(within(dialog).getByRole("textbox"), { target: { value: "100" } });
-    expect(dialog).toHaveTextContent(
-      "Lebih 22 porsi dicatat sebagai selisih lebih (Penyesuaian), mengurangi kerugian; COGS per porsi tetap: +Rp 19.250"
-    );
-    fireEvent.change(within(dialog).getByRole("textbox"), { target: { value: "70" } });
-    fireEvent.click(within(dialog).getByRole("button", { name: "Simpan" }));
-    await waitFor(() => expect(api.updateSemiStock.mock.calls[0][0]).toEqual({ semiItemId: 20, stock: 70 }));
   });
 
   it("lists the kerugian per day and lets admins undo the latest write-off of an item", async () => {

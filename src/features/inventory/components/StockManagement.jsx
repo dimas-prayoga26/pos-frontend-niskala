@@ -10,7 +10,6 @@ import PreparedHistoryDialog from "./stock/PreparedHistoryDialog";
 import PreparedItemDialog from "./stock/PreparedItemDialog";
 import PreparedItemsPanel from "./stock/PreparedItemsPanel";
 import PreparedProductionDialog from "./stock/PreparedProductionDialog";
-import PreparedStockDialog from "./stock/PreparedStockDialog";
 import PreparedWasteDialog from "./stock/PreparedWasteDialog";
 import PreparedWasteHistoryDialog from "./stock/PreparedWasteHistoryDialog";
 import StockCogsDialog from "./stock/StockCogsDialog";
@@ -45,7 +44,6 @@ const StockManagement = () => {
   const [editingSemiItem, setEditingSemiItem] = useState(null);
   const [producingItem, setProducingItem] = useState(null);
   const [historyItem, setHistoryItem] = useState(null);
-  const [adjustingItem, setAdjustingItem] = useState(null);
   const [wastingItem, setWastingItem] = useState(null);
   const [isWasteHistoryOpen, setIsWasteHistoryOpen] = useState(false);
   const stockActions = useStockItemActions({
@@ -58,7 +56,6 @@ const StockManagement = () => {
     onSaved: () => setEditingSemiItem(null),
     onDeleted: () => setPendingDeleteSemiItem(null),
     onProduced: () => setProducingItem(null),
-    onAdjusted: () => setAdjustingItem(null),
     onWasted: () => setWastingItem(null),
   });
 
@@ -88,7 +85,6 @@ const StockManagement = () => {
       editingSemiItem ||
       producingItem ||
       historyItem ||
-      adjustingItem ||
       wastingItem ||
       isWasteHistoryOpen
   );
@@ -140,7 +136,6 @@ const StockManagement = () => {
           onEdit={setEditingSemiItem}
           onProduce={setProducingItem}
           onHistory={setHistoryItem}
-          onAdjust={setAdjustingItem}
           onWaste={setWastingItem}
           onWasteHistory={() => setIsWasteHistoryOpen(true)}
           onDelete={setPendingDeleteSemiItem}
@@ -214,15 +209,6 @@ const StockManagement = () => {
           onUndo={semiActions.undoProduction}
           isUndoing={semiActions.isUndoing}
           onClose={() => setHistoryItem(null)}
-        />
-      )}
-
-      {adjustingItem && (
-        <PreparedStockDialog
-          item={adjustingItem}
-          onSave={(stock) => semiActions.adjustStock(adjustingItem, stock)}
-          onCancel={() => setAdjustingItem(null)}
-          isSaving={semiActions.isAdjusting}
         />
       )}
 

@@ -8,7 +8,6 @@ import {
   recordSemiProduction,
   recordSemiWaste,
   updateSemiItem,
-  updateSemiStock,
 } from "../api";
 
 const showError = (fallback) => (error) => {
@@ -16,9 +15,9 @@ const showError = (fallback) => (error) => {
 };
 
 // Bahan setengah jadi actions: save or delete the item, record a cooking, undo
-// the latest one, adjust leftover portions and throw portions away (kerugian).
+// the latest one and throw portions away (kerugian).
 // Callers pass callbacks to close their dialog.
-const usePreparedItemActions = ({ onSaved, onDeleted, onProduced, onAdjusted, onWasted }) => {
+const usePreparedItemActions = ({ onSaved, onDeleted, onProduced, onWasted }) => {
   const queryClient = useQueryClient();
   // Cooking also moves bahan baku stock, so both lists are refreshed.
   const refresh = () => {
@@ -67,15 +66,6 @@ const usePreparedItemActions = ({ onSaved, onDeleted, onProduced, onAdjusted, on
     },
     onError: showError("Gagal membatalkan catatan masak."),
   });
-  const adjustMutation = useMutation({
-    mutationFn: updateSemiStock,
-    onSuccess: () => {
-      refresh();
-      enqueueSnackbar("Stok bahan setengah jadi disesuaikan.", { variant: "success" });
-      onAdjusted();
-    },
-    onError: showError("Gagal menyesuaikan stok."),
-  });
   const wasteMutation = useMutation({
     mutationFn: recordSemiWaste,
     onSuccess: () => {
@@ -104,9 +94,6 @@ const usePreparedItemActions = ({ onSaved, onDeleted, onProduced, onAdjusted, on
     isProducing: produceMutation.isPending,
     undoProduction: (productionId) => undoMutation.mutate(productionId),
     isUndoing: undoMutation.isPending,
-    adjustStock: (item, stock) =>
-      adjustMutation.mutate({ semiItemId: item.id || item._id, stock }),
-    isAdjusting: adjustMutation.isPending,
     waste: (item, payload) =>
       wasteMutation.mutate({ semiItemId: item.id || item._id, ...payload }),
     isWasting: wasteMutation.isPending,

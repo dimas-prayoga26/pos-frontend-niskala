@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { formatDateAndTime } from "../../../../shared/lib/dates";
 import { getSemiProductions } from "../../api";
 import { currency, quantityDisplay } from "../../utils/format";
+import { batchDisplay } from "../../utils/preparedItems";
 
 // Cooking history of a bahan setengah jadi with the bahan baku each cooking
 // used. Admins can undo the latest cooking while its portions are in stock.
@@ -48,7 +49,7 @@ const PreparedHistoryDialog = ({ item, isAdmin, onUndo, isUndoing, onClose }) =>
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <div>
                   <p className="font-semibold">
-                    {quantityDisplay(production.batchQuantity, "resep")} →{" "}
+                    {batchDisplay(production.batchQuantity)} →{" "}
                     {quantityDisplay(production.portionQuantity, item.unit)}
                   </p>
                   <p className="mt-1 text-xs text-[#ababab]">
