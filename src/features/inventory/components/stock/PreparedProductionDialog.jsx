@@ -12,49 +12,41 @@ import { getJakartaDateKey } from "../../../../shared/lib/dates";
 
 const inputClass =
   "w-full rounded-lg border border-[#555] bg-[#1f1f1f] px-3 py-2 text-[#f5f5f5] outline-none focus:border-[#d6c7ae]";
-const modeButtonClass = (active) =>
-  `flex-1 rounded-md px-3 py-2 text-sm font-bold ${
-    active ? "bg-[#a79981] text-[#101010]" : "text-[#ababab] hover:bg-[#2f2f2f]"
-  }`;
 
-// "Catat Masak", the kitchen's Daily Prep: how many recipes were cooked and
-// what came out, weighed (result / portion size) or counted, on which business
-// day (today, or yesterday for a shift recorded after midnight). Shows the raw
-// items it will use. Its cost per portion goes to that day's notas whose HPP
-// is still pending (Modul 2).
+// "Catat Masak", the kitchen's Daily Prep, in the order it happens: how many
+// recipes were cooked (and the bahan baku they use), then how many portions
+// came out, on which business day (today, or an earlier day not yet closed).
+// Its cost per portion goes to that day's notas whose HPP is still pending
+// (Modul 2). Simpan asks once more, since saving takes the bahan baku out of
+// stock; editing a field cancels that confirmation.
 const PreparedProductionDialog = ({ item, stockItems, onSave, onCancel, isSaving }) => {
   const today = getJakartaDateKey();
   const [form, setForm] = useState({
     producedDate: today,
     batchQuantity: "1",
-    mode: item.portionSize > 0 ? "weight" : "count",
-    outputWeight: "",
     portionQuantity: "",
     note: "",
   });
+  const [isConfirming, setIsConfirming] = useState(false);
   const usage = getProductionUsage(item, form.batchQuantity, stockItems);
   const totalCost = getUsageCost(usage);
-  const portions = getProductionPortions(form, item.portionSize);
+  const portions = getProductionPortions(form.portionQuantity);
   const batch = parseCostInput(form.batchQuantity);
   const shortItems = usage.filter((used) => used.isShort);
-  const setField = (field) => (event) =>
+  const setField = (field) => (event) => {
     setForm((current) => ({ ...current, [field]: event.target.value }));
+    setIsConfirming(false);
+  };
 
   const handleSubmit = (event) => {
     event.preventDefault();
 
     if (!(batch > 0)) {
-      enqueueSnackbar("Jumlah resep yang dimasak harus lebih dari 0.", { variant: "error" });
-      return;
-    }
-    if (form.mode === "weight" && !(item.portionSize > 0)) {
-      enqueueSnackbar("Isi takaran 1 porsi lewat Ubah, atau pakai Jumlah Porsi.", {
-        variant: "error",
-      });
+      enqueueSnackbar("Jumlah masak harus lebih dari 0.", { variant: "error" });
       return;
     }
     if (!(portions > 0)) {
-      enqueueSnackbar("Isi berat hasil masak atau jumlah porsinya.", { variant: "error" });
+      enqueueSnackbar("Isi jumlah porsi jadi.", { variant: "error" });
       return;
     }
 
@@ -62,11 +54,15 @@ const PreparedProductionDialog = ({ item, stockItems, onSave, onCancel, isSaving
       enqueueSnackbar("Tanggal masak tidak boleh setelah hari ini.", { variant: "error" });
       return;
     }
+    if (!isConfirming) {
+      setIsConfirming(true);
+      return;
+    }
 
     onSave({
-      ...(form.mode === "weight"
-        ? { batchQuantity: batch, outputWeight: parseCostInput(form.outputWeight), note: form.note }
-        : { batchQuantity: batch, portionQuantity: portions, note: form.note }),
+      batchQuantity: batch,
+      portionQuantity: portions,
+      note: form.note,
       producedDate: form.producedDate,
     });
   };
@@ -82,102 +78,61 @@ const PreparedProductionDialog = ({ item, stockItems, onSave, onCancel, isSaving
         <div className="mb-4 border-b border-[#333] pb-3">
           <h3 className="text-lg font-bold">Catat Masak {item.name}</h3>
           <p className="mt-1 text-sm text-[#ababab]">
-            1 resep: {describeComposition(item.components) || "-"}
-          </p>
-          <p className="mt-1 text-xs text-[#ababab]">
-            Daily Prep: HPP per porsi hari itu dibagikan ke nota yang HPP-nya masih pending, lalu dikunci saat hari
-            ditutup (otomatis pukul 05.00 keesokan harinya). Shift yang selesai lewat tengah malam masih bisa
-            mencatat untuk tanggal kemarin sampai jam itu.
+            1x masak = {describeComposition(item.components) || "-"}
           </p>
         </div>
 
-        <label className="mb-3 block">
-          <span className="mb-1 block text-sm font-semibold">Tanggal Masak</span>
-          <input
-            type="date"
-            value={form.producedDate}
-            max={today}
-            onChange={setField("producedDate")}
-            className={inputClass}
-          />
-        </label>
-
-        <label className="mb-3 block">
-          <span className="mb-1 block text-sm font-semibold">Berapa Resep Dimasak</span>
-          <input
-            type="text"
-            inputMode="decimal"
-            value={form.batchQuantity}
-            onChange={setField("batchQuantity")}
-            className={inputClass}
-            placeholder="Contoh: 5"
-          />
-        </label>
-
-        <div className="mb-3 flex gap-1 rounded-lg bg-[#1f1f1f] p-1">
-          <button
-            type="button"
-            onClick={() => setForm((current) => ({ ...current, mode: "weight" }))}
-            className={modeButtonClass(form.mode === "weight")}
-          >
-            Berat Matang
-          </button>
-          <button
-            type="button"
-            onClick={() => setForm((current) => ({ ...current, mode: "count" }))}
-            className={modeButtonClass(form.mode === "count")}
-          >
-            Jumlah Porsi
-          </button>
+        <div className="mb-3 grid gap-3 sm:grid-cols-2">
+          <label className="block">
+            <span className="mb-1 block text-sm font-semibold">Tanggal Masak</span>
+            <input
+              type="date"
+              value={form.producedDate}
+              max={today}
+              onChange={setField("producedDate")}
+              className={inputClass}
+            />
+          </label>
+          <label className="block">
+            <span className="mb-1 block text-sm font-semibold">Berapa Kali Masak</span>
+            <input
+              type="text"
+              inputMode="decimal"
+              value={form.batchQuantity}
+              onChange={setField("batchQuantity")}
+              className={inputClass}
+              placeholder="Contoh: 5"
+            />
+          </label>
         </div>
 
-        {form.mode === "weight" ? (
-          <label className="mb-3 block">
-            <span className="mb-1 block text-sm font-semibold">Berat Matang (gr)</span>
-            <input
-              type="text"
-              inputMode="decimal"
-              value={form.outputWeight}
-              onChange={setField("outputWeight")}
-              className={inputClass}
-              placeholder="Contoh: 12000"
-            />
-            <span className="mt-1 block text-xs text-[#ababab]">
-              {item.portionSize > 0
-                ? `Takaran 1 porsi ${quantityDisplay(item.portionSize, "gr")}.`
-                : "Takaran 1 porsi belum diisi. Isi lewat Ubah, atau pakai Jumlah Porsi."}
-            </span>
-          </label>
-        ) : (
-          <label className="mb-3 block">
-            <span className="mb-1 block text-sm font-semibold">Jumlah Porsi Jadi ({item.unit})</span>
-            <input
-              type="text"
-              inputMode="decimal"
-              value={form.portionQuantity}
-              onChange={setField("portionQuantity")}
-              className={inputClass}
-              placeholder="Contoh: 80"
-            />
-          </label>
-        )}
-
-        <div className="mb-3 rounded-lg border border-[#333] bg-[#202020] p-3 text-sm">
-          <span className="mb-2 block font-semibold">Bahan Terpakai</span>
+        <div className="mb-4 rounded-lg border border-[#333] bg-[#202020] p-3 text-sm">
+          <span className="mb-2 block font-semibold">Bahan Baku Terpakai</span>
           {usage.map((used) => (
-            <div key={used.stockItemId} className="flex items-center justify-between gap-3 py-1">
+            <div key={used.stockItemId} className="flex items-start justify-between gap-3 py-1">
               <span>
                 {used.name} {quantityDisplay(used.quantity, used.unit)}
-                {used.isShort && (
-                  <span className="ml-2 text-xs font-semibold text-red-400">
-                    stok kurang, sisa {quantityDisplay(used.available, used.unit)}
-                  </span>
-                )}
+                <span className={`block text-xs ${used.isShort ? "font-semibold text-red-400" : "text-[#ababab]"}`}>
+                  Stok sekarang: {used.isUnlimited ? "Bebas stok" : quantityDisplay(used.available, used.unit)}
+                  {used.isShort && " (stok kurang)"}
+                </span>
               </span>
               <span className="font-semibold">{currency(used.cost)}</span>
             </div>
           ))}
         </div>
+
+        <label className="mb-3 block">
+          <span className="mb-1 block text-sm font-semibold">Jumlah Porsi Jadi ({item.unit})</span>
+          <input
+            type="text"
+            inputMode="decimal"
+            value={form.portionQuantity}
+            onChange={setField("portionQuantity")}
+            className={inputClass}
+            placeholder="Contoh: 80"
+          />
+        </label>
 
         <label className="mb-3 block">
           <span className="mb-1 block text-sm font-semibold">Catatan</span>
@@ -195,38 +150,65 @@ const PreparedProductionDialog = ({ item, stockItems, onSave, onCancel, isSaving
             <strong className="block text-base">{quantityDisplay(portions, item.unit)}</strong>
             {batch > 0 && portions > 0 && (
               <span className="block text-xs text-[#ababab]">
-                {quantityDisplay(portions / batch, item.unit)} / resep
+                {quantityDisplay(portions / batch, item.unit)} / 1x masak
               </span>
             )}
           </div>
           <div>
-            <span className="block text-[#ababab]">Biaya Bahan</span>
+            <span className="block text-[#ababab]">Harga Bahan</span>
             <strong className="block text-base">{currency(totalCost)}</strong>
           </div>
           <div>
-            <span className="block text-[#ababab]">Biaya per {item.unit}</span>
+            <span className="block text-[#ababab]">COGS per {item.unit}</span>
             <strong className="block text-base">
               {portions > 0 ? currency(totalCost / portions) : "-"}
             </strong>
           </div>
         </div>
 
-        <div className="flex justify-end gap-3">
-          <button
-            type="button"
-            onClick={onCancel}
-            className="rounded-lg bg-[#333] px-4 py-2 text-sm font-semibold text-[#f5f5f5]"
-          >
-            Batal
-          </button>
-          <button
-            type="submit"
-            disabled={isSaving || shortItems.length > 0}
-            className="rounded-lg bg-[#a79981] px-4 py-2 text-sm font-bold text-[#101010] disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {isSaving ? "Menyimpan..." : "Simpan"}
-          </button>
-        </div>
+        {isConfirming ? (
+          <div className="rounded-lg border border-[#a79981] bg-[#2a2620] p-3 text-sm">
+            <p className="font-semibold">Simpan catatan masak?</p>
+            <p className="mt-1 text-[#ababab]">
+              Stok bahan baku berkurang:{" "}
+              {usage.map((used) => `${used.name} ${quantityDisplay(used.quantity, used.unit)}`).join(", ")}. Stok{" "}
+              {item.name} bertambah {quantityDisplay(portions, item.unit)}.
+            </p>
+            <div className="mt-3 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setIsConfirming(false)}
+                className="rounded-lg bg-[#333] px-4 py-2 text-sm font-semibold text-[#f5f5f5]"
+              >
+                Kembali
+              </button>
+              <button
+                type="submit"
+                disabled={isSaving || shortItems.length > 0}
+                className="rounded-lg bg-[#a79981] px-4 py-2 text-sm font-bold text-[#101010] disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isSaving ? "Menyimpan..." : "Ya, Simpan"}
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="flex justify-end gap-3">
+            <button
+              type="button"
+              onClick={onCancel}
+              className="rounded-lg bg-[#333] px-4 py-2 text-sm font-semibold text-[#f5f5f5]"
+            >
+              Batal
+            </button>
+            <button
+              type="submit"
+              disabled={isSaving || shortItems.length > 0}
+              className="rounded-lg bg-[#a79981] px-4 py-2 text-sm font-bold text-[#101010] disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Simpan
+            </button>
+          </div>
+        )}
       </form>
     </div>
   );

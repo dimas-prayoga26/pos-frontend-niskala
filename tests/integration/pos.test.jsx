@@ -1,4 +1,4 @@
-import { fireEvent, screen, within } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import * as api from "../../src/https/index";
 import { MenuContainer } from "../../src/features/pos";
@@ -48,7 +48,8 @@ describe("POS menu", () => {
   it("adds items to the cart with their menu price and category tax", async () => {
     const { store } = renderWithProviders(<MenuContainer />, { route: "/menu" });
     await screen.findByText("Kopi Susu");
-    expect(store.getState().customer.selectedCategoryName).toBe("Coffee");
+    // Dispatched by an effect after the menu renders.
+    await waitFor(() => expect(store.getState().customer.selectedCategoryName).toBe("Coffee"));
 
     const kopi = itemCard("Kopi Susu");
     expect(kopi).toHaveTextContent(/Rp\s18\.000/);

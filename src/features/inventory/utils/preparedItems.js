@@ -15,6 +15,11 @@ const positive = (value) => {
 export const getComponentCost = (quantity, stockItem) =>
   Math.round(roundQuantity(positive(quantity)) * Number(stockItem?.averageCost || 0));
 
+// "10x masak": how many recipes (batch_quantity) one cooking made. The UI
+// says "1x masak" for one recipe, so it is not mistaken for a menu recipe.
+export const batchDisplay = (batchQuantity) =>
+  `${Number(batchQuantity || 0).toLocaleString("id-ID", { maximumFractionDigits: 2 })}x masak`;
+
 // "Beras 1 kg, Garam 5 gr" for one recipe.
 export const describeComposition = (components = []) =>
   components
@@ -25,18 +30,11 @@ export const describeComposition = (components = []) =>
     )
     .join(", ");
 
-// Portions from one cooking: weighed result / portion size, or counted.
-export const getProductionPortions = ({ mode, outputWeight, portionQuantity }, portionSize) => {
-  if (mode === "weight") {
-    const weight = positive(outputWeight);
-    return portionSize > 0 && weight > 0 ? roundPortions(weight / portionSize) : 0;
-  }
+// Portions from one cooking, counted by the kitchen.
+export const getProductionPortions = (portionQuantity) => roundPortions(positive(portionQuantity));
 
-  return roundPortions(positive(portionQuantity));
-};
-
-// Raw items used by batchQuantity recipes, with their cost and whether the
-// stock is short.
+// Raw items used by batchQuantity recipes, with their cost, their stock now
+// and whether it is short.
 export const getProductionUsage = (item, batchQuantity, stockItems = []) => {
   const batch = positive(batchQuantity);
   const stockById = new Map(stockItems.map((stock) => [Number(stock.id || stock._id), stock]));
@@ -53,6 +51,7 @@ export const getProductionUsage = (item, batchQuantity, stockItems = []) => {
       unitCost,
       cost: roundCurrency(quantity * unitCost),
       available,
+      isUnlimited: Boolean(stock?.isUnlimited),
       isShort: !stock?.isUnlimited && quantity > available,
     };
   });
@@ -78,7 +77,8 @@ export const toPreparedPayload = (form) => ({
   name: form.name.trim(),
   unit: form.unit.trim() || "porsi",
   portionSize: positive(form.portionSize),
-  minimumStock: positive(form.minimumStock),
+  // No minimum: a semi item is HARUS MASAK only when its stock is empty.
+  minimumStock: 0,
   resetDaily: Boolean(form.resetDaily),
   components: form.components
     .map((component) => ({

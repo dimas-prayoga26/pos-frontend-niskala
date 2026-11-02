@@ -513,7 +513,7 @@ const MetricCardSlider = ({ items, renderItem }) => {
 // pendingHppCount: notas whose HPP is still pending (Modul 2): their bahan
 // olahan already carry the day's cooking cost, locked when the day closes.
 const PENDING_HPP_NOTE =
-  " Nota berlabel HPP Pending sudah memakai biaya masak (Daily Prep) hari itu, tapi angkanya masih bisa berubah sampai hari ditutup (otomatis pukul 05.00 keesokan harinya).";
+  " Nota berlabel HPP Pending sudah memakai biaya masak (Daily Prep) hari itu, tapi angkanya masih bisa berubah sampai hari ditutup (otomatis pukul 00.00).";
 
 const ProfitFlow = ({ revenue, cost, grossProfit, netProfit, isLoading, pendingHppCount = 0 }) => {
   const steps = [

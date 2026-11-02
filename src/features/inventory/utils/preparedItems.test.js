@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  batchDisplay,
   describeComposition,
   getComponentCost,
   getProductionPortions,
@@ -29,15 +30,15 @@ describe("prepared item utils", () => {
     expect(getComponentCost("", beras)).toBe(0);
     expect(getComponentCost("2", undefined)).toBe(0);
     expect(describeComposition(sambal.components)).toBe("Cabai 500 gr, Garam 20 gr");
+    expect(batchDisplay(10)).toBe("10x masak");
+    expect(batchDisplay(2.5)).toBe("2,5x masak");
   });
 
-  it("finds portions from the weighed result or a direct count", () => {
-    expect(getProductionPortions({ mode: "weight", outputWeight: "12000" }, 150)).toBe(80);
-    expect(getProductionPortions({ mode: "weight", outputWeight: "750" }, 25)).toBe(30);
-    expect(getProductionPortions({ mode: "weight", outputWeight: "100" }, 150)).toBe(0.67);
-    expect(getProductionPortions({ mode: "weight", outputWeight: "750" }, 0)).toBe(0);
-    expect(getProductionPortions({ mode: "count", portionQuantity: "15" }, 150)).toBe(15);
-    expect(getProductionPortions({ mode: "count", portionQuantity: "-1" }, 150)).toBe(0);
+  it("takes the portions counted after cooking", () => {
+    expect(getProductionPortions("15")).toBe(15);
+    expect(getProductionPortions("12,5")).toBe(12.5);
+    expect(getProductionPortions("-1")).toBe(0);
+    expect(getProductionPortions("")).toBe(0);
   });
 
   it("lists the raw items a cooking uses and flags short stock", () => {
@@ -60,7 +61,6 @@ describe("prepared item utils", () => {
         name: " Nasi ",
         unit: "",
         portionSize: "150",
-        minimumStock: "",
         resetDaily: true,
         components: [
           { stockItemId: "1", quantity: "1" },
