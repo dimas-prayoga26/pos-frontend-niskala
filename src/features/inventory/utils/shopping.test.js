@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { costDisplay, currency, formatRupiahInput, quantityDisplay } from "./format";
 import { buildPurchasePayload, getLogDetail, isPurchaseFormComplete, lineTotal, parseShoppingQuantity, purchaseUnitForStockUnit, unitPriceFromTotal } from "./shopping";
+import { convertQuantity } from "./units";
 
 describe("shopping utils", () => {
   it("parses decimal, comma and fraction quantities", () => {
@@ -9,6 +10,13 @@ describe("shopping utils", () => {
     expect(parseShoppingQuantity(" 1 / 4 ")).toBe(0.25);
     expect(parseShoppingQuantity("1/0")).toBeNaN();
     expect(parseShoppingQuantity("")).toBeNaN();
+  });
+
+  it("converts a line into its stock unit like the server, or gives null", () => {
+    expect(convertQuantity(20.2, "liter", "ml")).toBe(20200);
+    expect(convertQuantity(500, "gr", "kg")).toBe(0.5);
+    expect(convertQuantity(3, "Pouch", "pouch")).toBe(3);
+    expect(convertQuantity(10, "pouch", "ml")).toBeNull();
   });
 
   it("derives the unit price from the typed line total", () => {

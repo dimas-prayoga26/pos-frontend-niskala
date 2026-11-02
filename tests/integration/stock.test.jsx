@@ -25,7 +25,6 @@ vi.mock("../../src/https/index", async (importOriginal) => ({
   recordSemiWaste: vi.fn(),
   updateStockCogs: vi.fn(),
   updateStockRecipeUse: vi.fn(),
-  updateStockUnit: vi.fn(),
 }));
 
 const stockItem = (id, overrides = {}) => ({
@@ -66,8 +65,6 @@ const items = [
   ...Array.from({ length: 10 }, (_, index) => stockItem(index + 3)),
 ];
 // From the rekap import: bought and stocked by the galon.
-const airIsiUlang = stockItem(13, { name: "Air Isi Ulang", unit: "galon", stock: 8, averageCost: 8000, stockValue: 64000, isRecipeIngredient: false });
-
 const asAdmin = { user: { _id: 1, name: "Admin", email: "a", phone: "1", role: "Admin", isAuth: true } };
 const asCashier = { user: { ...asAdmin.user, role: "Cashier" } };
 const rowOf = (name) => screen.getByText(name).closest("tr");
@@ -102,6 +99,9 @@ describe("stock management", () => {
     expect(rowOf("Air Galon")).toHaveTextContent("Bebas Stok");
     // Bebas Stok has no asset value (its Rp 10.000 is not shown).
     expect(rowOf("Air Galon")).not.toHaveTextContent("Rp 10.000");
+    // Not a Bahan Resep: no COGS.
+    expect(milk.cells[5]).toHaveTextContent("Rp 26 / ml");
+    expect(rowOf("Air Galon").cells[5]).toHaveTextContent(/^-$/);
     expect(screen.getByText(/^Showing/)).toHaveTextContent("Showing 1 - 10 of 12");
     expect(screen.getByText("1 / 2")).toBeInTheDocument();
 
@@ -162,48 +162,12 @@ describe("stock management", () => {
     expect(screen.getByRole("dialog", { name: "Tambah Stok" })).toBeInTheDocument();
   });
 
-  it("changes the unit of a bahan: 1 galon = 19000 ml, with what the stock and COGS become", async () => {
-    api.updateStockUnit.mockResolvedValue({
-      data: { success: true, message: "Satuan Air Isi Ulang dikonversi: 1 galon = 19.000 ml. Stok, resep, dan riwayat belanja ikut disesuaikan." },
-    });
-    api.getStockItems.mockResolvedValue({ data: { data: [...items, airIsiUlang] } });
-    renderWithProviders(<StockManagement />, { preloadedState: asAdmin });
-    fireEvent.change(await screen.findByPlaceholderText("Search stock"), { target: { value: "Air Isi" } });
-    fireEvent.click(within(await findRow("Air Isi Ulang")).getByRole("button", { name: "Konversi satuan Air Isi Ulang" }));
-
-    const dialog = screen.getByRole("dialog", { name: "Konversi Satuan Air Isi Ulang" });
-    expect(dialog).toHaveTextContent("Satuan sekarang: galon");
-    fireEvent.change(within(dialog).getByPlaceholderText("ml"), { target: { value: "ml" } });
-    // galon and ml are not converted by themselves: the isi is asked.
-    fireEvent.click(within(dialog).getByRole("button", { name: "Konversi" }));
-    expect(await screen.findByText("Isi konversinya: 1 galon = berapa ml?")).toBeInTheDocument();
-    expect(api.updateStockUnit).not.toHaveBeenCalled();
-
-    fireEvent.change(within(dialog).getByLabelText("Isi per satuan lama"), { target: { value: "19000" } });
-    const result = within(dialog).getByLabelText("Hasil konversi");
-    expect(result).toHaveTextContent("Stok8 galon → 152.000 ml");
-    expect(result).toHaveTextContent("COGSRp 8.000 / galon → Rp 0 / ml");
-    expect(result).toHaveTextContent("Nilai AssetRp 64.000 (tetap)");
-    fireEvent.click(within(dialog).getByRole("button", { name: "Konversi" }));
-    await waitFor(() => expect(api.updateStockUnit.mock.calls[0][0]).toEqual({ stockItemId: 13, unit: "ml", factor: 19000 }));
-    expect(await screen.findByText(/Satuan Air Isi Ulang dikonversi: 1 galon = 19.000 ml/)).toBeInTheDocument();
-    expect(screen.queryByRole("dialog", { name: "Konversi Satuan Air Isi Ulang" })).not.toBeInTheDocument();
-
-    // kg to gr: the isi is known.
-    fireEvent.change(screen.getByPlaceholderText("Search stock"), { target: { value: "Susu" } });
-    fireEvent.click(within(await findRow("Susu Segar")).getByRole("button", { name: "Konversi satuan Susu Segar" }));
-    const susu = screen.getByRole("dialog", { name: "Konversi Satuan Susu Segar" });
-    fireEvent.change(within(susu).getByPlaceholderText("ml"), { target: { value: "liter" } });
-    expect(within(susu).getByLabelText("Isi per satuan lama")).toHaveValue("0.001");
-    expect(within(susu).getByLabelText("Isi per satuan lama")).toBeDisabled();
-    expect(susu).toHaveTextContent("Dihitung otomatis.");
-  });
-
-  it("hides Ubah on Bahan Baku but keeps Hapus", async () => {
+  it("hides Ubah and Konversi Satuan on Bahan Baku but keeps Hapus", async () => {
     renderWithProviders(<StockManagement />, { preloadedState: asAdmin });
 
     const row = await findRow("Susu Segar");
     expect(within(row).queryByRole("button", { name: "Ubah" })).not.toBeInTheDocument();
+    expect(within(row).queryByRole("button", { name: /Konversi/i })).not.toBeInTheDocument();
     expect(within(row).getByRole("button", { name: "Hapus" })).toBeInTheDocument();
   });
 

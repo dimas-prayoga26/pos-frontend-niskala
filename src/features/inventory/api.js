@@ -38,7 +38,6 @@ export {
   updateSemiItem,
   updateStockCogs,
   updateStockRecipeUse,
-  updateStockUnit,
   updateSupplier,
   updateSupplyPurchaseDraft,
   updateSupplyPurchaseItem,
