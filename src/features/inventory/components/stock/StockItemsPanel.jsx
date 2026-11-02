@@ -47,7 +47,6 @@ const StockItemsPanel = ({
   searchQuery,
   onSearchChange,
   isAdmin,
-  onAdd,
   onEditCogs,
   onDelete,
   onToggleRecipeUse,
@@ -83,24 +82,13 @@ const StockItemsPanel = ({
             menu dan bahan setengah jadi.
           </p>
         </div>
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-          {isAdmin && (
-            <button
-              type="button"
-              onClick={onAdd}
-              className="rounded-lg bg-[#a79981] px-4 py-2 text-sm font-bold text-[#101010] hover:bg-[#b7aa94]"
-            >
-              Tambah Stok
-            </button>
-          )}
-          <input
-            value={searchQuery}
-            onChange={(event) => onSearchChange(event.target.value)}
-            type="search"
-            placeholder="Search stock"
-            className="rounded-lg bg-[#262626] px-4 py-2 text-sm text-[#f5f5f5] outline-none placeholder:text-[#777]"
-          />
-        </div>
+        <input
+          value={searchQuery}
+          onChange={(event) => onSearchChange(event.target.value)}
+          type="search"
+          placeholder="Search stock"
+          className="rounded-lg bg-[#262626] px-4 py-2 text-sm text-[#f5f5f5] outline-none placeholder:text-[#777]"
+        />
       </div>
 
       <div className="mb-3 flex flex-wrap gap-2" role="group" aria-label="Filter Bahan Resep">

@@ -13,7 +13,6 @@ import PreparedProductionDialog from "./stock/PreparedProductionDialog";
 import PreparedWasteDialog from "./stock/PreparedWasteDialog";
 import PreparedWasteHistoryDialog from "./stock/PreparedWasteHistoryDialog";
 import StockCogsDialog from "./stock/StockCogsDialog";
-import StockItemDialog from "./stock/StockItemDialog";
 import StockItemsPanel from "./stock/StockItemsPanel";
 
 // "Ubah" (COGS awal) on Bahan Baku is hidden for now; set to true to show it again.
@@ -27,13 +26,13 @@ const STOCK_TABS = [
 // Dashboard "Stok" menu, what is on hand: bahan baku (stock_raw_items) and
 // bahan setengah jadi (stock_semi_items) cooked from bahan baku. Buying them is
 // the separate "Belanja" menu, which also shows the barang Lainnya
-// (stock_supply_items: peralatan, perlengkapan, promosi, lain-lain).
+// (stock_supply_items: peralatan, perlengkapan, promosi, lain-lain). A new
+// bahan baku comes from Tambah Belanja; there is no Tambah Stok.
 const StockManagement = () => {
   const userRole = useSelector((state) => state.user.role);
   const isAdmin = userRole?.toLowerCase() === "admin";
   const [activeStockTab, setActiveStockTab] = useState("stock");
   const [searchQuery, setSearchQuery] = useState("");
-  const [isAddingStock, setIsAddingStock] = useState(false);
   const [pendingDeleteItem, setPendingDeleteItem] = useState(null);
   const [pendingDeleteSemiItem, setPendingDeleteSemiItem] = useState(null);
   const [editingCogsItem, setEditingCogsItem] = useState(null);
@@ -44,7 +43,6 @@ const StockManagement = () => {
   const [wastingItem, setWastingItem] = useState(null);
   const [isWasteHistoryOpen, setIsWasteHistoryOpen] = useState(false);
   const stockActions = useStockItemActions({
-    onCreated: () => setIsAddingStock(false),
     onDeleted: () => setPendingDeleteItem(null),
     onCogsSaved: () => setEditingCogsItem(null),
   });
@@ -73,8 +71,7 @@ const StockManagement = () => {
   const stockItems = stockItemsRes?.data?.data || [];
   const semiItems = semiItemsRes?.data?.data || [];
   const isDialogOpen = Boolean(
-    isAddingStock ||
-      pendingDeleteItem ||
+    pendingDeleteItem ||
       pendingDeleteSemiItem ||
       editingCogsItem ||
       editingSemiItem ||
@@ -142,19 +139,10 @@ const StockManagement = () => {
           searchQuery={searchQuery}
           onSearchChange={setSearchQuery}
           isAdmin={isAdmin}
-          onAdd={() => setIsAddingStock(true)}
           onEditCogs={SHOW_COGS_EDIT ? setEditingCogsItem : undefined}
           onDelete={setPendingDeleteItem}
           onToggleRecipeUse={stockActions.setRecipeUse}
           recipeUsePendingId={stockActions.recipeUsePendingId}
-        />
-      )}
-
-      {isAdmin && isAddingStock && (
-        <StockItemDialog
-          onSave={stockActions.createItem}
-          onCancel={() => setIsAddingStock(false)}
-          isSaving={stockActions.isCreating}
         />
       )}
 
