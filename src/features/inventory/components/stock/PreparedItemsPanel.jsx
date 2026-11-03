@@ -1,13 +1,14 @@
 import { formatDateAndTime } from "../../../../shared/lib/dates";
 import { costDisplay, currency, quantityDisplay } from "../../utils/format";
-import { batchDisplay, describeComposition } from "../../utils/preparedItems";
+import { describeBahan } from "../../utils/preparedItems";
 import { STOCK_STATUS_CLASS_NAMES } from "../../utils/stockItems";
 
 const linkClass = "font-semibold text-[#d6c7ae] hover:text-[#f5f5f5]";
 
 // "Bahan Setengah Jadi" tab: items cooked in-house (Nasi, Sambal, ...). Portions come
 // from "Catat Masak"; selling a menu uses them like any stock item. Each row keeps
-// the daily actions (Catat Masak, Buang) apart from the rarer ones.
+// the daily actions (Catat Masak, Buang) apart from the rarer ones. The Riwayat
+// Kerugian button opens the thrown-away portions (PreparedWastesPanel).
 const PreparedItemsPanel = ({
   preparedItems,
   isAdmin,
@@ -16,8 +17,8 @@ const PreparedItemsPanel = ({
   onProduce,
   onHistory,
   onWaste,
-  onWasteHistory,
   onDelete,
+  onShowWastes,
 }) => (
   <div className="rounded-lg bg-[#1f1f1f] p-4">
     <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -25,11 +26,12 @@ const PreparedItemsPanel = ({
         <h3 className="text-lg font-bold text-[#f5f5f5]">Bahan Setengah Jadi</h3>
         <p className="mt-1 text-sm text-[#ababab]">Bahan yang dimasak sendiri dari bahan baku lalu dipakai di menu.</p>
       </div>
-      <div className="flex shrink-0 flex-wrap gap-2">
+      <div className="flex shrink-0 gap-2">
         <button
           type="button"
-          onClick={onWasteHistory}
-          className="rounded-lg bg-[#333] px-4 py-2 text-sm font-bold text-[#f5f5f5]"
+          onClick={onShowWastes}
+          title="Porsi yang dibuang dan nilai kerugiannya"
+          className="rounded-lg bg-[#333] px-4 py-2 text-sm font-bold text-[#f5f5f5] hover:bg-[#3a3a3a]"
         >
           Riwayat Kerugian
         </button>
@@ -85,7 +87,7 @@ const PreparedItemsPanel = ({
                     </span>
                   </p>
                   <p className="mt-1 text-xs text-[#ababab]">
-                    1x masak: {describeComposition(item.components) || "-"} · Harga bahan {currency(item.recipeCost)}
+                    Bahan: {describeBahan(item.components) || "-"}
                   </p>
                   {item.portionSize > 0 && (
                     <p className="mt-0.5 text-xs text-[#ababab]">
@@ -111,7 +113,6 @@ const PreparedItemsPanel = ({
                   {lastProduction ? (
                     <>
                       <span className="block whitespace-nowrap font-semibold">
-                        {batchDisplay(lastProduction.batchQuantity)} →{" "}
                         {quantityDisplay(lastProduction.portionQuantity, item.unit)}
                       </span>
                       <span className="block text-xs text-[#d6c7ae]">

@@ -1423,7 +1423,7 @@ const MenuManagement = () => {
                             `, jadi ${formatMoneyDisplay(ingredient.quantity)} gr = ${formatMoneyDisplay(
                               roundRecipeQuantity(getRecipeQuantity(ingredient, selectedIngredientStockItem))
                             )} porsi`}
-                          . Stok Nasi dipotong per porsi.
+                          . Stok {selectedIngredientStockItem.name} dipotong per porsi.
                         </p>
                       )}
                     </div>
@@ -1432,7 +1432,7 @@ const MenuManagement = () => {
               </div>
               <p className="mt-2 text-xs text-[#777]">
                 Boleh kosong. Dipakai sebagai catatan resep dan pengurangan stok otomatis. Bahan baku yang
-                muncul hanya yang bertanda Bahan Resep di Stok → Bahan Baku.
+                muncul hanya yang bertanda Bahan Resep di Stok Bahan → Bahan Baku.
               </p>
             </div>
             <div className="mt-4">

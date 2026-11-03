@@ -11,37 +11,30 @@ const positive = (value) => {
   return Number.isFinite(number) && number > 0 ? number : 0;
 };
 
-// Composition line cost at the raw item's current cost (whole rupiah).
-export const getComponentCost = (quantity, stockItem) =>
-  Math.round(roundQuantity(positive(quantity)) * Number(stockItem?.averageCost || 0));
-
-// "10x masak": how many recipes (batch_quantity) one cooking made. The UI
-// says "1x masak" for one recipe, so it is not mistaken for a menu recipe.
-export const batchDisplay = (batchQuantity) =>
-  `${Number(batchQuantity || 0).toLocaleString("id-ID", { maximumFractionDigits: 2 })}x masak`;
-
-// "Beras 1 kg, Garam 5 gr" for one recipe.
-export const describeComposition = (components = []) =>
-  components
-    .map((component) =>
-      `${component.name} ${Number(component.quantity).toLocaleString("id-ID", {
-        maximumFractionDigits: 4,
-      })} ${component.unit || ""}`.trim()
-    )
-    .join(", ");
+// "Beras, Garam": the bahan baku a semi item is cooked from.
+export const describeBahan = (components = []) => components.map((component) => component.name).join(", ");
 
 // Portions from one cooking, counted by the kitchen.
 export const getProductionPortions = (portionQuantity) => roundPortions(positive(portionQuantity));
 
-// Raw items used by batchQuantity recipes, with their cost, their stock now
-// and whether it is short.
-export const getProductionUsage = (item, batchQuantity, stockItems = []) => {
-  const batch = positive(batchQuantity);
+// Catat Masak starts from the latest cooking's quantities (the composition's).
+export const getStartingQuantities = (item) =>
+  Object.fromEntries(
+    (item?.components || []).map((component) => [
+      String(component.stockItemId),
+      Number(component.quantity) > 0 ? String(component.quantity).replace(".", ",") : "",
+    ])
+  );
+
+// Raw items a cooking uses: each bahan of the composition with the quantity
+// typed for it (quantities by stockItemId), its cost, its stock now and
+// whether it is short.
+export const getProductionUsage = (item, quantities = {}, stockItems = []) => {
   const stockById = new Map(stockItems.map((stock) => [Number(stock.id || stock._id), stock]));
 
   return (item?.components || []).map((component) => {
     const stock = stockById.get(Number(component.stockItemId));
-    const quantity = roundQuantity(batch * Number(component.quantity || 0));
+    const quantity = roundQuantity(positive(quantities[String(component.stockItemId)]));
     const unitCost = Number(stock?.averageCost ?? component.unitCost ?? 0);
     const available = Number(stock?.stock ?? 0);
 
@@ -72,18 +65,15 @@ export const getWasteCost = (item, quantity) => {
     : roundCurrency(portions * Number(item?.averageCost || 0));
 };
 
-// Request body for saving a prepared item from the dialog form.
+// Request body for saving a prepared item from the dialog form: its bahan
+// baku only. Their quantities and the portion size come from Catat Masak;
+// the unit stays porsi.
 export const toPreparedPayload = (form) => ({
   name: form.name.trim(),
-  unit: form.unit.trim() || "porsi",
-  portionSize: positive(form.portionSize),
   // No minimum: a semi item is HARUS MASAK only when its stock is empty.
   minimumStock: 0,
   resetDaily: Boolean(form.resetDaily),
-  components: form.components
-    .map((component) => ({
-      stockItemId: Number(component.stockItemId) || 0,
-      quantity: roundQuantity(positive(component.quantity)),
-    }))
-    .filter((component) => component.stockItemId > 0 && component.quantity > 0),
+  components: [...new Set(form.components.map((component) => Number(component.stockItemId) || 0))]
+    .filter((stockItemId) => stockItemId > 0)
+    .map((stockItemId) => ({ stockItemId })),
 });

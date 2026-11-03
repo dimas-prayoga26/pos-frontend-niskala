@@ -11,7 +11,7 @@ import PreparedItemDialog from "./stock/PreparedItemDialog";
 import PreparedItemsPanel from "./stock/PreparedItemsPanel";
 import PreparedProductionDialog from "./stock/PreparedProductionDialog";
 import PreparedWasteDialog from "./stock/PreparedWasteDialog";
-import PreparedWasteHistoryDialog from "./stock/PreparedWasteHistoryDialog";
+import PreparedWastesPanel from "./stock/PreparedWastesPanel";
 import StockCogsDialog from "./stock/StockCogsDialog";
 import StockItemsPanel from "./stock/StockItemsPanel";
 
@@ -27,11 +27,14 @@ const STOCK_TABS = [
 // bahan setengah jadi (stock_semi_items) cooked from bahan baku. Buying them is
 // the separate "Belanja" menu, which also shows the barang Lainnya
 // (stock_supply_items: peralatan, perlengkapan, promosi, lain-lain). A new
-// bahan baku comes from Tambah Belanja; there is no Tambah Stok.
+// bahan baku comes from Tambah Belanja; there is no Tambah Stok. Riwayat
+// Kerugian (portions of bahan setengah jadi thrown away) opens from its button
+// inside the Bahan Setengah Jadi tab, in place of the list.
 const StockManagement = () => {
   const userRole = useSelector((state) => state.user.role);
   const isAdmin = userRole?.toLowerCase() === "admin";
   const [activeStockTab, setActiveStockTab] = useState("stock");
+  const [showWastes, setShowWastes] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [pendingDeleteItem, setPendingDeleteItem] = useState(null);
   const [pendingDeleteSemiItem, setPendingDeleteSemiItem] = useState(null);
@@ -41,7 +44,6 @@ const StockManagement = () => {
   const [producingItem, setProducingItem] = useState(null);
   const [historyItem, setHistoryItem] = useState(null);
   const [wastingItem, setWastingItem] = useState(null);
-  const [isWasteHistoryOpen, setIsWasteHistoryOpen] = useState(false);
   const stockActions = useStockItemActions({
     onDeleted: () => setPendingDeleteItem(null),
     onCogsSaved: () => setEditingCogsItem(null),
@@ -77,8 +79,7 @@ const StockManagement = () => {
       editingSemiItem ||
       producingItem ||
       historyItem ||
-      wastingItem ||
-      isWasteHistoryOpen
+      wastingItem
   );
 
   // Lock page scrolling while a dialog is open.
@@ -107,7 +108,10 @@ const StockManagement = () => {
             <button
               key={tab.key}
               type="button"
-              onClick={() => setActiveStockTab(tab.key)}
+              onClick={() => {
+                setActiveStockTab(tab.key);
+                setShowWastes(false);
+              }}
               className={`flex flex-1 items-center justify-center rounded-md px-4 py-2 text-sm font-bold transition sm:flex-none ${
                 activeStockTab === tab.key
                   ? "bg-[#a79981] text-[#101010]"
@@ -120,7 +124,7 @@ const StockManagement = () => {
         </div>
       </div>
 
-      {activeStockTab === "semi" && (
+      {activeStockTab === "semi" && !showWastes && (
         <PreparedItemsPanel
           preparedItems={semiItems}
           isAdmin={isAdmin}
@@ -129,8 +133,16 @@ const StockManagement = () => {
           onProduce={setProducingItem}
           onHistory={setHistoryItem}
           onWaste={setWastingItem}
-          onWasteHistory={() => setIsWasteHistoryOpen(true)}
           onDelete={setPendingDeleteSemiItem}
+          onShowWastes={() => setShowWastes(true)}
+        />
+      )}
+      {activeStockTab === "semi" && showWastes && (
+        <PreparedWastesPanel
+          isAdmin={isAdmin}
+          onUndo={semiActions.undoWaste}
+          isUndoing={semiActions.isUndoingWaste}
+          onBack={() => setShowWastes(false)}
         />
       )}
       {activeStockTab === "stock" && (
@@ -191,15 +203,6 @@ const StockManagement = () => {
           onSave={(payload) => semiActions.waste(wastingItem, payload)}
           onCancel={() => setWastingItem(null)}
           isSaving={semiActions.isWasting}
-        />
-      )}
-
-      {isWasteHistoryOpen && (
-        <PreparedWasteHistoryDialog
-          isAdmin={isAdmin}
-          onUndo={semiActions.undoWaste}
-          isUndoing={semiActions.isUndoingWaste}
-          onClose={() => setIsWasteHistoryOpen(false)}
         />
       )}
 

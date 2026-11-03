@@ -2,47 +2,59 @@ import { useState } from "react";
 import { enqueueSnackbar } from "notistack";
 import { currency, quantityDisplay } from "../../utils/format";
 import {
-  describeComposition,
   getProductionPortions,
   getProductionUsage,
+  getStartingQuantities,
   getUsageCost,
 } from "../../utils/preparedItems";
 import { parseCostInput } from "../../utils/stockItems";
 import { getJakartaDateKey } from "../../../../shared/lib/dates";
 
 const inputClass =
-  "w-full rounded-lg border border-[#555] bg-[#1f1f1f] px-3 py-2 text-[#f5f5f5] outline-none focus:border-[#d6c7ae]";
+  "w-full min-w-0 rounded-lg border border-[#555] bg-[#1f1f1f] px-3 py-2 text-[#f5f5f5] outline-none focus:border-[#d6c7ae]";
 
-// "Catat Masak", the kitchen's Daily Prep, in the order it happens: how many
-// recipes were cooked (and the bahan baku they use), then how many portions
-// came out, on which business day (today, or an earlier day not yet closed).
-// Its cost per portion goes to that day's notas whose HPP is still pending
-// (Modul 2). Simpan asks once more, since saving takes the bahan baku out of
-// stock; editing a field cancels that confirmation.
+const Suffix = ({ children }) => (
+  <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm font-semibold text-[#ababab]">
+    {children}
+  </span>
+);
+
+// "Catat Masak", the kitchen's Daily Prep, in the order it happens: how much
+// of each bahan baku was cooked (starting from the latest cooking's), then
+// how many portions came out and the weight of one, on which business day
+// (today, or an earlier day not yet closed). Its cost per portion goes to that
+// day's notas whose HPP is still pending (Modul 2). Simpan asks once more,
+// since saving takes the bahan baku out of stock; editing a field cancels
+// that confirmation.
 const PreparedProductionDialog = ({ item, stockItems, onSave, onCancel, isSaving }) => {
   const today = getJakartaDateKey();
-  const [form, setForm] = useState({
+  const [form, setForm] = useState(() => ({
     producedDate: today,
-    batchQuantity: "1",
+    quantities: getStartingQuantities(item),
     portionQuantity: "",
+    portionSize: Number(item.portionSize) > 0 ? String(item.portionSize).replace(".", ",") : "",
     note: "",
-  });
+  }));
   const [isConfirming, setIsConfirming] = useState(false);
-  const usage = getProductionUsage(item, form.batchQuantity, stockItems);
+  const usage = getProductionUsage(item, form.quantities, stockItems);
+  const usedItems = usage.filter((used) => used.quantity > 0);
   const totalCost = getUsageCost(usage);
   const portions = getProductionPortions(form.portionQuantity);
-  const batch = parseCostInput(form.batchQuantity);
+  const portionSize = parseCostInput(form.portionSize);
   const shortItems = usage.filter((used) => used.isShort);
-  const setField = (field) => (event) => {
-    setForm((current) => ({ ...current, [field]: event.target.value }));
+  const update = (changes) => {
+    setForm((current) => ({ ...current, ...changes }));
     setIsConfirming(false);
   };
+  const setField = (field) => (event) => update({ [field]: event.target.value });
+  const setQuantity = (stockItemId) => (event) =>
+    update({ quantities: { ...form.quantities, [String(stockItemId)]: event.target.value } });
 
   const handleSubmit = (event) => {
     event.preventDefault();
 
-    if (!(batch > 0)) {
-      enqueueSnackbar("Jumlah masak harus lebih dari 0.", { variant: "error" });
+    if (!usedItems.length) {
+      enqueueSnackbar("Isi jumlah bahan baku yang dipakai.", { variant: "error" });
       return;
     }
     if (!(portions > 0)) {
@@ -60,8 +72,9 @@ const PreparedProductionDialog = ({ item, stockItems, onSave, onCancel, isSaving
     }
 
     onSave({
-      batchQuantity: batch,
+      items: usedItems.map((used) => ({ stockItemId: used.stockItemId, quantity: used.quantity })),
       portionQuantity: portions,
+      portionSize: portionSize > 0 ? portionSize : 0,
       note: form.note,
       producedDate: form.producedDate,
     });
@@ -75,64 +88,79 @@ const PreparedProductionDialog = ({ item, stockItems, onSave, onCancel, isSaving
         className="max-h-[92vh] overflow-y-auto rounded-lg bg-[#262626] p-5 text-[#f5f5f5] shadow-2xl"
         style={{ width: "min(94vw, 560px)" }}
       >
-        <div className="mb-4 border-b border-[#333] pb-3">
-          <h3 className="text-lg font-bold">Catat Masak {item.name}</h3>
-          <p className="mt-1 text-sm text-[#ababab]">
-            1x masak = {describeComposition(item.components) || "-"}
-          </p>
+        <h3 className="mb-4 border-b border-[#333] pb-3 text-lg font-bold">Catat Masak {item.name}</h3>
+
+        <label className="mb-3 block">
+          <span className="mb-1 block text-sm font-semibold">Tanggal Masak</span>
+          <input
+            type="date"
+            value={form.producedDate}
+            max={today}
+            onChange={setField("producedDate")}
+            className={inputClass}
+          />
+        </label>
+
+        <div className="mb-3 rounded-lg border border-[#333] bg-[#202020] p-3 text-sm">
+          <span className="mb-2 block font-semibold">Bahan Baku Terpakai</span>
+          <div className="space-y-2">
+            {usage.map((used) => (
+              <div
+                key={used.stockItemId}
+                className="grid grid-cols-[minmax(0,1fr)_120px] items-center gap-2 sm:grid-cols-[minmax(0,1fr)_140px_96px]"
+              >
+                <span className="min-w-0">
+                  {used.name}
+                  <span className={`block text-xs ${used.isShort ? "font-semibold text-red-400" : "text-[#ababab]"}`}>
+                    Stok sekarang: {used.isUnlimited ? "Bebas stok" : quantityDisplay(used.available, used.unit)}
+                    {used.isShort && " (stok kurang)"}
+                  </span>
+                </span>
+                <div className="relative">
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={form.quantities[String(used.stockItemId)] ?? ""}
+                    onChange={setQuantity(used.stockItemId)}
+                    aria-label={`Jumlah ${used.name}`}
+                    className={`${inputClass} ${used.unit ? "pr-12" : ""}`}
+                    placeholder="0"
+                  />
+                  {used.unit && <Suffix>{used.unit}</Suffix>}
+                </div>
+                <span className="hidden text-right font-semibold sm:block">{currency(used.cost)}</span>
+              </div>
+            ))}
+          </div>
         </div>
 
         <div className="mb-3 grid gap-3 sm:grid-cols-2">
           <label className="block">
-            <span className="mb-1 block text-sm font-semibold">Tanggal Masak</span>
-            <input
-              type="date"
-              value={form.producedDate}
-              max={today}
-              onChange={setField("producedDate")}
-              className={inputClass}
-            />
-          </label>
-          <label className="block">
-            <span className="mb-1 block text-sm font-semibold">Berapa Kali Masak</span>
+            <span className="mb-1 block text-sm font-semibold">Jumlah Porsi Jadi ({item.unit})</span>
             <input
               type="text"
               inputMode="decimal"
-              value={form.batchQuantity}
-              onChange={setField("batchQuantity")}
+              value={form.portionQuantity}
+              onChange={setField("portionQuantity")}
               className={inputClass}
-              placeholder="Contoh: 5"
+              placeholder="Contoh: 80"
             />
           </label>
-        </div>
-
-        <div className="mb-4 rounded-lg border border-[#333] bg-[#202020] p-3 text-sm">
-          <span className="mb-2 block font-semibold">Bahan Baku Terpakai</span>
-          {usage.map((used) => (
-            <div key={used.stockItemId} className="flex items-start justify-between gap-3 py-1">
-              <span>
-                {used.name} {quantityDisplay(used.quantity, used.unit)}
-                <span className={`block text-xs ${used.isShort ? "font-semibold text-red-400" : "text-[#ababab]"}`}>
-                  Stok sekarang: {used.isUnlimited ? "Bebas stok" : quantityDisplay(used.available, used.unit)}
-                  {used.isShort && " (stok kurang)"}
-                </span>
-              </span>
-              <span className="font-semibold">{currency(used.cost)}</span>
+          <label className="block">
+            <span className="mb-1 block text-sm font-semibold">Takaran 1 Porsi</span>
+            <div className="relative">
+              <input
+                type="text"
+                inputMode="decimal"
+                value={form.portionSize}
+                onChange={setField("portionSize")}
+                className={`${inputClass} pr-10`}
+                placeholder="Contoh: 150"
+              />
+              <Suffix>gr</Suffix>
             </div>
-          ))}
+          </label>
         </div>
-
-        <label className="mb-3 block">
-          <span className="mb-1 block text-sm font-semibold">Jumlah Porsi Jadi ({item.unit})</span>
-          <input
-            type="text"
-            inputMode="decimal"
-            value={form.portionQuantity}
-            onChange={setField("portionQuantity")}
-            className={inputClass}
-            placeholder="Contoh: 80"
-          />
-        </label>
 
         <label className="mb-3 block">
           <span className="mb-1 block text-sm font-semibold">Catatan</span>
@@ -148,11 +176,6 @@ const PreparedProductionDialog = ({ item, stockItems, onSave, onCancel, isSaving
           <div>
             <span className="block text-[#ababab]">Hasil</span>
             <strong className="block text-base">{quantityDisplay(portions, item.unit)}</strong>
-            {batch > 0 && portions > 0 && (
-              <span className="block text-xs text-[#ababab]">
-                {quantityDisplay(portions / batch, item.unit)} / 1x masak
-              </span>
-            )}
           </div>
           <div>
             <span className="block text-[#ababab]">Harga Bahan</span>
@@ -171,7 +194,7 @@ const PreparedProductionDialog = ({ item, stockItems, onSave, onCancel, isSaving
             <p className="font-semibold">Simpan catatan masak?</p>
             <p className="mt-1 text-[#ababab]">
               Stok bahan baku berkurang:{" "}
-              {usage.map((used) => `${used.name} ${quantityDisplay(used.quantity, used.unit)}`).join(", ")}. Stok{" "}
+              {usedItems.map((used) => `${used.name} ${quantityDisplay(used.quantity, used.unit)}`).join(", ")}. Stok{" "}
               {item.name} bertambah {quantityDisplay(portions, item.unit)}.
             </p>
             <div className="mt-3 flex justify-end gap-3">
