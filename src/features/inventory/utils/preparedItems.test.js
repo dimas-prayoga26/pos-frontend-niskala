@@ -1,16 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
-  batchDisplay,
-  describeComposition,
-  getComponentCost,
+  describeBahan,
   getProductionPortions,
   getProductionUsage,
+  getStartingQuantities,
   getUsageCost,
   getWasteCost,
   toPreparedPayload,
 } from "./preparedItems";
 
-const beras = { id: 1, name: "Beras", unit: "kg", stock: 10, averageCost: 14000 };
 const cabai = { id: 2, name: "Cabai", unit: "gr", stock: 300, averageCost: 60 };
 const sambal = {
   id: 9,
@@ -24,14 +22,11 @@ const sambal = {
 };
 
 describe("prepared item utils", () => {
-  it("costs a composition line at the raw item's current cost", () => {
-    expect(getComponentCost("1", beras)).toBe(14000);
-    expect(getComponentCost("0,5", beras)).toBe(7000);
-    expect(getComponentCost("", beras)).toBe(0);
-    expect(getComponentCost("2", undefined)).toBe(0);
-    expect(describeComposition(sambal.components)).toBe("Cabai 500 gr, Garam 20 gr");
-    expect(batchDisplay(10)).toBe("10x masak");
-    expect(batchDisplay(2.5)).toBe("2,5x masak");
+  it("names the bahan baku and starts Catat Masak from the latest quantities", () => {
+    expect(describeBahan(sambal.components)).toBe("Cabai, Garam");
+    expect(
+      getStartingQuantities({ components: [...sambal.components, { stockItemId: 4, quantity: 0.5 }, { stockItemId: 5, quantity: 0 }] })
+    ).toEqual({ 2: "500", 3: "20", 4: "0,5", 5: "" });
   });
 
   it("takes the portions counted after cooking", () => {
@@ -42,16 +37,17 @@ describe("prepared item utils", () => {
   });
 
   it("lists the raw items a cooking uses and flags short stock", () => {
-    const usage = getProductionUsage(sambal, "1", [cabai]);
+    const usage = getProductionUsage(sambal, { 2: "500", 3: "20" }, [cabai]);
 
     expect(usage.map(({ name, quantity, unitCost, cost, isShort }) => [name, quantity, unitCost, cost, isShort])).toEqual([
       ["Cabai", 500, 60, 30000, true],
       ["Garam", 20, 10, 200, true],
     ]);
     expect(getUsageCost(usage)).toBe(30200);
-    expect(getProductionUsage(sambal, "0,5", [cabai, { id: 3, stock: 50, averageCost: 12 }]).map((used) => [used.quantity, used.cost, used.isShort])).toEqual([
-      [250, 15000, false],
-      [10, 120, false],
+    // A bahan left empty is not used this time.
+    expect(getProductionUsage(sambal, { 2: "250,5", 3: "" }, [cabai, { id: 3, stock: 50, averageCost: 12 }]).map((used) => [used.quantity, used.cost, used.isShort])).toEqual([
+      [250.5, 15030, false],
+      [0, 0, false],
     ]);
   });
 
@@ -59,22 +55,14 @@ describe("prepared item utils", () => {
     expect(
       toPreparedPayload({
         name: " Nasi ",
-        unit: "",
-        portionSize: "150",
         resetDaily: true,
-        components: [
-          { stockItemId: "1", quantity: "1" },
-          { stockItemId: "", quantity: "2" },
-          { stockItemId: "2", quantity: "0" },
-        ],
+        components: [{ stockItemId: "1" }, { stockItemId: "" }, { stockItemId: "2" }, { stockItemId: "1" }],
       })
     ).toEqual({
       name: "Nasi",
-      unit: "porsi",
-      portionSize: 150,
       minimumStock: 0,
       resetDaily: true,
-      components: [{ stockItemId: 1, quantity: 1 }],
+      components: [{ stockItemId: 1 }, { stockItemId: 2 }],
     });
   });
 

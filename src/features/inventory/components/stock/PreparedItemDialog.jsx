@@ -1,8 +1,7 @@
 import { useState } from "react";
 import { enqueueSnackbar } from "notistack";
-import { currency, quantityDisplay } from "../../utils/format";
-import { getComponentCost, toPreparedPayload } from "../../utils/preparedItems";
-import { isRecipeIngredient, parseCostInput } from "../../utils/stockItems";
+import { toPreparedPayload } from "../../utils/preparedItems";
+import { isRecipeIngredient } from "../../utils/stockItems";
 
 const inputClass =
   "w-full min-w-0 rounded-lg border border-[#555] bg-[#1f1f1f] px-3 py-2 text-[#f5f5f5] outline-none focus:border-[#d6c7ae]";
@@ -21,42 +20,29 @@ const LEFTOVER_OPTIONS = [
   },
 ];
 
-const emptyComponent = () => ({ stockItemId: "", quantity: "" });
+const emptyComponent = () => ({ stockItemId: "" });
 
 const toForm = (item) => ({
   name: item?.name || "",
-  unit: item?.unit || "porsi",
-  portionSize: item?.portionSize ? String(item.portionSize) : "",
   resetDaily: item ? Boolean(item.resetDaily) : true,
   components: item?.components?.length
-    ? item.components.map((component) => ({
-        stockItemId: String(component.stockItemId),
-        quantity: String(component.quantity),
-      }))
+    ? item.components.map((component) => ({ stockItemId: String(component.stockItemId) }))
     : [emptyComponent()],
 });
 
 const SectionTitle = ({ children }) => <h4 className="mb-2 text-sm font-semibold">{children}</h4>;
 
-// Adds or edits a bahan setengah jadi in the order it is thought of: its name,
-// the bahan baku of one recipe (one cooking, each in its own stock unit), the
-// weight of one portion (menu recipes may be typed in gram) and what happens to
-// the leftover each day.
+// Adds or edits a bahan setengah jadi: its name, the bahan baku it is cooked
+// from and what happens to the leftover each day. How much of each bahan and
+// how many portions come out are filled at Catat Masak.
 const PreparedItemDialog = ({ item, rawItems, onSave, onCancel, isSaving }) => {
   const [form, setForm] = useState(() => toForm(item));
-  const rawById = new Map(rawItems.map((raw) => [String(raw.id || raw._id), raw]));
   const recipeOptions = rawItems.filter(isRecipeIngredient);
-  const recipeCost = form.components.reduce(
-    (total, component) => total + getComponentCost(component.quantity, rawById.get(component.stockItemId)),
-    0
-  );
-  const setField = (field) => (event) =>
-    setForm((current) => ({ ...current, [field]: event.target.value }));
-  const setComponent = (index, field, value) =>
+  const setComponent = (index, stockItemId) =>
     setForm((current) => ({
       ...current,
       components: current.components.map((component, componentIndex) =>
-        componentIndex === index ? { ...component, [field]: value } : component
+        componentIndex === index ? { stockItemId } : component
       ),
     }));
 
@@ -68,17 +54,8 @@ const PreparedItemDialog = ({ item, rawItems, onSave, onCancel, isSaving }) => {
       enqueueSnackbar("Nama bahan setengah jadi wajib diisi.", { variant: "error" });
       return;
     }
-    const missingQuantity = form.components.find(
-      (component) => component.stockItemId && !(parseCostInput(component.quantity) > 0)
-    );
-    if (missingQuantity) {
-      enqueueSnackbar(`Isi jumlah ${rawById.get(missingQuantity.stockItemId)?.name || "bahan"} untuk 1x masak.`, {
-        variant: "error",
-      });
-      return;
-    }
     if (!payload.components.length) {
-      enqueueSnackbar("Pilih minimal satu bahan baku beserta jumlahnya.", { variant: "error" });
+      enqueueSnackbar("Pilih minimal satu bahan baku.", { variant: "error" });
       return;
     }
 
@@ -99,7 +76,7 @@ const PreparedItemDialog = ({ item, rawItems, onSave, onCancel, isSaving }) => {
           <SectionTitle>Nama</SectionTitle>
           <input
             value={form.name}
-            onChange={setField("name")}
+            onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
             aria-label="Nama"
             className={inputClass}
             placeholder="Contoh: Nasi"
@@ -107,7 +84,7 @@ const PreparedItemDialog = ({ item, rawItems, onSave, onCancel, isSaving }) => {
         </div>
 
         <div className={sectionClass}>
-          <SectionTitle>Bahan baku untuk 1x masak</SectionTitle>
+          <SectionTitle>Bahan baku</SectionTitle>
 
           {recipeOptions.length === 0 && (
             <p className="mb-2 rounded-md bg-[#4a452e] px-3 py-2 text-xs text-yellow-200">
@@ -115,17 +92,9 @@ const PreparedItemDialog = ({ item, rawItems, onSave, onCancel, isSaving }) => {
             </p>
           )}
 
-          <div className="mb-1 hidden grid-cols-[minmax(0,1fr)_140px_96px_32px] gap-2 px-1 text-xs font-semibold text-[#ababab] sm:grid">
-            <span>Bahan baku</span>
-            <span>Jumlah</span>
-            <span className="text-right">Harga Bahan</span>
-            <span />
-          </div>
-
           <div className="space-y-2">
             {form.components.map((component, index) => {
-              const raw = rawById.get(component.stockItemId);
-              // A bahan is picked once; the backend would add the lines up anyway.
+              // A bahan is picked once.
               const takenIds = new Set(
                 form.components
                   .filter((_, otherIndex) => otherIndex !== index)
@@ -133,71 +102,41 @@ const PreparedItemDialog = ({ item, rawItems, onSave, onCancel, isSaving }) => {
               );
 
               return (
-                <div key={index}>
-                  <div className="grid grid-cols-[minmax(0,1fr)_112px_32px] items-center gap-2 sm:grid-cols-[minmax(0,1fr)_140px_96px_32px]">
-                    <select
-                      value={component.stockItemId}
-                      onChange={(event) => setComponent(index, "stockItemId", event.target.value)}
-                      aria-label={`Bahan ${index + 1}`}
-                      className={inputClass}
-                    >
-                      <option value="">Pilih bahan baku</option>
-                      {rawItems
-                        .filter((rawItem) => {
-                          const id = String(rawItem.id || rawItem._id);
-                          return id === component.stockItemId || (isRecipeIngredient(rawItem) && !takenIds.has(id));
-                        })
-                        .map((rawItem) => (
-                          <option key={rawItem.id || rawItem._id} value={String(rawItem.id || rawItem._id)}>
-                            {rawItem.name}
-                          </option>
-                        ))}
-                    </select>
-                    <div className="relative">
-                      <input
-                        type="text"
-                        inputMode="decimal"
-                        value={component.quantity}
-                        onChange={(event) => setComponent(index, "quantity", event.target.value)}
-                        aria-label={`Jumlah bahan ${index + 1}`}
-                        className={`${inputClass} ${raw?.unit ? "pr-12" : ""}`}
-                        placeholder="Jumlah"
-                      />
-                      {raw?.unit && (
-                        <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm font-semibold text-[#ababab]">
-                          {raw.unit}
-                        </span>
-                      )}
-                    </div>
-                    <span className="hidden text-right text-sm font-semibold sm:block">
-                      {currency(getComponentCost(component.quantity, raw))}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setForm((current) => ({
-                          ...current,
-                          components:
-                            current.components.length > 1
-                              ? current.components.filter((_, componentIndex) => componentIndex !== index)
-                              : [emptyComponent()],
-                        }))
-                      }
-                      aria-label={`Hapus bahan ${index + 1}`}
-                      className="h-full rounded-md bg-[#333] text-sm font-bold text-red-400"
-                    >
-                      ×
-                    </button>
-                  </div>
-                  {raw && (
-                    <p
-                      className={`mt-1 pl-1 text-xs ${
-                        !raw.isUnlimited && !(Number(raw.stock) > 0) ? "text-red-400" : "text-[#ababab]"
-                      }`}
-                    >
-                      Stok sekarang: {raw.isUnlimited ? "Bebas stok" : quantityDisplay(raw.stock, raw.unit)}
-                    </p>
-                  )}
+                <div key={index} className="grid grid-cols-[minmax(0,1fr)_32px] items-center gap-2">
+                  <select
+                    value={component.stockItemId}
+                    onChange={(event) => setComponent(index, event.target.value)}
+                    aria-label={`Bahan ${index + 1}`}
+                    className={inputClass}
+                  >
+                    <option value="">Pilih bahan baku</option>
+                    {rawItems
+                      .filter((rawItem) => {
+                        const id = String(rawItem.id || rawItem._id);
+                        return id === component.stockItemId || (isRecipeIngredient(rawItem) && !takenIds.has(id));
+                      })
+                      .map((rawItem) => (
+                        <option key={rawItem.id || rawItem._id} value={String(rawItem.id || rawItem._id)}>
+                          {rawItem.name}
+                        </option>
+                      ))}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setForm((current) => ({
+                        ...current,
+                        components:
+                          current.components.length > 1
+                            ? current.components.filter((_, componentIndex) => componentIndex !== index)
+                            : [emptyComponent()],
+                      }))
+                    }
+                    aria-label={`Hapus bahan ${index + 1}`}
+                    className="h-full rounded-md bg-[#333] text-sm font-bold text-red-400"
+                  >
+                    ×
+                  </button>
                 </div>
               );
             })}
@@ -215,37 +154,6 @@ const PreparedItemDialog = ({ item, rawItems, onSave, onCancel, isSaving }) => {
           >
             + Tambah Bahan Baku
           </button>
-
-          <div className="mt-3 flex items-center justify-between border-t border-[#333] pt-3 text-sm">
-            <span className="text-[#ababab]">Total harga bahan</span>
-            <strong className="text-base">{currency(recipeCost)}</strong>
-          </div>
-        </div>
-
-        <div className={sectionClass}>
-          <SectionTitle>Porsi</SectionTitle>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <label>
-              <span className="mb-1 block text-xs font-semibold">Takaran 1 Porsi</span>
-              <div className="relative">
-                <input
-                  type="text"
-                  inputMode="decimal"
-                  value={form.portionSize}
-                  onChange={setField("portionSize")}
-                  className={`${inputClass} pr-10`}
-                  placeholder="Contoh: 150"
-                />
-                <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm font-semibold text-[#ababab]">
-                  gr
-                </span>
-              </div>
-            </label>
-            <label>
-              <span className="mb-1 block text-xs font-semibold">Satuan Stok</span>
-              <input value={form.unit} onChange={setField("unit")} className={inputClass} placeholder="porsi" />
-            </label>
-          </div>
         </div>
 
         <fieldset className={sectionClass}>
