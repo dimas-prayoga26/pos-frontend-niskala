@@ -104,6 +104,39 @@ describe("dashboard menus: Stok Bahan holds what is on hand, Belanja the purchas
     expect(within(page).queryByRole("button", { name: "Tambah Belanja Bahan" })).not.toBeInTheDocument();
   });
 
+  it("goes from a Catat Masak short of bahan baku to Tambah Belanja Bahan with them picked", async () => {
+    const beras = { id: 3, name: "Beras", unit: "gr", stock: 0, averageCost: 13, isRecipeIngredient: true, status: "HARUS ORDER" };
+    api.getStockItems.mockResolvedValue({ data: { data: [beras] } });
+    api.getSemiItems.mockResolvedValue({
+      data: {
+        data: [
+          {
+            id: 20,
+            name: "Nasi",
+            unit: "porsi",
+            stock: 0,
+            components: [{ stockItemId: 3, name: "Beras", unit: "gr", quantity: 500, unitCost: 13, cost: 6500 }],
+          },
+        ],
+      },
+    });
+    renderWithProviders(<Dashboard />, { preloadedState: user("Admin") });
+    fireEvent.click(screen.getByRole("button", { name: /^Stok Bahan/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Bahan Olahan" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Catat Masak" }));
+    fireEvent.click(screen.getByRole("button", { name: "Belanja Bahan Kurang" }));
+
+    expect(screen.getByRole("heading", { name: "Belanja Bahan" })).toBeInTheDocument();
+    const form = screen.getByRole("dialog");
+    expect(form).toHaveTextContent("Tambah Belanja Bahan");
+    expect(form.querySelector('select[aria-label="Cari atau buat barang"]')).toHaveValue("3");
+
+    // Opening Belanja Bahan from its menu starts without them.
+    fireEvent.click(screen.getByRole("button", { name: /^Stok Bahan/ }));
+    fireEvent.click(screen.getByRole("button", { name: /^Belanja Bahan/ }));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
   it("shows Belanja to kasir, who write draft nota", async () => {
     renderWithProviders(<Dashboard />, { preloadedState: user("Cashier") });
     expect(menuNames()).toEqual(["Metrik", "Pesanan", "Stok Bahan", "Belanja Bahan", "Rekap"]);

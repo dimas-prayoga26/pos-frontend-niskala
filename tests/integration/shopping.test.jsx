@@ -327,6 +327,23 @@ describe("shopping history", () => {
     expect(form).toHaveTextContent("Satuan stok: galon. Isi gramasi sesuai satuan stok");
   });
 
+  it("opens Tambah Belanja Bahan at once with the bahan a Catat Masak is short of", async () => {
+    const bahan = [...stockItems, { id: 10, name: "Air Galon", unit: "pcs", isRecipeIngredient: false }];
+    renderWithProviders(
+      <ShoppingManagement
+        stockItems={bahan}
+        isAdmin
+        restockItems={[{ stockItemId: 5, unit: "gr" }, { stockItemId: 10, unit: "pcs" }]}
+      />
+    );
+    const form = await screen.findByRole("dialog");
+    expect(form).toHaveTextContent("Tambah Belanja Bahan");
+    const items = Array.from(form.querySelectorAll('select[aria-label="Cari atau buat barang"]'));
+    // A line per bahan, picked, even one that is not a Bahan Resep.
+    await waitFor(() => expect(items.map((select) => select.value)).toEqual(["5", "10"]));
+    expect(Array.from(form.querySelectorAll('select[aria-label="Satuan"]'), (select) => select.value)).toEqual(["gr", "pcs"]);
+  });
+
   it("lists only Bahan Resep in Tambah Belanja Bahan Baku", async () => {
     renderWithProviders(
       <ShoppingManagement stockItems={[...stockItems, { id: 10, name: "Aqua Botol", unit: "pcs", isRecipeIngredient: false }]} isAdmin />

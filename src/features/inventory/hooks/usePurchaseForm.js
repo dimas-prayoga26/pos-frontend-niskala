@@ -21,6 +21,7 @@ import {
   isPurchaseFormComplete,
   lineTotal,
   parseShoppingQuantity,
+  purchaseUnitForStockUnit,
 } from "../utils/shopping";
 
 const NO_ITEMS = [];
@@ -68,18 +69,28 @@ const footerOf = (form) => ({
 // State of the "Tambah Belanja Bahan" form, for both Jenis Belanja. It lives
 // in the parent so a closed form keeps its draft until it is saved or the page
 // reloads. A saved draft nota (Simpan Draft) can be opened again with
-// loadDraft; only admins post (Simpan & Posting).
+// loadDraft; only admins post (Simpan & Posting). initialItems ({ stockItemId,
+// unit }): bahan baku the form starts with, one line each.
 const usePurchaseForm = ({
   suppliers,
   stockItems,
   supplyItems = NO_ITEMS,
   paymentSources = [],
   canPost = true,
+  initialItems = NO_ITEMS,
   onSaved,
 }) => {
   const queryClient = useQueryClient();
   const [rawForm, setForm] = useState(initialForm);
-  const [rows, setRows] = useState(() => [blankRow()]);
+  const [rows, setRows] = useState(() =>
+    initialItems.length
+      ? initialItems.map((item) => ({
+          ...blankRow(),
+          stockItemId: item.stockItemId,
+          unit: purchaseUnitForStockUnit(item.unit),
+        }))
+      : [blankRow()]
+  );
   const [extraItems, setExtraItems] = useState([]);
   const [extraSuppliers, setExtraSuppliers] = useState([]);
   const [receipts, setReceipts] = useState([]);
