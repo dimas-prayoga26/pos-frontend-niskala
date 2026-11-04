@@ -16,7 +16,7 @@ const kindButtonClass = (active) =>
     active ? "bg-[#a79981] text-[#101010]" : "text-[#ababab] hover:bg-[#333] hover:text-white"
   }`;
 
-// "Tambah Belanja" form for every belanja: Jenis Belanja picks bahan
+// "Tambah Belanja Bahan" form for every belanja: Jenis Belanja picks bahan
 // baku or perlengkapan. All state comes from usePurchaseForm.
 const PurchaseFormDialog = ({ purchaseForm, onClose }) => {
   const {
@@ -68,7 +68,7 @@ const PurchaseFormDialog = ({ purchaseForm, onClose }) => {
         <div className="mb-4 flex items-start justify-between gap-3">
           <div>
             <h2 id="shopping-form-title" className="text-xl font-bold">
-              {editingDraft ? `Draft Nota #${editingDraft.id}` : "Tambah Belanja"}
+              {editingDraft ? `Draft Nota #${editingDraft.id}` : "Tambah Belanja Bahan"}
             </h2>
             <p className="mt-1 text-sm text-[#ababab]">
               Pilih &quot;Buat&quot; jika nama belum tersedia. Simpan Draft belum mengubah stok dan saldo;

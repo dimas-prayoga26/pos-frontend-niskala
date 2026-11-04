@@ -32,7 +32,7 @@ describe("menu recipe editor", () => {
     });
   });
 
-  it("offers bahan resep and bahan setengah jadi only", async () => {
+  it("picks bahan baku (bahan resep only) or bahan olahan per line", async () => {
     renderWithProviders(<MenuManagement />, { preloadedState: asAdmin });
 
     await waitFor(() => expect(api.getStockItems).toHaveBeenCalled());
@@ -41,15 +41,21 @@ describe("menu recipe editor", () => {
     const recipeSection = screen.getByText("Komposisi Bahan").parentElement;
     fireEvent.click(within(recipeSection).getByRole("button", { name: "Tambah" }));
 
-    const select = screen.getByLabelText("Stok bahan");
+    const kinds = screen.getByRole("group", { name: "Jenis bahan" });
+    expect(within(kinds).getByRole("button", { name: "Bahan Baku" })).toHaveAttribute("aria-pressed", "true");
     await waitFor(() =>
-      expect(optionNames(select)).toEqual(["Pilih dari stok", "Susu Segar", "Gula Lama", "Nasi (Setengah jadi)"])
+      expect(optionNames(screen.getByLabelText("Stok bahan"))).toEqual(["Pilih bahan baku", "Susu Segar", "Gula Lama"])
     );
     expect(screen.getByText(/hanya yang bertanda Bahan Resep/)).toBeInTheDocument();
+
+    fireEvent.click(within(kinds).getByRole("button", { name: "Bahan Olahan" }));
+    await waitFor(() =>
+      expect(optionNames(screen.getByLabelText("Stok bahan"))).toEqual(["Pilih bahan olahan", "Nasi"])
+    );
   });
 
-  it("fills Nasi in gram, like the COGS sheet, and saves it in portions", async () => {
-    // Nasi: 1 porsi = 150 gr, Rp 4.125 a portion.
+  it("fills a bahan olahan in portions, never in gram", async () => {
+    // Nasi: Rp 4.125 a portion; its old portion size is ignored.
     api.getSemiItems.mockResolvedValue({
       data: { data: [{ id: 5, name: "Nasi", unit: "porsi", portionSize: 150, averageCost: 4125 }] },
     });
@@ -75,16 +81,14 @@ describe("menu recipe editor", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Menu Items" }));
     fireEvent.click(await screen.findByRole("button", { name: "Ubah" }));
 
-    // 1 porsi in the recipe shows as 150 gr.
     const quantity = await screen.findByLabelText("Jumlah bahan");
-    expect(quantity).toHaveValue(150);
-    expect(screen.getByLabelText("Satuan bahan")).toHaveValue("gr");
-    expect(screen.getByText(/1 porsi Nasi = 150 gr, jadi 150 gr = 1 porsi/)).toBeInTheDocument();
+    expect(quantity).toHaveValue(1);
+    expect(screen.getByLabelText("Satuan bahan")).toHaveValue("porsi");
+    expect(screen.getByRole("button", { name: "Bahan Olahan" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.queryByText(/150 gr/)).not.toBeInTheDocument();
     expect(screen.getByLabelText("Cost bahan").value).toMatch(/^Rp\s4\.125$/);
 
-    // 225 gr = 1,5 porsi = Rp 6.187,5.
-    fireEvent.change(quantity, { target: { value: "225" } });
-    expect(screen.getByText(/225 gr = 1,5 porsi/)).toBeInTheDocument();
+    fireEvent.change(quantity, { target: { value: "1.5" } });
     fireEvent.click(screen.getByRole("button", { name: "Simpan" }));
     await waitFor(() => expect(api.updateMenuItem).toHaveBeenCalled());
     expect(api.updateMenuItem.mock.calls[0][0].ingredients).toEqual([

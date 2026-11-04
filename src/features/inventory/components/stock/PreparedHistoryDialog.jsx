@@ -4,7 +4,7 @@ import { formatDateAndTime } from "../../../../shared/lib/dates";
 import { getSemiProductions } from "../../api";
 import { currency, quantityDisplay } from "../../utils/format";
 
-// Cooking history of a bahan setengah jadi with the bahan baku each cooking
+// Cooking history of a bahan olahan with the bahan baku each cooking
 // used. Admins can undo the latest cooking while its portions are in stock.
 const PreparedHistoryDialog = ({ item, isAdmin, onUndo, isUndoing, onClose }) => {
   const [confirmingId, setConfirmingId] = useState(null);

@@ -12,6 +12,7 @@ vi.mock("../../src/https/index", async (importOriginal) => ({
   getOrders: vi.fn(),
   getRecaps: vi.fn(),
   getStockItems: vi.fn(),
+  getStockWastes: vi.fn(),
 }));
 
 const today = getJakartaDateKey();
@@ -52,6 +53,27 @@ describe("dashboard metrics", () => {
     api.getRecaps.mockResolvedValue(empty);
     api.getStockItems.mockResolvedValue(empty);
     api.getOrders.mockResolvedValue({ data: { data: orders } });
+    api.getStockWastes.mockResolvedValue({ data: { data: { wastes: [], dailyTotals: [] } } });
+  });
+
+  it("shows the Biaya Wastage of the period apart from HPP", async () => {
+    api.getStockWastes.mockResolvedValue({
+      data: {
+        data: {
+          wastes: [],
+          dailyTotals: [
+            { date: today, cost: 6180, entries: 1 },
+            // Outside this month: not counted.
+            { date: "2025-01-15", cost: 9270, entries: 1 },
+          ],
+        },
+      },
+    });
+    renderWithProviders(<Metrics />, { route: "/dashboard" });
+
+    await waitFor(() =>
+      expect(screen.getByText("Biaya Wastage").closest(".min-w-0")).toHaveTextContent(/Rp\s6\.180$/)
+    );
   });
 
   it("shows sales after QRIS 0.7% (above Rp100.000) and platform fee deductions", async () => {

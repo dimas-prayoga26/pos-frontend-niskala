@@ -4,9 +4,7 @@ import {
   addSemiItem,
   deleteSemiItem,
   deleteSemiProduction,
-  deleteSemiWaste,
   recordSemiProduction,
-  recordSemiWaste,
   updateSemiItem,
 } from "../api";
 
@@ -14,17 +12,17 @@ const showError = (fallback) => (error) => {
   enqueueSnackbar(error?.response?.data?.message || fallback, { variant: "error" });
 };
 
-// Bahan setengah jadi actions: save or delete the item, record a cooking, undo
-// the latest one and throw portions away (kerugian).
+// Bahan olahan actions: save or delete the item, record a cooking and
+// undo the latest one. Buang is useWasteActions.
 // Callers pass callbacks to close their dialog.
-const usePreparedItemActions = ({ onSaved, onDeleted, onProduced, onWasted }) => {
+const usePreparedItemActions = ({ onSaved, onDeleted, onProduced }) => {
   const queryClient = useQueryClient();
   // Cooking also moves bahan baku stock, so both lists are refreshed.
   const refresh = () => {
     queryClient.invalidateQueries({ queryKey: ["semi-items"] });
     queryClient.invalidateQueries({ queryKey: ["stock-items"] });
     queryClient.invalidateQueries({ queryKey: ["semi-productions"] });
-    queryClient.invalidateQueries({ queryKey: ["semi-wastes"] });
+    queryClient.invalidateQueries({ queryKey: ["stock-wastes"] });
   };
 
   const saveMutation = useMutation({
@@ -33,12 +31,12 @@ const usePreparedItemActions = ({ onSaved, onDeleted, onProduced, onWasted }) =>
     onSuccess: (_response, { id }) => {
       refresh();
       enqueueSnackbar(
-        id ? "Bahan setengah jadi diperbarui." : "Bahan setengah jadi ditambahkan.",
+        id ? "Bahan olahan diperbarui." : "Bahan olahan ditambahkan.",
         { variant: "success" }
       );
       onSaved();
     },
-    onError: showError("Gagal menyimpan bahan setengah jadi."),
+    onError: showError("Gagal menyimpan bahan olahan."),
   });
   const deleteMutation = useMutation({
     mutationFn: deleteSemiItem,
@@ -66,24 +64,6 @@ const usePreparedItemActions = ({ onSaved, onDeleted, onProduced, onWasted }) =>
     },
     onError: showError("Gagal membatalkan catatan masak."),
   });
-  const wasteMutation = useMutation({
-    mutationFn: recordSemiWaste,
-    onSuccess: () => {
-      refresh();
-      enqueueSnackbar("Kerugian dicatat.", { variant: "success" });
-      onWasted();
-    },
-    onError: showError("Gagal mencatat kerugian."),
-  });
-  const undoWasteMutation = useMutation({
-    mutationFn: deleteSemiWaste,
-    onSuccess: () => {
-      refresh();
-      enqueueSnackbar("Catatan buang dibatalkan, porsinya kembali ke stok.", { variant: "success" });
-    },
-    onError: showError("Gagal membatalkan catatan buang."),
-  });
-
   return {
     save: (payload) => saveMutation.mutate(payload),
     isSaving: saveMutation.isPending,
@@ -94,11 +74,6 @@ const usePreparedItemActions = ({ onSaved, onDeleted, onProduced, onWasted }) =>
     isProducing: produceMutation.isPending,
     undoProduction: (productionId) => undoMutation.mutate(productionId),
     isUndoing: undoMutation.isPending,
-    waste: (item, payload) =>
-      wasteMutation.mutate({ semiItemId: item.id || item._id, ...payload }),
-    isWasting: wasteMutation.isPending,
-    undoWaste: (wasteId) => undoWasteMutation.mutate(wasteId),
-    isUndoingWaste: undoWasteMutation.isPending,
   };
 };
 

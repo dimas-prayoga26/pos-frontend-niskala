@@ -5,7 +5,7 @@ import ShoppingManagement from "./ShoppingManagement";
 
 const NO_ITEMS = [];
 
-// Dashboard "Belanja" menu: the transactions that bring goods in and take
+// Dashboard "Belanja Bahan" menu: the transactions that bring goods in and take
 // saldo out (belanja bahan baku and perlengkapan, draft nota, history). What
 // is on hand lives in the "Stok" menu.
 const ShoppingPage = () => {
@@ -25,7 +25,7 @@ const ShoppingPage = () => {
   return (
     <div className="container mx-auto rounded-lg bg-[#262626] p-4">
       <div className="mb-4">
-        <h2 className="text-xl font-semibold text-[#f5f5f5]">Belanja</h2>
+        <h2 className="text-xl font-semibold text-[#f5f5f5]">Belanja Bahan</h2>
         <p className="mt-1 text-sm text-[#ababab]">
           Barang masuk dan uang keluar: belanja bahan baku dan lainnya, draft nota, dan riwayatnya.
         </p>

@@ -41,7 +41,8 @@ const RecipeUseCell = ({ item, onToggle, isPending }) => {
 // "Bahan Baku" tab: searchable, paged stock list. The page resets whenever
 // the tab is reopened or the search changes. "Ubah" only shows when
 // onEditCogs is given. Admins switch "Bahan Resep" (offered in the recipe
-// editors) per bahan.
+// editors) per bahan. Staff throw bahan away with Buang (not those with
+// Bebas Stok); Riwayat Kerugian opens the write-offs.
 const StockItemsPanel = ({
   stockItems,
   searchQuery,
@@ -51,6 +52,8 @@ const StockItemsPanel = ({
   onDelete,
   onToggleRecipeUse,
   recipeUsePendingId,
+  onWaste,
+  onShowWastes,
 }) => {
   const [currentPage, setCurrentPage] = useState(1);
   const [recipeUse, setRecipeUse] = useState("all");
@@ -79,16 +82,25 @@ const StockItemsPanel = ({
           <h3 className="text-lg font-bold text-[#f5f5f5]">Bahan Baku</h3>
           <p className="mt-1 text-sm text-[#ababab]">
             Daftar bahan, kategori, jumlah stok, dan status restock. Bahan Resep = muncul di pilihan resep
-            menu dan bahan setengah jadi.
+            menu dan bahan olahan.
           </p>
         </div>
-        <input
-          value={searchQuery}
-          onChange={(event) => onSearchChange(event.target.value)}
-          type="search"
-          placeholder="Search stock"
-          className="rounded-lg bg-[#262626] px-4 py-2 text-sm text-[#f5f5f5] outline-none placeholder:text-[#777]"
-        />
+        <div className="flex shrink-0 gap-2">
+          <input
+            value={searchQuery}
+            onChange={(event) => onSearchChange(event.target.value)}
+            type="search"
+            placeholder="Search stock"
+            className="min-w-0 rounded-lg bg-[#262626] px-4 py-2 text-sm text-[#f5f5f5] outline-none placeholder:text-[#777]"
+          />
+          <button
+            type="button"
+            onClick={onShowWastes}
+            className="shrink-0 rounded-lg bg-[#333] px-4 py-2 text-sm font-bold text-[#f5f5f5] hover:bg-[#3a3a3a]"
+          >
+            Riwayat Kerugian
+          </button>
+        </div>
       </div>
 
       <div className="mb-3 flex flex-wrap gap-2" role="group" aria-label="Filter Bahan Resep">
@@ -122,7 +134,7 @@ const StockItemsPanel = ({
               <th className="p-3 text-center">Minimum</th>
               <th className="p-3 text-center">Status</th>
               <th className="p-3 text-center">Bahan Resep</th>
-              {isAdmin && <th className="p-3 text-center">Aksi</th>}
+              <th className="p-3 text-center">Aksi</th>
             </tr>
           </thead>
           <tbody>
@@ -175,18 +187,29 @@ const StockItemsPanel = ({
                     isPending={String(recipeUsePendingId) === String(item.id || item._id)}
                   />
                 </td>
-                {isAdmin && (
-                  <td className="p-4">
-                    <div className="flex items-center justify-center gap-4 text-sm font-semibold">
-                      {onEditCogs && (
-                        <button
-                          type="button"
-                          onClick={() => onEditCogs(item)}
-                          className="text-[#d6c7ae] hover:text-[#f5f5f5]"
-                        >
-                          Ubah
-                        </button>
-                      )}
+                <td className="p-4">
+                  <div className="flex items-center justify-center gap-4 text-sm font-semibold">
+                    {!item.isUnlimited && (
+                      <button
+                        type="button"
+                        onClick={() => onWaste(item)}
+                        disabled={!(Number(item.stock) > 0)}
+                        title={Number(item.stock) > 0 ? "Catat bahan yang dibuang" : "Stok kosong"}
+                        className="rounded-md border border-red-400/60 px-3 py-1 text-red-400 hover:bg-red-400/10 disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        Buang
+                      </button>
+                    )}
+                    {isAdmin && onEditCogs && (
+                      <button
+                        type="button"
+                        onClick={() => onEditCogs(item)}
+                        className="text-[#d6c7ae] hover:text-[#f5f5f5]"
+                      >
+                        Ubah
+                      </button>
+                    )}
+                    {isAdmin && (
                       <button
                         type="button"
                         onClick={() => onDelete(item)}
@@ -194,14 +217,14 @@ const StockItemsPanel = ({
                       >
                         Hapus
                       </button>
-                    </div>
-                  </td>
-                )}
+                    )}
+                  </div>
+                </td>
               </tr>
             ))}
             {filteredItems.length === 0 && (
               <tr>
-                <td className="p-4 text-center text-[#ababab]" colSpan={isAdmin ? 10 : 9}>
+                <td className="p-4 text-center text-[#ababab]" colSpan={10}>
                   No stock data found
                 </td>
               </tr>

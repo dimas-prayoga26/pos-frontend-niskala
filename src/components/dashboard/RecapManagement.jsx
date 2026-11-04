@@ -14,7 +14,7 @@ import {
   getOrders,
   getRecaps,
   getSemiItems,
-  getSemiWastes,
+  getStockWastes,
   getUsers,
 } from "../../https";
 import OrderDateRangeFilter from "../../features/orders/components/OrderDateRangeFilter";
@@ -599,11 +599,11 @@ const RecapManagement = () => {
     placeholderData: keepPreviousData,
   });
 
-  // Kerugian bahan setengah jadi per day, and the daily items whose leftover
-  // the daily recap writes off.
-  const { data: semiWastesRes } = useQuery({
-    queryKey: ["semi-wastes", "recap"],
-    queryFn: () => getSemiWastes(),
+  // Kerugian bahan (bahan baku and bahan olahan) per day, and the
+  // daily items whose leftover the daily recap writes off.
+  const { data: wastesRes } = useQuery({
+    queryKey: ["stock-wastes", "recap"],
+    queryFn: () => getStockWastes(),
     placeholderData: keepPreviousData,
   });
   const { data: semiItemsRes } = useQuery({
@@ -628,12 +628,12 @@ const RecapManagement = () => {
   const wasteTotalByDate = useMemo(
     () =>
       new Map(
-        (semiWastesRes?.data?.data?.dailyTotals || []).map((day) => [
+        (wastesRes?.data?.data?.dailyTotals || []).map((day) => [
           String(day.date).slice(0, 10),
           Number(day.cost) || 0,
         ])
       ),
-    [semiWastesRes]
+    [wastesRes]
   );
   const dailySemiLeftovers = (semiItemsRes?.data?.data || []).filter(
     (item) => item.resetDaily && Number(item.stock) > 0
@@ -1422,9 +1422,9 @@ const RecapManagement = () => {
     mutationFn: (data) => addRecap({ periodType: "daily", data }),
     onSuccess: (response) => {
       queryClient.invalidateQueries({ queryKey: ["recaps"] });
-      // The recap wrote off the leftover of daily bahan setengah jadi.
+      // The recap wrote off the leftover of daily bahan olahan.
       queryClient.invalidateQueries({ queryKey: ["semi-items"] });
-      queryClient.invalidateQueries({ queryKey: ["semi-wastes"] });
+      queryClient.invalidateQueries({ queryKey: ["stock-wastes"] });
       // ...and locked the HPP of its notas (Modul 2).
       queryClient.invalidateQueries({ queryKey: ["orders"] });
       enqueueSnackbar("Rekap harian berhasil disimpan", { variant: "success" });
@@ -2530,7 +2530,7 @@ const RecapManagement = () => {
             {dailySemiLeftovers.length > 0 && (
               <div className="mt-3 rounded-lg border border-[#4a2e2e] bg-[#2a1b1b] p-4">
                 <p className="text-sm font-semibold text-red-300">
-                  Sisa bahan setengah jadi dibuang dan dicatat sebagai kerugian:
+                  Sisa bahan olahan dibuang dan dicatat sebagai kerugian:
                 </p>
                 <ul className="mt-2 space-y-1 text-sm text-[#e5e5e5]">
                   {dailySemiLeftovers.map((item) => (
