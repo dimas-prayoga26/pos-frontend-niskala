@@ -19,6 +19,9 @@ const Dashboard = () => {
     user._id || user.email || userRole || "guest"
   }`;
   const [activeTab, setActiveTab] = useState("metrics");
+  // Bahan baku a Catat Masak is short of ({ stockItemId, unit }): Belanja
+  // Bahan opens Tambah Belanja Bahan with them. Any tab click drops them.
+  const [restockItems, setRestockItems] = useState(null);
   const [lastSeenOrderId, setLastSeenOrderId] = useState(() => {
     const storedValue = localStorage.getItem(orderBadgeStorageKey);
     return storedValue === null ? null : Number(storedValue) || 0;
@@ -105,6 +108,7 @@ const Dashboard = () => {
 
   const handleTabClick = (tabKey) => {
     setActiveTab(tabKey);
+    setRestockItems(null);
 
     if (tabKey === "orders") {
       localStorage.setItem(orderBadgeStorageKey, String(latestOrderId));
@@ -150,8 +154,15 @@ const Dashboard = () => {
 
       {activeTab === "metrics" && <Metrics />}
       {activeTab === "orders" && <RecentOrders />}
-      {activeTab === "stock" && <StockManagement />}
-      {activeTab === "shopping" && <ShoppingPage />}
+      {activeTab === "stock" && (
+        <StockManagement
+          onRestock={(items) => {
+            setActiveTab("shopping");
+            setRestockItems(items);
+          }}
+        />
+      )}
+      {activeTab === "shopping" && <ShoppingPage restockItems={restockItems} />}
       {activeTab === "menu" && isAdmin && <MenuManagement />}
       {activeTab === "recap" && <RecapManagement />}
       {activeTab === "setting" && isAdmin && <SettingsManagement />}

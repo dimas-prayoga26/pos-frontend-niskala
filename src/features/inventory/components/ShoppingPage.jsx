@@ -7,8 +7,9 @@ const NO_ITEMS = [];
 
 // Dashboard "Belanja Bahan" menu: the transactions that bring goods in and take
 // saldo out (belanja bahan baku and perlengkapan, draft nota, history). What
-// is on hand lives in the "Stok" menu.
-const ShoppingPage = () => {
+// is on hand lives in the "Stok" menu. restockItems: bahan baku to buy, the
+// form opens with them (from a Catat Masak short of stock).
+const ShoppingPage = ({ restockItems }) => {
   const userRole = useSelector((state) => state.user.role);
   const isAdmin = userRole?.toLowerCase() === "admin";
   const { data: stockItemsRes } = useQuery({
@@ -34,6 +35,7 @@ const ShoppingPage = () => {
         stockItems={stockItemsRes?.data?.data || NO_ITEMS}
         supplyItems={supplyItemsRes?.data?.data || NO_ITEMS}
         isAdmin={isAdmin}
+        restockItems={restockItems}
       />
     </div>
   );

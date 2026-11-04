@@ -343,6 +343,23 @@ describe("stock management", () => {
     expect(await screen.findByText("Bahan olahan ditambahkan.")).toBeInTheDocument();
   });
 
+  it("takes the bahan baku a Catat Masak is short of to Belanja Bahan", async () => {
+    const onRestock = vi.fn();
+    renderWithProviders(<StockManagement onRestock={onRestock} />, { preloadedState: asAdmin });
+
+    await findRow("Susu Segar");
+    fireEvent.click(screen.getByRole("button", { name: "Bahan Olahan" }));
+    fireEvent.click(within(rowOf("Nasi")).getByRole("button", { name: "Catat Masak" }));
+    const dialog = screen.getByRole("form", { name: "Form catat masak" });
+    const bahan = within(dialog).getByRole("textbox", { name: "Jumlah Bahan 03" });
+
+    // Enough stock: no button.
+    expect(within(dialog).queryByRole("button", { name: "Belanja Bahan Kurang" })).not.toBeInTheDocument();
+    fireEvent.change(bahan, { target: { value: "20" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Belanja Bahan Kurang" }));
+    expect(onRestock).toHaveBeenCalledWith([{ stockItemId: 3, unit: "pcs" }]);
+  });
+
   it("lets cashiers record a cooking with the portions counted", async () => {
     api.recordSemiProduction.mockResolvedValue({ data: { success: true } });
     renderWithProviders(<StockManagement />, { preloadedState: asCashier });

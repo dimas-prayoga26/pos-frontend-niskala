@@ -42,8 +42,10 @@ const toggleClass = (active) =>
 // (assets, lifetime), and exports it to Excel or PDF. Summary cards show the
 // spending of the period per kind and the lifetime value of the assets. Every staff member may
 // save a draft; only admins post. See SHOPPING.md in pos-backend.
-export default function ShoppingManagement({ stockItems, supplyItems = NO_ITEMS, isAdmin }) {
-  const [showForm, setShowForm] = useState(false);
+// restockItems ({ stockItemId, unit }) open Tambah Belanja Bahan at once with
+// a line for each.
+export default function ShoppingManagement({ stockItems, supplyItems = NO_ITEMS, isAdmin, restockItems }) {
+  const [showForm, setShowForm] = useState(() => Boolean(restockItems?.length));
   const [historyTab, setHistoryTab] = useState(HISTORY_TABS[0]);
   const [historyView, setHistoryView] = useState("nota");
   const historyKind = PURCHASE_KINDS[historyTab.kindKey];
@@ -182,6 +184,7 @@ export default function ShoppingManagement({ stockItems, supplyItems = NO_ITEMS,
     supplyItems,
     paymentSources: paymentSources.data?.data?.data || NO_SOURCES,
     canPost: Boolean(isAdmin),
+    initialItems: restockItems || NO_ITEMS,
     // Show the history of what was just posted.
     onSaved: (savedKindKey, status, category) => {
       setShowForm(false);

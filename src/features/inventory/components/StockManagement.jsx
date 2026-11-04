@@ -31,7 +31,9 @@ const STOCK_TABS = [
 // bahan baku comes from Tambah Belanja Bahan; there is no Tambah Stok. Both tabs
 // have Buang per item (Modul 3, with a bukti foto) and a Riwayat Kerugian
 // button that shows that tab's own write-offs in place of the list.
-const StockManagement = () => {
+// onRestock(items) takes the bahan baku a Catat Masak is short of to Belanja
+// Bahan.
+const StockManagement = ({ onRestock }) => {
   const userRole = useSelector((state) => state.user.role);
   const isAdmin = userRole?.toLowerCase() === "admin";
   const [activeStockTab, setActiveStockTab] = useState("stock");
@@ -188,6 +190,7 @@ const StockManagement = () => {
           stockItems={stockItems}
           onSave={(payload) => semiActions.produce(producingItem, payload)}
           onCancel={() => setProducingItem(null)}
+          onRestock={onRestock}
           isSaving={semiActions.isProducing}
         />
       )}

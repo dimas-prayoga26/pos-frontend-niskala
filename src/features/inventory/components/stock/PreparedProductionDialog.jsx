@@ -24,8 +24,9 @@ const Suffix = ({ children }) => (
 // day not yet closed). Its cost per portion goes to that
 // day's notas whose HPP is still pending (Modul 2). Simpan asks once more,
 // since saving takes the bahan baku out of stock; editing a field cancels
-// that confirmation.
-const PreparedProductionDialog = ({ item, stockItems, onSave, onCancel, isSaving }) => {
+// that confirmation. A bahan baku short of stock can be bought at once
+// (onRestock: Tambah Belanja Bahan with those bahan).
+const PreparedProductionDialog = ({ item, stockItems, onSave, onCancel, onRestock, isSaving }) => {
   const today = getJakartaDateKey();
   const [form, setForm] = useState(() => ({
     producedDate: today,
@@ -98,7 +99,20 @@ const PreparedProductionDialog = ({ item, stockItems, onSave, onCancel, isSaving
         </label>
 
         <div className="mb-3 rounded-lg border border-[#333] bg-[#202020] p-3 text-sm">
-          <span className="mb-2 block font-semibold">Bahan Baku Terpakai</span>
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <span className="font-semibold">Bahan Baku Terpakai</span>
+            {onRestock && shortItems.length > 0 && (
+              <button
+                type="button"
+                onClick={() =>
+                  onRestock(shortItems.map((used) => ({ stockItemId: used.stockItemId, unit: used.unit })))
+                }
+                className="whitespace-nowrap rounded-md border border-red-400/60 px-3 py-1 text-xs font-bold text-red-300 hover:bg-red-500/10"
+              >
+                Belanja Bahan Kurang
+              </button>
+            )}
+          </div>
           <div className="space-y-2">
             {usage.map((used) => (
               <div
