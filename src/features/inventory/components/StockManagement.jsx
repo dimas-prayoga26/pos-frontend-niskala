@@ -5,31 +5,32 @@ import { useSelector } from "react-redux";
 import { getSemiItems, getStockItems } from "../api";
 import usePreparedItemActions from "../hooks/usePreparedItemActions";
 import useStockItemActions from "../hooks/useStockItemActions";
+import useWasteActions from "../hooks/useWasteActions";
 import DeleteStockItemDialog from "./stock/DeleteStockItemDialog";
 import PreparedHistoryDialog from "./stock/PreparedHistoryDialog";
 import PreparedItemDialog from "./stock/PreparedItemDialog";
 import PreparedItemsPanel from "./stock/PreparedItemsPanel";
 import PreparedProductionDialog from "./stock/PreparedProductionDialog";
-import PreparedWasteDialog from "./stock/PreparedWasteDialog";
-import PreparedWastesPanel from "./stock/PreparedWastesPanel";
 import StockCogsDialog from "./stock/StockCogsDialog";
 import StockItemsPanel from "./stock/StockItemsPanel";
+import WasteDialog from "./stock/WasteDialog";
+import WastesPanel from "./stock/WastesPanel";
 
 // "Ubah" (COGS awal) on Bahan Baku is hidden for now; set to true to show it again.
 const SHOW_COGS_EDIT = false;
 
 const STOCK_TABS = [
   { key: "stock", label: "Bahan Baku" },
-  { key: "semi", label: "Bahan Setengah Jadi" },
+  { key: "semi", label: "Bahan Olahan" },
 ];
 
 // Dashboard "Stok" menu, what is on hand: bahan baku (stock_raw_items) and
-// bahan setengah jadi (stock_semi_items) cooked from bahan baku. Buying them is
-// the separate "Belanja" menu, which also shows the barang Lainnya
+// bahan olahan (stock_semi_items) cooked from bahan baku. Buying them is
+// the separate "Belanja Bahan" menu, which also shows the barang Lainnya
 // (stock_supply_items: peralatan, perlengkapan, promosi, lain-lain). A new
-// bahan baku comes from Tambah Belanja; there is no Tambah Stok. Riwayat
-// Kerugian (portions of bahan setengah jadi thrown away) opens from its button
-// inside the Bahan Setengah Jadi tab, in place of the list.
+// bahan baku comes from Tambah Belanja Bahan; there is no Tambah Stok. Both tabs
+// have Buang per item (Modul 3, with a bukti foto) and a Riwayat Kerugian
+// button that shows that tab's own write-offs in place of the list.
 const StockManagement = () => {
   const userRole = useSelector((state) => state.user.role);
   const isAdmin = userRole?.toLowerCase() === "admin";
@@ -43,7 +44,8 @@ const StockManagement = () => {
   const [editingSemiItem, setEditingSemiItem] = useState(null);
   const [producingItem, setProducingItem] = useState(null);
   const [historyItem, setHistoryItem] = useState(null);
-  const [wastingItem, setWastingItem] = useState(null);
+  // { kind: "raw" | "semi", item } being thrown away.
+  const [wasting, setWasting] = useState(null);
   const stockActions = useStockItemActions({
     onDeleted: () => setPendingDeleteItem(null),
     onCogsSaved: () => setEditingCogsItem(null),
@@ -52,8 +54,8 @@ const StockManagement = () => {
     onSaved: () => setEditingSemiItem(null),
     onDeleted: () => setPendingDeleteSemiItem(null),
     onProduced: () => setProducingItem(null),
-    onWasted: () => setWastingItem(null),
   });
+  const wasteActions = useWasteActions({ onWasted: () => setWasting(null) });
 
   const { data: stockItemsRes, isError } = useQuery({
     queryKey: ["stock-items"],
@@ -79,7 +81,7 @@ const StockManagement = () => {
       editingSemiItem ||
       producingItem ||
       historyItem ||
-      wastingItem
+      wasting
   );
 
   // Lock page scrolling while a dialog is open.
@@ -100,7 +102,7 @@ const StockManagement = () => {
         <div>
           <h2 className="text-[#f5f5f5] text-xl font-semibold">Stok Management</h2>
           <p className="mt-1 text-sm text-[#ababab]">
-            Isi gudang: bahan baku dan bahan setengah jadi. Belanjanya, termasuk barang Lainnya, lewat menu Belanja.
+            Isi gudang: bahan baku dan bahan olahan. Belanjanya, termasuk barang Lainnya, lewat menu Belanja Bahan.
           </p>
         </div>
         <div className="flex w-full shrink-0 gap-2 rounded-lg bg-[#1f1f1f] p-1 sm:w-fit">
@@ -132,20 +134,21 @@ const StockManagement = () => {
           onEdit={setEditingSemiItem}
           onProduce={setProducingItem}
           onHistory={setHistoryItem}
-          onWaste={setWastingItem}
+          onWaste={(item) => setWasting({ kind: "semi", item })}
           onDelete={setPendingDeleteSemiItem}
           onShowWastes={() => setShowWastes(true)}
         />
       )}
-      {activeStockTab === "semi" && showWastes && (
-        <PreparedWastesPanel
+      {showWastes && (
+        <WastesPanel
+          kind={activeStockTab === "semi" ? "semi" : "raw"}
           isAdmin={isAdmin}
-          onUndo={semiActions.undoWaste}
-          isUndoing={semiActions.isUndoingWaste}
+          onUndo={wasteActions.undoWaste}
+          isUndoing={wasteActions.isUndoingWaste}
           onBack={() => setShowWastes(false)}
         />
       )}
-      {activeStockTab === "stock" && (
+      {activeStockTab === "stock" && !showWastes && (
         <StockItemsPanel
           stockItems={stockItems}
           searchQuery={searchQuery}
@@ -155,6 +158,8 @@ const StockManagement = () => {
           onDelete={setPendingDeleteItem}
           onToggleRecipeUse={stockActions.setRecipeUse}
           recipeUsePendingId={stockActions.recipeUsePendingId}
+          onWaste={(item) => setWasting({ kind: "raw", item })}
+          onShowWastes={() => setShowWastes(true)}
         />
       )}
 
@@ -197,12 +202,13 @@ const StockManagement = () => {
         />
       )}
 
-      {wastingItem && (
-        <PreparedWasteDialog
-          item={wastingItem}
-          onSave={(payload) => semiActions.waste(wastingItem, payload)}
-          onCancel={() => setWastingItem(null)}
-          isSaving={semiActions.isWasting}
+      {wasting && (
+        <WasteDialog
+          item={wasting.item}
+          isAdmin={isAdmin}
+          onSave={(payload) => wasteActions.waste(wasting.kind, wasting.item, payload)}
+          onCancel={() => setWasting(null)}
+          isSaving={wasteActions.isWasting}
         />
       )}
 

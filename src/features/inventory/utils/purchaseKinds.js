@@ -28,7 +28,7 @@ export const SUPPLY_CATEGORIES = ["Peralatan", "Perlengkapan", "Promosi", "Lain-
 export const ASSET_CATEGORY = "Peralatan";
 export const SUPPLY_CATEGORY_OPTIONS = SUPPLY_CATEGORIES.map((name) => ({ id: name, text: name }));
 
-// Jenis Belanja. Both are made from the same "Tambah Belanja" form
+// Jenis Belanja. Both are made from the same "Tambah Belanja Bahan" form
 // and share the nota (tanggal, toko, sumber pembayaran, bukti nota); they
 // differ in where the items are stocked and which endpoints record them.
 export const PURCHASE_KINDS = {

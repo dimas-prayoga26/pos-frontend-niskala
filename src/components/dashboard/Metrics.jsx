@@ -19,6 +19,7 @@ import {
   FiPackage,
   FiPlus,
   FiShoppingBag,
+  FiTrash2,
   FiTrendingUp,
   FiTruck,
 } from "react-icons/fi";
@@ -31,6 +32,7 @@ import {
   getOrders,
   getRecaps,
   getStockItems,
+  getStockWastes,
 } from "../../https";
 import {
   formatCurrency,
@@ -515,7 +517,8 @@ const MetricCardSlider = ({ items, renderItem }) => {
 const PENDING_HPP_NOTE =
   " Nota berlabel HPP Pending sudah memakai biaya masak (Daily Prep) hari itu, tapi angkanya masih bisa berubah sampai hari ditutup (otomatis pukul 00.00).";
 
-const ProfitFlow = ({ revenue, cost, grossProfit, netProfit, isLoading, pendingHppCount = 0 }) => {
+// wasteCost: Biaya Wastage (Modul 3), bahan thrown away; it is not in HPP.
+const ProfitFlow = ({ revenue, cost, grossProfit, wasteCost, netProfit, isLoading, pendingHppCount = 0 }) => {
   const steps = [
     {
       label: "Penjualan Bersih",
@@ -538,6 +541,12 @@ const ProfitFlow = ({ revenue, cost, grossProfit, netProfit, isLoading, pendingH
             tone: "profit",
             description: "Penjualan Bersih dikurangi HPP.",
           },
+          {
+            label: "Biaya Wastage",
+            value: isLoading ? "..." : formatCurrency(wasteCost),
+            tone: "warning",
+            description: "Bahan baku dan bahan olahan yang dibuang. Tidak masuk HPP.",
+          },
           ...(SHOW_NET_PROFIT
             ? [
                 {
@@ -545,7 +554,7 @@ const ProfitFlow = ({ revenue, cost, grossProfit, netProfit, isLoading, pendingH
                   value: isLoading ? "..." : formatCurrency(netProfit),
                   tone: "net",
                   description:
-                    "Untung Kotor dikurangi pengeluaran harian di rekap.",
+                    "Untung Kotor dikurangi pengeluaran harian di rekap dan Biaya Wastage.",
                 },
               ]
             : []),
@@ -553,7 +562,7 @@ const ProfitFlow = ({ revenue, cost, grossProfit, netProfit, isLoading, pendingH
       : []),
   ];
   const gridColumnsClass =
-    { 1: "md:grid-cols-1", 3: "md:grid-cols-3", 4: "md:grid-cols-4" }[
+    { 1: "md:grid-cols-1", 3: "md:grid-cols-3", 4: "md:grid-cols-4", 5: "md:grid-cols-5" }[
       steps.length
     ] || "md:grid-cols-1";
 
@@ -672,6 +681,16 @@ const Metrics = () => {
   } = useQuery({
     queryKey: ["recaps", "monthly"],
     queryFn: () => getRecaps("monthly"),
+    placeholderData: keepPreviousData,
+  });
+
+  // Kerugian per business day (Riwayat Kerugian), for the Biaya Wastage.
+  const {
+    data: wastesRes,
+    isLoading: isWastesLoading,
+  } = useQuery({
+    queryKey: ["stock-wastes", "metrics"],
+    queryFn: () => getStockWastes(),
     placeholderData: keepPreviousData,
   });
 
@@ -818,7 +837,14 @@ const Metrics = () => {
   const materialSpendTotal = getOrdersHppTotal(filteredOrders, menuItems);
   const pendingHppCount = filteredOrders.filter((order) => order.hppStatus === "pending").length;
   const grossProfitTotal = netRevenueTotal - materialSpendTotal;
-  const netProfitTotal = grossProfitTotal - dailyExpenseTotal;
+  const wasteCostTotal = (wastesRes?.data?.data?.dailyTotals || []).reduce(
+    (total, day) =>
+      isDateKeyInRange(String(day.date).slice(0, 10), periodRange.startKey, periodRange.endKey)
+        ? total + (Number(day.cost) || 0)
+        : total,
+    0
+  );
+  const netProfitTotal = grossProfitTotal - dailyExpenseTotal - wasteCostTotal;
   const netCashTotal = cashRecordedTotal - dailyExpenseTotal;
 
   const isLoading =
@@ -827,7 +853,7 @@ const Metrics = () => {
     isMenuItemsLoading ||
     isStockItemsLoading;
   const isFinancialLoading =
-    isDailyRecapsLoading || isOrdersLoading || isMenuItemsLoading;
+    isDailyRecapsLoading || isOrdersLoading || isMenuItemsLoading || isWastesLoading;
   const isExportDisabled =
     isLoading ||
     isFinancialLoading ||
@@ -941,10 +967,18 @@ const Metrics = () => {
           tone: "profit",
         },
         {
+          title: "Biaya Wastage",
+          value: isFinancialLoading ? "..." : formatCurrency(wasteCostTotal),
+          badge: activePeriod.badge,
+          description: "Bahan yang dibuang, di luar HPP.",
+          icon: FiTrash2,
+          tone: "warning",
+        },
+        {
           title: "Untung Bersih",
           value: isFinancialLoading ? "..." : formatCurrency(netProfitTotal),
           badge: activePeriod.badge,
-          description: "Untung setelah pengeluaran harian.",
+          description: "Untung setelah pengeluaran harian dan biaya wastage.",
           icon: FiDollarSign,
           tone: "net",
         },
@@ -1389,6 +1423,7 @@ const Metrics = () => {
             revenue={netRevenueTotal}
             cost={materialSpendTotal}
             grossProfit={grossProfitTotal}
+            wasteCost={wasteCostTotal}
             netProfit={netProfitTotal}
             isLoading={isLoading || isFinancialLoading}
             pendingHppCount={pendingHppCount}

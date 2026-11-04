@@ -65,7 +65,7 @@ const footerOf = (form) => ({
   taxPercent: form.taxEnabled ? parsePercent(form.taxPercent) : 0,
 });
 
-// State of the "Tambah Belanja" form, for both Jenis Belanja. It lives
+// State of the "Tambah Belanja Bahan" form, for both Jenis Belanja. It lives
 // in the parent so a closed form keeps its draft until it is saved or the page
 // reloads. A saved draft nota (Simpan Draft) can be opened again with
 // loadDraft; only admins post (Simpan & Posting).

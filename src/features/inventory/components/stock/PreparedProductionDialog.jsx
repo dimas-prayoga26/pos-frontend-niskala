@@ -7,7 +7,6 @@ import {
   getStartingQuantities,
   getUsageCost,
 } from "../../utils/preparedItems";
-import { parseCostInput } from "../../utils/stockItems";
 import { getJakartaDateKey } from "../../../../shared/lib/dates";
 
 const inputClass =
@@ -21,8 +20,8 @@ const Suffix = ({ children }) => (
 
 // "Catat Masak", the kitchen's Daily Prep, in the order it happens: how much
 // of each bahan baku was cooked (starting from the latest cooking's), then
-// how many portions came out and the weight of one, on which business day
-// (today, or an earlier day not yet closed). Its cost per portion goes to that
+// how many portions came out, on which business day (today, or an earlier
+// day not yet closed). Its cost per portion goes to that
 // day's notas whose HPP is still pending (Modul 2). Simpan asks once more,
 // since saving takes the bahan baku out of stock; editing a field cancels
 // that confirmation.
@@ -32,7 +31,6 @@ const PreparedProductionDialog = ({ item, stockItems, onSave, onCancel, isSaving
     producedDate: today,
     quantities: getStartingQuantities(item),
     portionQuantity: "",
-    portionSize: Number(item.portionSize) > 0 ? String(item.portionSize).replace(".", ",") : "",
     note: "",
   }));
   const [isConfirming, setIsConfirming] = useState(false);
@@ -40,7 +38,6 @@ const PreparedProductionDialog = ({ item, stockItems, onSave, onCancel, isSaving
   const usedItems = usage.filter((used) => used.quantity > 0);
   const totalCost = getUsageCost(usage);
   const portions = getProductionPortions(form.portionQuantity);
-  const portionSize = parseCostInput(form.portionSize);
   const shortItems = usage.filter((used) => used.isShort);
   const update = (changes) => {
     setForm((current) => ({ ...current, ...changes }));
@@ -74,7 +71,6 @@ const PreparedProductionDialog = ({ item, stockItems, onSave, onCancel, isSaving
     onSave({
       items: usedItems.map((used) => ({ stockItemId: used.stockItemId, quantity: used.quantity })),
       portionQuantity: portions,
-      portionSize: portionSize > 0 ? portionSize : 0,
       note: form.note,
       producedDate: form.producedDate,
     });
@@ -134,33 +130,17 @@ const PreparedProductionDialog = ({ item, stockItems, onSave, onCancel, isSaving
           </div>
         </div>
 
-        <div className="mb-3 grid gap-3 sm:grid-cols-2">
-          <label className="block">
-            <span className="mb-1 block text-sm font-semibold">Jumlah Porsi Jadi ({item.unit})</span>
-            <input
-              type="text"
-              inputMode="decimal"
-              value={form.portionQuantity}
-              onChange={setField("portionQuantity")}
-              className={inputClass}
-              placeholder="Contoh: 80"
-            />
-          </label>
-          <label className="block">
-            <span className="mb-1 block text-sm font-semibold">Takaran 1 Porsi</span>
-            <div className="relative">
-              <input
-                type="text"
-                inputMode="decimal"
-                value={form.portionSize}
-                onChange={setField("portionSize")}
-                className={`${inputClass} pr-10`}
-                placeholder="Contoh: 150"
-              />
-              <Suffix>gr</Suffix>
-            </div>
-          </label>
-        </div>
+        <label className="mb-3 block">
+          <span className="mb-1 block text-sm font-semibold">Jumlah Porsi Jadi ({item.unit})</span>
+          <input
+            type="text"
+            inputMode="decimal"
+            value={form.portionQuantity}
+            onChange={setField("portionQuantity")}
+            className={inputClass}
+            placeholder="Contoh: 80"
+          />
+        </label>
 
         <label className="mb-3 block">
           <span className="mb-1 block text-sm font-semibold">Catatan</span>

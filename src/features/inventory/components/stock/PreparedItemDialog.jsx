@@ -32,7 +32,7 @@ const toForm = (item) => ({
 
 const SectionTitle = ({ children }) => <h4 className="mb-2 text-sm font-semibold">{children}</h4>;
 
-// Adds or edits a bahan setengah jadi: its name, the bahan baku it is cooked
+// Adds or edits a bahan olahan: its name, the bahan baku it is cooked
 // from and what happens to the leftover each day. How much of each bahan and
 // how many portions come out are filled at Catat Masak.
 const PreparedItemDialog = ({ item, rawItems, onSave, onCancel, isSaving }) => {
@@ -51,7 +51,7 @@ const PreparedItemDialog = ({ item, rawItems, onSave, onCancel, isSaving }) => {
 
     const payload = toPreparedPayload(form);
     if (!payload.name) {
-      enqueueSnackbar("Nama bahan setengah jadi wajib diisi.", { variant: "error" });
+      enqueueSnackbar("Nama bahan olahan wajib diisi.", { variant: "error" });
       return;
     }
     if (!payload.components.length) {
@@ -66,11 +66,11 @@ const PreparedItemDialog = ({ item, rawItems, onSave, onCancel, isSaving }) => {
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
       <form
         onSubmit={handleSubmit}
-        aria-label="Form bahan setengah jadi"
+        aria-label="Form bahan olahan"
         className="max-h-[92vh] overflow-y-auto rounded-lg bg-[#262626] p-5 text-[#f5f5f5] shadow-2xl"
         style={{ width: "min(94vw, 620px)" }}
       >
-        <h3 className="mb-4 text-lg font-bold">{item ? "Ubah Bahan Setengah Jadi" : "Tambah Bahan Setengah Jadi"}</h3>
+        <h3 className="mb-4 text-lg font-bold">{item ? "Ubah Bahan Olahan" : "Tambah Bahan Olahan"}</h3>
 
         <div className={sectionClass}>
           <SectionTitle>Nama</SectionTitle>

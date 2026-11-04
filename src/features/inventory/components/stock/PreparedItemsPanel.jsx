@@ -5,10 +5,10 @@ import { STOCK_STATUS_CLASS_NAMES } from "../../utils/stockItems";
 
 const linkClass = "font-semibold text-[#d6c7ae] hover:text-[#f5f5f5]";
 
-// "Bahan Setengah Jadi" tab: items cooked in-house (Nasi, Sambal, ...). Portions come
+// "Bahan Olahan" tab: items cooked in-house (Nasi, Sambal, ...). Portions come
 // from "Catat Masak"; selling a menu uses them like any stock item. Each row keeps
 // the daily actions (Catat Masak, Buang) apart from the rarer ones. The Riwayat
-// Kerugian button opens the thrown-away portions (PreparedWastesPanel).
+// Kerugian button opens the thrown-away portions (WastesPanel).
 const PreparedItemsPanel = ({
   preparedItems,
   isAdmin,
@@ -23,7 +23,7 @@ const PreparedItemsPanel = ({
   <div className="rounded-lg bg-[#1f1f1f] p-4">
     <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
       <div>
-        <h3 className="text-lg font-bold text-[#f5f5f5]">Bahan Setengah Jadi</h3>
+        <h3 className="text-lg font-bold text-[#f5f5f5]">Bahan Olahan</h3>
         <p className="mt-1 text-sm text-[#ababab]">Bahan yang dimasak sendiri dari bahan baku lalu dipakai di menu.</p>
       </div>
       <div className="flex shrink-0 gap-2">
@@ -41,7 +41,7 @@ const PreparedItemsPanel = ({
             onClick={onAdd}
             className="rounded-lg bg-[#a79981] px-4 py-2 text-sm font-bold text-[#101010]"
           >
-            Tambah Bahan Setengah Jadi
+            Tambah Bahan Olahan
           </button>
         )}
       </div>
@@ -51,7 +51,7 @@ const PreparedItemsPanel = ({
       <table className="w-full text-left text-[#f5f5f5]">
         <thead className="bg-[#333] text-sm text-[#ababab]">
           <tr>
-            <th className="p-3">Bahan Setengah Jadi</th>
+            <th className="p-3">Bahan Olahan</th>
             <th className="p-3 text-center">Stok</th>
             <th className="p-3 text-center">Masak Terakhir</th>
             <th className="p-3 text-right">Nilai Asset</th>
@@ -89,11 +89,6 @@ const PreparedItemsPanel = ({
                   <p className="mt-1 text-xs text-[#ababab]">
                     Bahan: {describeBahan(item.components) || "-"}
                   </p>
-                  {item.portionSize > 0 && (
-                    <p className="mt-0.5 text-xs text-[#ababab]">
-                      1 porsi = {quantityDisplay(item.portionSize, "gr")}
-                    </p>
-                  )}
                 </td>
                 <td className="p-4 text-center">
                   <span className="block whitespace-nowrap text-lg font-bold">
@@ -154,7 +149,7 @@ const PreparedItemsPanel = ({
                         type="button"
                         onClick={() => onWaste(item)}
                         disabled={!hasStock}
-                        title={hasStock ? "Catat porsi yang basi atau tumpah" : "Stok kosong"}
+                        title={hasStock ? "Catat porsi yang dibuang" : "Stok kosong"}
                         className="rounded-md border border-red-400/60 px-3 py-1.5 font-semibold text-red-400 hover:bg-red-400/10 disabled:cursor-not-allowed disabled:opacity-40"
                       >
                         Buang
@@ -197,7 +192,7 @@ const PreparedItemsPanel = ({
           {preparedItems.length === 0 && (
             <tr>
               <td className="p-6 text-center text-sm text-[#ababab]" colSpan={6}>
-                Belum ada bahan setengah jadi.
+                Belum ada bahan olahan.
               </td>
             </tr>
           )}

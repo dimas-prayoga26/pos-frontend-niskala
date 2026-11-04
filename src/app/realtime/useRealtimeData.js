@@ -46,6 +46,8 @@ const useRealtimeData = () => {
     };
     const refreshStockData = () => {
       queryClient.invalidateQueries({ queryKey: ["stock-items"] });
+      queryClient.invalidateQueries({ queryKey: ["semi-items"] });
+      queryClient.invalidateQueries({ queryKey: ["stock-wastes"] });
       queryClient.invalidateQueries({ queryKey: ["supply-items"] });
       queryClient.invalidateQueries({ queryKey: ["purchase-summary"] });
     };

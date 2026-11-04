@@ -66,7 +66,7 @@ const Dashboard = () => {
         { key: "metrics", label: "Metrik" },
         { key: "orders", label: "Pesanan", badge: newOrderCount },
         { key: "stock", label: "Stok Bahan", badge: lowStockCount },
-        { key: "shopping", label: "Belanja", badge: draftCount },
+        { key: "shopping", label: "Belanja Bahan", badge: draftCount },
         { key: "menu", label: "Menu" },
         { key: "recap", label: "Rekap" },
         { key: "setting", label: "Pengaturan" },
@@ -75,7 +75,7 @@ const Dashboard = () => {
         { key: "metrics", label: "Metrik" },
         { key: "orders", label: "Pesanan", badge: newOrderCount },
         { key: "stock", label: "Stok Bahan", badge: lowStockCount },
-        { key: "shopping", label: "Belanja", badge: draftCount },
+        { key: "shopping", label: "Belanja Bahan", badge: draftCount },
         { key: "recap", label: "Rekap" },
       ];
 

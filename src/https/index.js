@@ -148,7 +148,7 @@ export const updateStockUnit = ({ stockItemId, unit, factor }) =>
   axiosWrapper.patch(`/api/stock-item/${stockItemId}/unit`, { unit, factor });
 export const deleteStockItem = (stockItemId) =>
   axiosWrapper.delete(`/api/stock-item/${stockItemId}`);
-// Bahan setengah jadi (stock_semi_items) and their cooking ("Catat Masak").
+// Bahan olahan (stock_semi_items) and their cooking ("Catat Masak").
 export const getSemiItems = () => axiosWrapper.get("/api/stock-item/semi");
 export const addSemiItem = (data) => axiosWrapper.post("/api/stock-item/semi", data);
 export const updateSemiItem = ({ semiItemId, ...data }) =>
@@ -163,11 +163,27 @@ export const recordSemiProduction = ({ semiItemId, ...data }) =>
   axiosWrapper.post(`/api/stock-item/semi/${semiItemId}/productions`, data);
 export const deleteSemiProduction = (productionId) =>
   axiosWrapper.delete(`/api/stock-item/semi/productions/${productionId}`);
-// Kerugian: portions of a bahan setengah jadi thrown away.
+// Buang (Modul 3): bahan baku or bahan olahan thrown away, sent as
+// multipart with their bukti foto.
+const postWaste = (url, { quantity, reason, note, files = [] }) => {
+  const formData = new FormData();
+  formData.append("quantity", String(quantity));
+  formData.append("reason", reason);
+  formData.append("note", note || "");
+  files.forEach((file) => formData.append("files", file, file.name));
+  return axiosWrapper.post(url, formData, { headers: { "Content-Type": "multipart/form-data" } });
+};
+// Riwayat Kerugian: write-offs of both kinds, each with kind and itemId.
+export const getStockWastes = (params = {}) =>
+  axiosWrapper.get("/api/stock-item/wastes", { params });
+export const recordStockWaste = ({ stockItemId, ...data }) =>
+  postWaste(`/api/stock-item/${stockItemId}/wastes`, data);
+export const deleteStockWaste = (wasteId) =>
+  axiosWrapper.delete(`/api/stock-item/wastes/${wasteId}`);
 export const getSemiWastes = (params = {}) =>
   axiosWrapper.get("/api/stock-item/semi/wastes", { params });
 export const recordSemiWaste = ({ semiItemId, ...data }) =>
-  axiosWrapper.post(`/api/stock-item/semi/${semiItemId}/wastes`, data);
+  postWaste(`/api/stock-item/semi/${semiItemId}/wastes`, data);
 export const deleteSemiWaste = (wasteId) =>
   axiosWrapper.delete(`/api/stock-item/semi/wastes/${wasteId}`);
 // Perlengkapan (stock_supply_items): peralatan, operasional, promosi.

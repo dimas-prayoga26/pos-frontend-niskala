@@ -10,7 +10,7 @@ export const STOCK_STATUS_CLASS_NAMES = {
 };
 
 // Bahan Resep: the bahan baku offered in the recipe editors (menu resep and
-// bahan setengah jadi). Older payloads without the flag count as bahan resep.
+// bahan olahan). Older payloads without the flag count as bahan resep.
 export const isRecipeIngredient = (item) => item?.isRecipeIngredient !== false;
 
 export const RECIPE_USE_FILTERS = [

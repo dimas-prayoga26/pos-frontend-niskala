@@ -282,13 +282,13 @@ describe("shopping history", () => {
     expect(screen.queryByRole("button", { name: "Update" })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Tutup" }));
     // Kasir may write a draft nota but not post it.
-    fireEvent.click(screen.getByRole("button", { name: "Tambah Belanja" }));
+    fireEvent.click(screen.getByRole("button", { name: "Tambah Belanja Bahan" }));
     expect(within(screen.getByRole("dialog")).getByRole("button", { name: "Simpan Draft" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Simpan & Posting" })).not.toBeInTheDocument();
     unmount();
 
     renderShopping(true);
-    fireEvent.click(await screen.findByRole("button", { name: "Tambah Belanja" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Tambah Belanja Bahan" }));
     const form = screen.getByRole("dialog");
     // The gramasi is in the stock unit: no Isi per Kemasan to fill.
     expect(within(form).queryByText("Isi per Kemasan")).not.toBeInTheDocument();
@@ -303,7 +303,7 @@ describe("shopping history", () => {
 
     // The draft survives closing and reopening the form.
     fireEvent.click(screen.getByRole("button", { name: "Tutup form" }));
-    fireEvent.click(screen.getByRole("button", { name: "Tambah Belanja" }));
+    fireEvent.click(screen.getByRole("button", { name: "Tambah Belanja Bahan" }));
     expect(screen.getByDisplayValue("draft note")).toBeInTheDocument();
   });
 
@@ -311,7 +311,7 @@ describe("shopping history", () => {
     renderWithProviders(
       <ShoppingManagement stockItems={[...stockItems, { id: 9, name: "Air Isi Ulang", unit: "galon" }]} isAdmin />
     );
-    fireEvent.click(await screen.findByRole("button", { name: "Tambah Belanja" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Tambah Belanja Bahan" }));
     const form = screen.getByRole("dialog");
     const unitOptions = () => Array.from(within(form).getByLabelText("Satuan").options, (option) => option.value).filter(Boolean);
     // A new line takes any unit.
@@ -331,14 +331,14 @@ describe("shopping history", () => {
     renderWithProviders(
       <ShoppingManagement stockItems={[...stockItems, { id: 10, name: "Aqua Botol", unit: "pcs", isRecipeIngredient: false }]} isAdmin />
     );
-    fireEvent.click(await screen.findByRole("button", { name: "Tambah Belanja" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Tambah Belanja Bahan" }));
     const item = screen.getByRole("dialog").querySelector('select[aria-label="Cari atau buat barang"]');
     expect(Array.from(item.options, (option) => option.text).filter(Boolean)).toEqual(["Gula"]);
   });
 
   it("pays from the first payment source and shows its saldo after the purchase", async () => {
     renderShopping(true);
-    fireEvent.click(await screen.findByRole("button", { name: "Tambah Belanja" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Tambah Belanja Bahan" }));
     const form = screen.getByRole("dialog");
     expect(within(form).getByText("Informasi Nota")).toBeInTheDocument();
 
@@ -358,7 +358,7 @@ describe("shopping history", () => {
 
   it("adds bukti nota from the camera or the gallery", async () => {
     renderShopping(true);
-    fireEvent.click(await screen.findByRole("button", { name: "Tambah Belanja" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Tambah Belanja Bahan" }));
     const form = screen.getByRole("dialog");
     const camera = within(form).getByLabelText("Ambil foto bukti nota");
     const gallery = within(form).getByLabelText("Pilih bukti nota dari galeri");
@@ -874,9 +874,9 @@ describe("belanja lainnya in the same form", () => {
     URL.revokeObjectURL = vi.fn();
   });
 
-  it("switches Jenis Belanja inside Tambah Belanja", async () => {
+  it("switches Jenis Belanja inside Tambah Belanja Bahan", async () => {
     renderBoth();
-    fireEvent.click(await screen.findByRole("button", { name: "Tambah Belanja" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Tambah Belanja Bahan" }));
     const form = screen.getByRole("dialog");
     const kinds = within(form).getByRole("group", { name: "Jenis Belanja" });
     expect(within(kinds).getByRole("button", { name: "Bahan Baku" })).toHaveAttribute("aria-pressed", "true");
@@ -1146,7 +1146,7 @@ describe("ringkasan and draft nota", () => {
 
   it("adds ongkir, diskon and PPN into the Grand Total that leaves the saldo", async () => {
     renderShopping(true);
-    fireEvent.click(await screen.findByRole("button", { name: "Tambah Belanja" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Tambah Belanja Bahan" }));
     const form = screen.getByRole("dialog");
     fireEvent.change(within(form).getByLabelText("Harga Total"), { target: { value: "100000" } });
     const summary = within(form).getByRole("region", { name: "Ringkasan nota" });

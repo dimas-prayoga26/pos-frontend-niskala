@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import * as api from "../../src/https/index";
 import { StockManagement } from "../../src/features/inventory";
 import StockCogsDialog from "../../src/features/inventory/components/stock/StockCogsDialog";
+import * as receiptImages from "../../src/features/inventory/utils/receiptImages";
 import { getJakartaDateKey } from "../../src/shared/lib/dates";
 import { renderWithProviders } from "../renderWithProviders";
 
@@ -13,18 +14,44 @@ vi.mock("../../src/https/index", async (importOriginal) => ({
   deleteSemiProduction: vi.fn(),
   deleteSemiWaste: vi.fn(),
   deleteStockItem: vi.fn(),
+  deleteStockWaste: vi.fn(),
   getPurchases: vi.fn(),
   getSemiItems: vi.fn(),
   getSemiProductions: vi.fn(),
-  getSemiWastes: vi.fn(),
   getShoppingSuppliers: vi.fn(),
   getStockItems: vi.fn(),
+  getStockWastes: vi.fn(),
   getSupplyItems: vi.fn(),
   recordSemiProduction: vi.fn(),
   recordSemiWaste: vi.fn(),
+  recordStockWaste: vi.fn(),
   updateStockCogs: vi.fn(),
   updateStockRecipeUse: vi.fn(),
 }));
+
+// jsdom cannot decode images: bukti foto are sent as picked.
+vi.mock("../../src/features/inventory/utils/receiptImages", async (importOriginal) => ({
+  ...(await importOriginal()),
+  compressReceiptImage: vi.fn(),
+}));
+
+const photo = (name) => new File(["x"], name, { type: "image/jpeg" });
+
+// A write-off of Nasi as Riwayat Kerugian lists it.
+const semiWaste = (id, overrides = {}) => ({
+  id,
+  kind: "semi",
+  itemId: 20,
+  semiItemId: 20,
+  itemName: "Nasi",
+  wasteDate: "2026-10-28",
+  unit: "porsi",
+  note: "",
+  userName: "Admin",
+  createdAt: "2026-10-28 10:00:00",
+  photos: [],
+  ...overrides,
+});
 
 const stockItem = (id, overrides = {}) => ({
   id,
@@ -41,7 +68,7 @@ const stockItem = (id, overrides = {}) => ({
   ...overrides,
 });
 
-// Bahan setengah jadi made from "Bahan 03" (1 pcs per recipe), served by its
+// Bahan olahan made from "Bahan 03" (1 pcs per recipe), served by its
 // own endpoint and never listed under Bahan Baku.
 const nasi = stockItem(20, {
   name: "Nasi",
@@ -73,19 +100,23 @@ describe("stock management", () => {
   beforeEach(() => {
     api.getStockItems.mockResolvedValue({ data: { data: items } });
     api.getSemiItems.mockResolvedValue({ data: { data: [nasi] } });
-    api.getSemiWastes.mockResolvedValue({ data: { data: { wastes: [], dailyTotals: [] } } });
+    api.getStockWastes.mockResolvedValue({ data: { data: { wastes: [], dailyTotals: [] } } });
+    receiptImages.compressReceiptImage.mockImplementation(async (file) => file);
+    URL.createObjectURL = vi.fn((file) => `blob:${file.name}`);
+    URL.revokeObjectURL = vi.fn();
     api.getPurchases.mockResolvedValue({ data: { data: { purchases: [], itemGroups: [], total: 0 } } });
     api.getShoppingSuppliers.mockResolvedValue({ data: { data: [] } });
   });
 
-  it("has no Lainnya tab: barang Lainnya are seen in Belanja", async () => {
+  it("has no Lainnya tab: barang Lainnya are seen in Belanja Bahan", async () => {
     renderWithProviders(<StockManagement />, { preloadedState: asAdmin });
 
     await findRow("Susu Segar");
     expect(screen.getByRole("button", { name: "Bahan Baku" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Bahan Setengah Jadi" })).toBeInTheDocument();
-    // Riwayat Kerugian is a button inside Bahan Setengah Jadi, not a tab.
-    expect(screen.queryByRole("button", { name: "Riwayat Kerugian" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Bahan Olahan" })).toBeInTheDocument();
+    // Riwayat Kerugian is a button inside the tab's panel, not a tab.
+    const tabs = screen.getByRole("button", { name: "Bahan Baku" }).parentElement;
+    expect(within(tabs).queryByRole("button", { name: "Riwayat Kerugian" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Lainnya" })).not.toBeInTheDocument();
     expect(api.getSupplyItems).not.toHaveBeenCalled();
   });
@@ -117,7 +148,7 @@ describe("stock management", () => {
     expect(screen.getByText("No stock data found")).toBeInTheDocument();
   });
 
-  it("has no Tambah Stok: a new bahan baku comes from Tambah Belanja", async () => {
+  it("has no Tambah Stok: a new bahan baku comes from Tambah Belanja Bahan", async () => {
     renderWithProviders(<StockManagement />, { preloadedState: asAdmin });
 
     await findRow("Susu Segar");
@@ -175,14 +206,17 @@ describe("stock management", () => {
     await screen.findByText("Air Galon");
     expect(screen.queryByRole("button", { name: "Ubah" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Tambah Stok" })).not.toBeInTheDocument();
-    expect(screen.queryByText("Aksi")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Hapus" })).not.toBeInTheDocument();
+    // Kasir may only throw bahan away; Bebas Stok has nothing to throw away.
+    expect(within(rowOf("Susu Segar")).getByRole("button", { name: "Buang" })).toBeEnabled();
+    expect(within(rowOf("Air Galon")).queryByRole("button", { name: "Buang" })).not.toBeInTheDocument();
     // Kasir sees Bahan Resep but cannot switch it.
     expect(screen.queryByRole("switch")).not.toBeInTheDocument();
     expect(rowOf("Air Galon")).toHaveTextContent("Tidak");
     expect(rowOf("Susu Segar")).toHaveTextContent("Ya");
   });
 
-  it("filters and switches Bahan Resep, and offers only bahan resep to a bahan setengah jadi", async () => {
+  it("filters and switches Bahan Resep, and offers only bahan resep to a bahan olahan", async () => {
     api.updateStockRecipeUse
       .mockRejectedValueOnce({ response: { data: { message: "Bahan masih dipakai di resep: Latte. Hapus dari resep terlebih dahulu." } } })
       .mockResolvedValueOnce({ data: { message: "Bahan ditandai sebagai bahan resep." } });
@@ -213,26 +247,26 @@ describe("stock management", () => {
     await waitFor(() => expect(api.updateStockRecipeUse.mock.calls[1][0]).toEqual({ stockItemId: 2, isRecipeIngredient: true }));
     expect(await screen.findByText("Bahan ditandai sebagai bahan resep.")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Bahan Setengah Jadi" }));
-    fireEvent.click(screen.getByRole("button", { name: "Tambah Bahan Setengah Jadi" }));
-    const dialog = screen.getByRole("form", { name: "Form bahan setengah jadi" });
+    fireEvent.click(screen.getByRole("button", { name: "Bahan Olahan" }));
+    fireEvent.click(screen.getByRole("button", { name: "Tambah Bahan Olahan" }));
+    const dialog = screen.getByRole("form", { name: "Form bahan olahan" });
     const ingredient = within(dialog).getByRole("combobox", { name: "Bahan 1" });
     expect(within(ingredient).getByRole("option", { name: "Susu Segar" })).toBeInTheDocument();
     expect(within(ingredient).queryByRole("option", { name: "Air Galon" })).not.toBeInTheDocument();
   });
 
-  it("lists bahan setengah jadi in their own tab, not under Bahan Baku", async () => {
+  it("lists bahan olahan in their own tab, not under Bahan Baku", async () => {
     renderWithProviders(<StockManagement />, { preloadedState: asAdmin });
 
     await findRow("Susu Segar");
     expect(screen.queryByText("Nasi")).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Bahan Setengah Jadi" }));
+    fireEvent.click(screen.getByRole("button", { name: "Bahan Olahan" }));
     const row = rowOf("Nasi");
     expect(row).toHaveTextContent("Tahan lama");
     expect(row).toHaveTextContent("Bahan: Bahan 03");
     expect(row).not.toHaveTextContent("1x masak");
-    expect(row).toHaveTextContent("1 porsi = 150 gr");
+    expect(row).not.toHaveTextContent("150 gr");
     expect(row).toHaveTextContent("80 porsi");
     // Recounting leftover portions (Sesuaikan) is not offered.
     expect(within(row).queryByRole("button", { name: "Sesuaikan" })).not.toBeInTheDocument();
@@ -253,23 +287,23 @@ describe("stock management", () => {
     expect(api.deleteStockItem).not.toHaveBeenCalled();
   });
 
-  it("marks a bahan setengah jadi with no portions left as HARUS MASAK", async () => {
+  it("marks a bahan olahan with no portions left as HARUS MASAK", async () => {
     api.getSemiItems.mockResolvedValue({ data: { data: [{ ...nasi, stock: 0, stockValue: 0, status: "HARUS MASAK" }] } });
     renderWithProviders(<StockManagement />, { preloadedState: asAdmin });
 
     await findRow("Susu Segar");
-    fireEvent.click(screen.getByRole("button", { name: "Bahan Setengah Jadi" }));
+    fireEvent.click(screen.getByRole("button", { name: "Bahan Olahan" }));
     expect(rowOf("Nasi")).toHaveTextContent("0 porsiHARUS MASAK");
   });
 
-  it("adds a bahan setengah jadi from bahan baku only", async () => {
+  it("adds a bahan olahan from bahan baku only", async () => {
     api.addSemiItem.mockResolvedValue({ data: { success: true } });
     renderWithProviders(<StockManagement />, { preloadedState: asAdmin });
 
     await findRow("Susu Segar");
-    fireEvent.click(screen.getByRole("button", { name: "Bahan Setengah Jadi" }));
-    fireEvent.click(screen.getByRole("button", { name: "Tambah Bahan Setengah Jadi" }));
-    const dialog = screen.getByRole("form", { name: "Form bahan setengah jadi" });
+    fireEvent.click(screen.getByRole("button", { name: "Bahan Olahan" }));
+    fireEvent.click(screen.getByRole("button", { name: "Tambah Bahan Olahan" }));
+    const dialog = screen.getByRole("form", { name: "Form bahan olahan" });
     const ingredient = within(dialog).getByRole("combobox", { name: "Bahan 1" });
     expect(within(ingredient).queryByRole("option", { name: "Nasi" })).not.toBeInTheDocument();
 
@@ -306,7 +340,7 @@ describe("stock management", () => {
         components: [{ stockItemId: 1 }],
       })
     );
-    expect(await screen.findByText("Bahan setengah jadi ditambahkan.")).toBeInTheDocument();
+    expect(await screen.findByText("Bahan olahan ditambahkan.")).toBeInTheDocument();
   });
 
   it("lets cashiers record a cooking with the portions counted", async () => {
@@ -314,17 +348,17 @@ describe("stock management", () => {
     renderWithProviders(<StockManagement />, { preloadedState: asCashier });
 
     await findRow("Susu Segar");
-    fireEvent.click(screen.getByRole("button", { name: "Bahan Setengah Jadi" }));
-    expect(screen.queryByRole("button", { name: "Tambah Bahan Setengah Jadi" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Bahan Olahan" }));
+    expect(screen.queryByRole("button", { name: "Tambah Bahan Olahan" })).not.toBeInTheDocument();
     expect(within(rowOf("Nasi")).queryByRole("button", { name: "Ubah" })).not.toBeInTheDocument();
     fireEvent.click(within(rowOf("Nasi")).getByRole("button", { name: "Catat Masak" }));
 
     const dialog = screen.getByRole("form", { name: "Form catat masak" });
-    // The jumlah of each bahan starts from the latest cooking's; the takaran
-    // from the item's.
+    // The jumlah of each bahan starts from the latest cooking's. Only
+    // portions are counted: no Takaran 1 Porsi.
     const bahan = within(dialog).getByRole("textbox", { name: "Jumlah Bahan 03" });
     expect(bahan).toHaveValue("1");
-    expect(within(dialog).getByPlaceholderText("Contoh: 150")).toHaveValue("150");
+    expect(dialog).not.toHaveTextContent("Takaran");
     expect(dialog).not.toHaveTextContent("Berapa Kali Masak");
 
     fireEvent.change(bahan, { target: { value: "" } });
@@ -340,9 +374,8 @@ describe("stock management", () => {
     expect(within(dialog).queryByRole("button", { name: "Timbang Hasil" })).not.toBeInTheDocument();
     expect(within(dialog).queryByText(/Berat Matang/)).not.toBeInTheDocument();
 
-    // 5 pcs (Rp 5.000) for 20 portions of 120 gr.
+    // 5 pcs (Rp 5.000) for 20 portions.
     fireEvent.change(bahan, { target: { value: "5" } });
-    fireEvent.change(within(dialog).getByPlaceholderText("Contoh: 150"), { target: { value: "120" } });
     expect(dialog).toHaveTextContent("Stok sekarang: 10 pcs");
     expect(dialog).not.toHaveTextContent("stok kurang");
     expect(dialog).toHaveTextContent("20 porsi");
@@ -369,7 +402,6 @@ describe("stock management", () => {
         semiItemId: 20,
         items: [{ stockItemId: 3, quantity: 5 }],
         portionQuantity: 20,
-        portionSize: 120,
         note: "",
         // The Daily Prep's business day: today unless picked.
         producedDate: getJakartaDateKey(),
@@ -391,7 +423,7 @@ describe("stock management", () => {
     renderWithProviders(<StockManagement />, { preloadedState: asAdmin });
 
     await findRow("Susu Segar");
-    fireEvent.click(screen.getByRole("button", { name: "Bahan Setengah Jadi" }));
+    fireEvent.click(screen.getByRole("button", { name: "Bahan Olahan" }));
     fireEvent.click(within(rowOf("Nasi")).getByRole("button", { name: "Riwayat" }));
 
     const dialog = await screen.findByRole("dialog", { name: "Riwayat masak Nasi" });
@@ -406,15 +438,15 @@ describe("stock management", () => {
     await waitFor(() => expect(api.deleteSemiProduction.mock.calls[0][0]).toBe(8));
   });
 
-  it("lets cashiers throw portions away and shows the kerugian", async () => {
+  it("lets cashiers throw portions away with a bukti foto and shows the kerugian", async () => {
     api.recordSemiWaste.mockResolvedValue({ data: { success: true } });
     renderWithProviders(<StockManagement />, { preloadedState: asCashier });
 
     await findRow("Susu Segar");
-    fireEvent.click(screen.getByRole("button", { name: "Bahan Setengah Jadi" }));
+    fireEvent.click(screen.getByRole("button", { name: "Bahan Olahan" }));
     fireEvent.click(within(rowOf("Nasi")).getByRole("button", { name: "Buang" }));
 
-    const dialog = screen.getByRole("form", { name: "Form buang porsi" });
+    const dialog = screen.getByRole("form", { name: "Form buang" });
     const quantity = within(dialog).getByPlaceholderText("Contoh: 5");
     fireEvent.change(quantity, { target: { value: "80" } });
     expect(dialog).toHaveTextContent("Lebih dari sisa stok (78 porsi)");
@@ -423,18 +455,59 @@ describe("stock management", () => {
     // 5 of 78 portions worth Rp 68.250: Rp 4.375.
     fireEvent.change(quantity, { target: { value: "5" } });
     expect(dialog).toHaveTextContent("Rp 4.375");
-    fireEvent.change(within(dialog).getByRole("combobox", { name: "Alasan" }), { target: { value: "Tumpah" } });
+    const reason = within(dialog).getByRole("combobox", { name: "Alasan" });
+    expect(Array.from(reason.options, (option) => option.value)).toEqual(["Basi", "Jatuh", "Gosong", "Expired", "Lainnya"]);
+    fireEvent.change(reason, { target: { value: "Jatuh" } });
+    // Kasir must add a photo of what is thrown away.
+    expect(dialog).toHaveTextContent("Foto bukti (wajib)");
+    expect(within(dialog).getByRole("button", { name: "Buang" })).toBeDisabled();
+    const camera = within(dialog).getByLabelText("Ambil foto bukti buang");
+    expect(camera).toHaveAttribute("capture", "environment");
+    fireEvent.change(camera, { target: { files: [photo("nasi-jatuh.jpg")] } });
+    expect(await within(dialog).findByAltText("Bukti buang 1")).toHaveAttribute("src", "blob:nasi-jatuh.jpg");
     fireEvent.click(within(dialog).getByRole("button", { name: "Buang" }));
 
     await waitFor(() =>
       expect(api.recordSemiWaste.mock.calls[0][0]).toEqual({
         semiItemId: 20,
         quantity: 5,
-        reason: "Tumpah",
+        reason: "Jatuh",
         note: "",
+        files: [expect.objectContaining({ name: "nasi-jatuh.jpg" })],
       })
     );
     expect(await screen.findByText("Kerugian dicatat.")).toBeInTheDocument();
+  });
+
+  it("lets admins throw bahan baku away, the photo optional", async () => {
+    api.recordStockWaste.mockResolvedValue({ data: { success: true } });
+    renderWithProviders(<StockManagement />, { preloadedState: asAdmin });
+
+    fireEvent.click(within(await findRow("Susu Segar")).getByRole("button", { name: "Buang" }));
+    const dialog = screen.getByRole("form", { name: "Form buang" });
+    expect(dialog).toHaveTextContent("Buang Susu Segar");
+    expect(dialog).toHaveTextContent("Sisa stok: 800 ml");
+    expect(dialog).toHaveTextContent("Jumlah dibuang (ml)");
+    expect(dialog).toHaveTextContent("Foto bukti (opsional)");
+
+    // 100 of 800 ml worth Rp 20.488: Rp 2.561.
+    fireEvent.change(within(dialog).getByPlaceholderText("Contoh: 5"), { target: { value: "100" } });
+    expect(dialog).toHaveTextContent("Rp 2.561");
+    fireEvent.change(within(dialog).getByRole("combobox", { name: "Alasan" }), { target: { value: "Expired" } });
+    fireEvent.change(within(dialog).getByPlaceholderText("Opsional"), { target: { value: "lewat tanggal" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Buang" }));
+
+    await waitFor(() =>
+      expect(api.recordStockWaste.mock.calls[0][0]).toEqual({
+        stockItemId: 1,
+        quantity: 100,
+        reason: "Expired",
+        note: "lewat tanggal",
+        files: [],
+      })
+    );
+    expect(await screen.findByText("Kerugian dicatat.")).toBeInTheDocument();
+    expect(screen.queryByRole("form", { name: "Form buang" })).not.toBeInTheDocument();
   });
 
   it("tells COGS Sekarang (average of the stock) from the last cooking's cost", async () => {
@@ -447,19 +520,19 @@ describe("stock management", () => {
     renderWithProviders(<StockManagement />, { preloadedState: asAdmin });
 
     await findRow("Susu Segar");
-    fireEvent.click(screen.getByRole("button", { name: "Bahan Setengah Jadi" }));
+    fireEvent.click(screen.getByRole("button", { name: "Bahan Olahan" }));
     const row = rowOf("Nasi");
     expect(row).toHaveTextContent("COGS Rp 3.193 / porsi");
     expect(row).toHaveTextContent("Rp 3.659 / porsiRata-rata stok, ada sisa masak sebelumnya");
   });
 
-  it("lists the kerugian per day and lets admins undo the latest write-off of an item", async () => {
-    api.getSemiWastes.mockResolvedValue({
+  it("lists the kerugian of bahan olahan per day and lets admins undo the latest write-off of an item", async () => {
+    api.getStockWastes.mockResolvedValue({
       data: {
         data: {
           wastes: [
-            { id: 12, semiItemId: 20, itemName: "Nasi", wasteDate: "2026-10-28", quantity: 70, unit: "porsi", cost: 61250, reason: "Sisa akhir hari", note: "", userName: "Admin", createdAt: "2026-10-28 22:00:00" },
-            { id: 11, semiItemId: 20, itemName: "Nasi", wasteDate: "2026-10-28", quantity: 8, unit: "porsi", cost: 7000, reason: "Penyesuaian", note: "", userName: "Admin", createdAt: "2026-10-28 15:00:00" },
+            semiWaste(12, { quantity: 70, cost: 61250, reason: "Sisa akhir hari", createdAt: "2026-10-28 22:00:00" }),
+            semiWaste(11, { quantity: 8, cost: 7000, reason: "Penyesuaian", createdAt: "2026-10-28 15:00:00" }),
           ],
           dailyTotals: [{ date: "2026-10-28", cost: 68250, entries: 2 }],
         },
@@ -469,16 +542,19 @@ describe("stock management", () => {
     renderWithProviders(<StockManagement />, { preloadedState: asAdmin });
 
     await findRow("Susu Segar");
-    // A button inside Bahan Setengah Jadi that shows a table on the page in place
-    // of the list, not a dialog.
-    fireEvent.click(screen.getByRole("button", { name: "Bahan Setengah Jadi" }));
+    // A button inside the tab that shows a table on the page in place of the
+    // list, not a dialog.
+    fireEvent.click(screen.getByRole("button", { name: "Bahan Olahan" }));
     expect(screen.queryByRole("region", { name: "Riwayat kerugian" })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Riwayat Kerugian" }));
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-    expect(screen.queryByText("Tambah Bahan Setengah Jadi")).not.toBeInTheDocument();
+    expect(screen.queryByText("Tambah Bahan Olahan")).not.toBeInTheDocument();
 
     const history = await screen.findByRole("region", { name: "Riwayat kerugian" });
     expect(await within(history).findByText("Sisa akhir hari")).toBeInTheDocument();
+    // Only this tab's kind.
+    expect(api.getStockWastes).toHaveBeenCalledWith({ kind: "semi" });
+    expect(history).toHaveTextContent("Porsi bahan olahan yang dibuang");
     // A table: one row per write-off under its day, with the day's total.
     const table = within(history).getByRole("table");
     expect(within(table).getAllByRole("columnheader").map((cell) => cell.textContent)).toEqual([
@@ -486,14 +562,15 @@ describe("stock management", () => {
       "Jumlah",
       "Alasan",
       "Dicatat",
+      "Bukti",
       "Kerugian",
       "Aksi",
     ]);
     const rows = within(table).getAllByRole("row").slice(1);
     expect(rows.map((row) => within(row).getAllByRole("cell").map((cell) => cell.textContent))).toEqual([
       [expect.stringContaining("28 Okt 2026"), "Rp 68.250", ""],
-      ["Nasi", "70 porsi", "Sisa akhir hari", expect.stringContaining("Admin"), "Rp 61.250", "Batalkan"],
-      ["Nasi", "8 porsi", "Penyesuaian", expect.stringContaining("Admin"), "Rp 7.000", ""],
+      ["Nasi", "70 porsi", "Sisa akhir hari", expect.stringContaining("Admin"), "-", "Rp 61.250", "Batalkan"],
+      ["Nasi", "8 porsi", "Penyesuaian", expect.stringContaining("Admin"), "-", "Rp 7.000", ""],
     ]);
     expect(within(history).getAllByRole("button", { name: "Batalkan" })).toHaveLength(1);
 
@@ -501,33 +578,115 @@ describe("stock management", () => {
     fireEvent.click(within(history).getByRole("button", { name: "Ya, kembalikan ke stok" }));
     await waitFor(() => expect(api.deleteSemiWaste.mock.calls[0][0]).toBe(12));
 
-    // Kembali shows the Bahan Setengah Jadi list again.
+    // Kembali shows the Bahan Olahan list again.
     fireEvent.click(within(history).getByRole("button", { name: "Kembali" }));
     expect(screen.queryByRole("region", { name: "Riwayat kerugian" })).not.toBeInTheDocument();
     expect(rowOf("Nasi")).toHaveTextContent("Catat Masak");
+  });
+
+  it("has its own Riwayat Kerugian for bahan baku, with the bukti foto", async () => {
+    api.getStockWastes.mockResolvedValue({
+      data: {
+        data: {
+          wastes: [
+            {
+              id: 5, kind: "raw", itemId: 1, stockItemId: 1, itemName: "Susu Segar", wasteDate: "2026-10-28", quantity: 250, unit: "ml",
+              cost: 6403, reason: "Basi", note: "kulkas mati", userName: "Kasir", createdAt: "2026-10-28 16:00:00",
+              photos: [{ id: 4, url: "/api/stock-item/waste-photos/raw/4" }],
+            },
+          ],
+          dailyTotals: [{ date: "2026-10-28", cost: 6403, entries: 1 }],
+        },
+      },
+    });
+    api.deleteStockWaste.mockResolvedValue({ data: { success: true } });
+    renderWithProviders(<StockManagement />, { preloadedState: asAdmin });
+
+    await findRow("Susu Segar");
+    fireEvent.click(screen.getByRole("button", { name: "Riwayat Kerugian" }));
+    const history = await screen.findByRole("region", { name: "Riwayat kerugian" });
+    expect(await within(history).findByText("kulkas mati")).toBeInTheDocument();
+    expect(api.getStockWastes).toHaveBeenCalledWith({ kind: "raw" });
+    expect(history).toHaveTextContent("Bahan baku yang dibuang");
+    // In place of the bahan baku list.
+    expect(screen.queryByPlaceholderText("Search stock")).not.toBeInTheDocument();
+
+    const row = within(history).getAllByRole("row")[2];
+    expect(within(row).getAllByRole("cell").map((cell) => cell.textContent)).toEqual([
+      "Susu Segarkulkas mati", "250 ml", "Basi", expect.stringContaining("Kasir"), "", "Rp 6.403", "Batalkan",
+    ]);
+    // The bukti foto opens in full size.
+    const photo = within(row).getByAltText("Bukti buang Susu Segar 1");
+    expect(photo.getAttribute("src")).toMatch(/\/api\/stock-item\/waste-photos\/raw\/4$/);
+    expect(photo.closest("a")).toHaveAttribute("target", "_blank");
+
+    fireEvent.click(within(row).getByRole("button", { name: "Batalkan" }));
+    fireEvent.click(within(history).getByRole("button", { name: "Ya, kembalikan ke stok" }));
+    await waitFor(() => expect(api.deleteStockWaste.mock.calls[0][0]).toBe(5));
+    expect(api.deleteSemiWaste).not.toHaveBeenCalled();
+
+    fireEvent.click(within(history).getByRole("button", { name: "Kembali" }));
+    expect(rowOf("Susu Segar")).toBeInTheDocument();
+  });
+
+  it("totals the kerugian of today, this week (from Monday) and this month", async () => {
+    // Friday 30 Oct 2026: the week started on Monday the 26th.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-10-30T10:00:00+07:00"));
+    api.getStockWastes.mockResolvedValue({
+      data: {
+        data: {
+          wastes: [
+            semiWaste(15, { wasteDate: "2026-10-30", quantity: 2, cost: 6180, reason: "Jatuh", createdAt: "2026-10-30 16:50:00" }),
+          ],
+          dailyTotals: [
+            { date: "2026-10-30", cost: 6180, entries: 1 },
+            { date: "2026-10-28", cost: 68250, entries: 2 },
+            { date: "2026-10-25", cost: 5000, entries: 1 },
+            { date: "2026-09-30", cost: 1000, entries: 1 },
+          ],
+        },
+      },
+    });
+
+    try {
+      renderWithProviders(<StockManagement />, { preloadedState: asCashier });
+      await findRow("Susu Segar");
+      fireEvent.click(screen.getByRole("button", { name: "Bahan Olahan" }));
+      fireEvent.click(screen.getByRole("button", { name: "Riwayat Kerugian" }));
+
+      const totals = await screen.findByRole("list", { name: "Total kerugian" });
+      expect(within(totals).getAllByRole("listitem").map((card) => card.textContent)).toEqual([
+        "Hari iniRp 6.180",
+        "Minggu iniRp 74.430",
+        "Bulan iniRp 79.430",
+      ]);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("closes Riwayat Kerugian when another tab is chosen", async () => {
     renderWithProviders(<StockManagement />, { preloadedState: asAdmin });
 
     await findRow("Susu Segar");
-    fireEvent.click(screen.getByRole("button", { name: "Bahan Setengah Jadi" }));
+    fireEvent.click(screen.getByRole("button", { name: "Bahan Olahan" }));
     fireEvent.click(screen.getByRole("button", { name: "Riwayat Kerugian" }));
     await screen.findByRole("region", { name: "Riwayat kerugian" });
 
     fireEvent.click(screen.getByRole("button", { name: "Bahan Baku" }));
-    fireEvent.click(screen.getByRole("button", { name: "Bahan Setengah Jadi" }));
+    fireEvent.click(screen.getByRole("button", { name: "Bahan Olahan" }));
     expect(screen.queryByRole("region", { name: "Riwayat kerugian" })).not.toBeInTheDocument();
     expect(rowOf("Nasi")).toBeInTheDocument();
   });
 
   it("shows a recount above the stock as a selisih lebih that lowers the day's kerugian", async () => {
-    api.getSemiWastes.mockResolvedValue({
+    api.getStockWastes.mockResolvedValue({
       data: {
         data: {
           wastes: [
-            { id: 14, semiItemId: 20, itemName: "Nasi", wasteDate: "2026-10-30", quantity: -50, unit: "porsi", cost: -43750, reason: "Penyesuaian", note: "", userName: "Admin", createdAt: "2026-10-30 16:00:00" },
-            { id: 13, semiItemId: 20, itemName: "Nasi", wasteDate: "2026-10-30", quantity: 50, unit: "porsi", cost: 43750, reason: "Penyesuaian", note: "", userName: "Admin", createdAt: "2026-10-30 15:59:00" },
+            semiWaste(14, { wasteDate: "2026-10-30", quantity: -50, cost: -43750, reason: "Penyesuaian", createdAt: "2026-10-30 16:00:00" }),
+            semiWaste(13, { wasteDate: "2026-10-30", quantity: 50, cost: 43750, reason: "Penyesuaian", createdAt: "2026-10-30 15:59:00" }),
           ],
           dailyTotals: [{ date: "2026-10-30", cost: 0, entries: 2 }],
         },
@@ -536,7 +695,7 @@ describe("stock management", () => {
     renderWithProviders(<StockManagement />, { preloadedState: asAdmin });
 
     await findRow("Susu Segar");
-    fireEvent.click(screen.getByRole("button", { name: "Bahan Setengah Jadi" }));
+    fireEvent.click(screen.getByRole("button", { name: "Bahan Olahan" }));
     fireEvent.click(screen.getByRole("button", { name: "Riwayat Kerugian" }));
 
     const history = await screen.findByRole("region", { name: "Riwayat kerugian" });
@@ -549,7 +708,7 @@ describe("stock management", () => {
     renderWithProviders(<StockManagement />, { preloadedState: asCashier });
 
     await findRow("Susu Segar");
-    fireEvent.click(screen.getByRole("button", { name: "Bahan Setengah Jadi" }));
+    fireEvent.click(screen.getByRole("button", { name: "Bahan Olahan" }));
     fireEvent.click(screen.getByRole("button", { name: "Riwayat Kerugian" }));
     const empty = await screen.findByRole("region", { name: "Riwayat kerugian" });
     expect(await within(empty).findByText("Belum ada porsi yang dibuang.")).toBeInTheDocument();
@@ -557,22 +716,12 @@ describe("stock management", () => {
   });
 
   it("shows the next 10 write-offs on the next page", async () => {
-    api.getSemiWastes.mockResolvedValue({
+    api.getStockWastes.mockResolvedValue({
       data: {
         data: {
-          wastes: Array.from({ length: 12 }, (_, index) => ({
-            id: 100 - index,
-            semiItemId: 20,
-            itemName: "Nasi",
-            wasteDate: "2026-10-28",
-            quantity: index + 1,
-            unit: "porsi",
-            cost: 1000,
-            reason: "Basi",
-            note: "",
-            userName: "Kasir",
-            createdAt: "2026-10-28 10:00:00",
-          })),
+          wastes: Array.from({ length: 12 }, (_, index) =>
+            semiWaste(100 - index, { quantity: index + 1, cost: 1000, reason: "Basi", userName: "Kasir" })
+          ),
           dailyTotals: [{ date: "2026-10-28", cost: 12000, entries: 12 }],
         },
       },
@@ -580,7 +729,7 @@ describe("stock management", () => {
     renderWithProviders(<StockManagement />, { preloadedState: asCashier });
 
     await findRow("Susu Segar");
-    fireEvent.click(screen.getByRole("button", { name: "Bahan Setengah Jadi" }));
+    fireEvent.click(screen.getByRole("button", { name: "Bahan Olahan" }));
     fireEvent.click(screen.getByRole("button", { name: "Riwayat Kerugian" }));
     const history = await screen.findByRole("region", { name: "Riwayat kerugian" });
     expect(await within(history).findByText("10 porsi")).toBeInTheDocument();

@@ -41,7 +41,7 @@ const menuNames = () =>
   screen
     .getAllByRole("button")
     .map((button) => button.textContent.replace(/\d+$/, ""))
-    .filter((name) => ["Metrik", "Pesanan", "Stok Bahan", "Belanja", "Menu", "Rekap", "Pengaturan"].includes(name));
+    .filter((name) => ["Metrik", "Pesanan", "Stok Bahan", "Belanja Bahan", "Menu", "Rekap", "Pengaturan"].includes(name));
 
 describe("dashboard menus: Stok Bahan holds what is on hand, Belanja the purchases", () => {
   beforeEach(() => {
@@ -61,12 +61,12 @@ describe("dashboard menus: Stok Bahan holds what is on hand, Belanja the purchas
 
   it("puts Belanja right after Stok Bahan with the number of draft nota", async () => {
     renderWithProviders(<Dashboard />, { preloadedState: user("Admin") });
-    expect(menuNames()).toEqual(["Metrik", "Pesanan", "Stok Bahan", "Belanja", "Menu", "Rekap", "Pengaturan"]);
-    expect(await screen.findByRole("button", { name: "Belanja 2" })).toBeInTheDocument();
+    expect(menuNames()).toEqual(["Metrik", "Pesanan", "Stok Bahan", "Belanja Bahan", "Menu", "Rekap", "Pengaturan"]);
+    expect(await screen.findByRole("button", { name: "Belanja Bahan 2" })).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Belanja 2" }));
-    expect(screen.getByRole("heading", { name: "Belanja" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Tambah Belanja" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Belanja Bahan 2" }));
+    expect(screen.getByRole("heading", { name: "Belanja Bahan" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Tambah Belanja Bahan" })).toBeInTheDocument();
     expect(await screen.findByText("Draft Nota Menunggu Posting (2)")).toBeInTheDocument();
     // The history opens Per Nota.
     expect(await screen.findByText("Belum ada belanja bahan baku tersimpan.")).toBeInTheDocument();
@@ -90,24 +90,24 @@ describe("dashboard menus: Stok Bahan holds what is on hand, Belanja the purchas
     expect(await screen.findByRole("button", { name: "Stok Bahan 2" })).toBeInTheDocument();
   });
 
-  it("keeps only bahan baku and bahan setengah jadi under Stok Bahan", async () => {
+  it("keeps only bahan baku and bahan olahan under Stok Bahan", async () => {
     renderWithProviders(<Dashboard />, { preloadedState: user("Admin") });
     fireEvent.click(screen.getByRole("button", { name: /^Stok Bahan/ }));
 
     const page = screen.getByRole("heading", { name: "Stok Management" }).closest("div.container");
-    for (const tab of ["Bahan Baku", "Bahan Setengah Jadi"]) {
+    for (const tab of ["Bahan Baku", "Bahan Olahan"]) {
       expect(within(page).getByRole("button", { name: tab })).toBeInTheDocument();
     }
     // Barang Lainnya are seen in the Belanja menu.
     expect(within(page).queryByRole("button", { name: "Lainnya" })).not.toBeInTheDocument();
     expect(within(page).queryByRole("button", { name: "Bahan Belanjaan" })).not.toBeInTheDocument();
-    expect(within(page).queryByRole("button", { name: "Tambah Belanja" })).not.toBeInTheDocument();
+    expect(within(page).queryByRole("button", { name: "Tambah Belanja Bahan" })).not.toBeInTheDocument();
   });
 
   it("shows Belanja to kasir, who write draft nota", async () => {
     renderWithProviders(<Dashboard />, { preloadedState: user("Cashier") });
-    expect(menuNames()).toEqual(["Metrik", "Pesanan", "Stok Bahan", "Belanja", "Rekap"]);
-    fireEvent.click(await screen.findByRole("button", { name: "Belanja 2" }));
-    expect(screen.getByRole("button", { name: "Tambah Belanja" })).toBeInTheDocument();
+    expect(menuNames()).toEqual(["Metrik", "Pesanan", "Stok Bahan", "Belanja Bahan", "Rekap"]);
+    fireEvent.click(await screen.findByRole("button", { name: "Belanja Bahan 2" }));
+    expect(screen.getByRole("button", { name: "Tambah Belanja Bahan" })).toBeInTheDocument();
   });
 });

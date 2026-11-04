@@ -14,7 +14,17 @@ const disabledPickerClass =
 //   preview (CameraCaptureDialog), because desktop browsers ignore capture.
 //   Without a usable camera API it falls back to the file chooser.
 // - "Pilih dari Galeri" picks saved pictures.
-const ReceiptPicker = ({ receipts = [], onAdd, onRemove, max, disabled = false, busy = false, hint }) => {
+// subject names the photos in labels: "bukti nota" or "bukti buang".
+const ReceiptPicker = ({
+  receipts = [],
+  onAdd,
+  onRemove,
+  max,
+  disabled = false,
+  busy = false,
+  hint,
+  subject = "bukti nota",
+}) => {
   const cameraInput = useRef(null);
   const [showCamera, setShowCamera] = useState(false);
   const full = receipts.length >= max;
@@ -57,7 +67,7 @@ const ReceiptPicker = ({ receipts = [], onAdd, onRemove, max, disabled = false, 
           tabIndex={-1}
           disabled={blocked}
           onChange={handleChange}
-          aria-label="Ambil foto bukti nota"
+          aria-label={`Ambil foto ${subject}`}
         />
         <label className={blocked ? disabledPickerClass : pickerClass}>
           <FiImage size={16} aria-hidden="true" />
@@ -69,7 +79,7 @@ const ReceiptPicker = ({ receipts = [], onAdd, onRemove, max, disabled = false, 
             className="sr-only"
             disabled={blocked}
             onChange={handleChange}
-            aria-label="Pilih bukti nota dari galeri"
+            aria-label={`Pilih ${subject} dari galeri`}
           />
         </label>
       </div>
@@ -77,12 +87,12 @@ const ReceiptPicker = ({ receipts = [], onAdd, onRemove, max, disabled = false, 
         {busy ? "Menyiapkan foto..." : hint || `${receipts.length} / ${max} foto. JPG, PNG, atau WEBP.`}
       </p>
       {receipts.length > 0 && (
-        <ul className="mt-3 flex flex-wrap gap-3" aria-label="Foto bukti nota">
+        <ul className="mt-3 flex flex-wrap gap-3" aria-label={`Foto ${subject}`}>
           {receipts.map((receipt, index) => (
             <li key={receipt.key} className="relative">
               <img
                 src={receipt.previewUrl}
-                alt={`Bukti nota ${index + 1}`}
+                alt={`${subject.charAt(0).toUpperCase()}${subject.slice(1)} ${index + 1}`}
                 className="h-24 w-24 rounded-lg border border-[#444] object-cover"
               />
               <button

@@ -1,4 +1,4 @@
-// Bahan setengah jadi (semi items, e.g. Nasi from Beras): previews for the
+// Bahan olahan (semi items, e.g. Nasi from Beras): previews for the
 // forms. They mirror the backend (semi.repository.js), which stores the result.
 import { parseCostInput } from "./stockItems";
 

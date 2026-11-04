@@ -29,7 +29,7 @@ const toggleClass = (active) =>
     active ? "bg-[#a79981] text-[#101010]" : "text-[#ababab] hover:bg-[#333] hover:text-white"
   }`;
 
-// The one place for belanja (the "Belanja" menu): the "Tambah Belanja" form for both Jenis
+// The one place for belanja (the "Belanja Bahan" menu): the "Tambah Belanja Bahan" form for both Jenis
 // Belanja (bahan baku, lainnya), the draft nota waiting to be posted, and
 // the searchable history, in tabs Bahan Baku and the kategori of barang
 // Lainnya (Peralatan, Perlengkapan, Promosi, Lain-lain), shown Per Struk (each
@@ -252,7 +252,7 @@ export default function ShoppingManagement({ stockItems, supplyItems = NO_ITEMS,
             onClick={() => setShowForm(true)}
             type="button"
           >
-            Tambah Belanja
+            Tambah Belanja Bahan
           </button>
           <input
             className={`${inputClass} sm:w-64`}
