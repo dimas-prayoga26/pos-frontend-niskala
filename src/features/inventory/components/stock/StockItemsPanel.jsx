@@ -42,8 +42,7 @@ const RecipeUseCell = ({ item, onToggle, isPending }) => {
 // the tab is reopened or the search changes. "Ubah" only shows when
 // onEditCogs is given. Admins switch "Bahan Resep" (offered in the recipe
 // editors) per bahan. Staff throw bahan away with Buang (not those with
-// Bebas Stok); Riwayat Kerugian opens the write-offs. Stock Opname counts
-// the stock on hand and Riwayat Opname lists its selisih.
+// Bebas Stok); Riwayat Kerugian opens the write-offs.
 const StockItemsPanel = ({
   stockItems,
   searchQuery,
@@ -55,8 +54,6 @@ const StockItemsPanel = ({
   recipeUsePendingId,
   onWaste,
   onShowWastes,
-  onOpname,
-  onShowOpnames,
 }) => {
   const [currentPage, setCurrentPage] = useState(1);
   const [recipeUse, setRecipeUse] = useState("all");
@@ -102,20 +99,6 @@ const StockItemsPanel = ({
             className="shrink-0 rounded-lg bg-[#333] px-4 py-2 text-sm font-bold text-[#f5f5f5] hover:bg-[#3a3a3a]"
           >
             Riwayat Kerugian
-          </button>
-          <button
-            type="button"
-            onClick={onShowOpnames}
-            className="rounded-lg bg-[#333] px-4 py-2 text-sm font-bold text-[#f5f5f5] hover:bg-[#3a3a3a]"
-          >
-            Riwayat Opname
-          </button>
-          <button
-            type="button"
-            onClick={onOpname}
-            className="rounded-lg bg-[#a79981] px-4 py-2 text-sm font-bold text-[#101010]"
-          >
-            Stock Opname
           </button>
         </div>
       </div>
@@ -212,9 +195,9 @@ const StockItemsPanel = ({
                         onClick={() => onWaste(item)}
                         disabled={!(Number(item.stock) > 0)}
                         title={Number(item.stock) > 0 ? "Catat bahan yang dibuang" : "Stok kosong"}
-                        className="rounded-md border border-red-400/60 px-3 py-1 text-red-400 hover:bg-red-400/10 disabled:cursor-not-allowed disabled:opacity-40"
+                        className="whitespace-nowrap rounded-md border border-red-400/60 px-3 py-1 text-red-400 hover:bg-red-400/10 disabled:cursor-not-allowed disabled:opacity-40"
                       >
-                        Buang
+                        Penyesuaian Stok
                       </button>
                     )}
                     {isAdmin && onEditCogs && (

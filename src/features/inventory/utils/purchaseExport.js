@@ -33,7 +33,7 @@ export const buildRekapRows = (notas, totalSpending, { showUnits = true } = {}) 
         kind: "item",
         cells: [
           ...(index === 0 ? head : ["", "", ""]),
-          item.itemName,
+          item.merkName ? `${item.itemName} (${item.merkName})` : item.itemName,
           index === 0 ? nota.paymentMethod : "",
           item.quantity,
           ...(showUnits

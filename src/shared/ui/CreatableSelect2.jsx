@@ -7,6 +7,9 @@ import { enqueueSnackbar } from "notistack";
 
 if (!$.fn.select2) installSelect2(window, $);
 
+// Options may be grouped: { text, children: [options] } is an <optgroup>.
+const flatten = options => options.flatMap(option => option.children || [option]);
+
 export default function CreatableSelect2({ options, value, onSelect, onCreate, placeholder, disabled, label }) {
   const select = useRef(null);
   const latest = useRef({ options, onSelect, onCreate });
@@ -22,7 +25,7 @@ export default function CreatableSelect2({ options, value, onSelect, onCreate, p
       language: { noResults: () => canCreate ? "Ketik nama untuk menambah data" : "Pilihan tidak ditemukan", searching: () => "Mencari..." },
       createTag: ({ term }) => {
         const name = term.trim().replace(/\s+/g, " ");
-        if (!name || name.length > 150 || latest.current.options.some(option => option.text.toLowerCase() === name.toLowerCase())) return null;
+        if (!name || name.length > 150 || flatten(latest.current.options).some(option => option.text.toLowerCase() === name.toLowerCase())) return null;
         return { id: `new:${name}`, text: name, newTag: true };
       },
       templateResult: data => data.newTag ? `Buat "${data.text}"` : data.text,
@@ -30,7 +33,7 @@ export default function CreatableSelect2({ options, value, onSelect, onCreate, p
     element.on("select2:select.shopping", async event => {
       const option = event.params.data;
       if (!option.newTag) {
-        latest.current.onSelect(latest.current.options.find(item => String(item.id) === option.id) || option);
+        latest.current.onSelect(flatten(latest.current.options).find(item => String(item.id) === option.id) || option);
         return;
       }
       setSaving(true);
@@ -56,11 +59,14 @@ export default function CreatableSelect2({ options, value, onSelect, onCreate, p
   }, [placeholder, canCreate]);
   useEffect(() => {
     const element = $(select.current);
-    const emptyOption = options.find(option => String(option.id) === "");
+    const emptyOption = flatten(options).find(option => String(option.id) === "");
+    const optionOf = option => new Option(option.text, String(option.id));
     element.empty().append(new Option(emptyOption?.text || "", ""));
     options
-      .filter(option => String(option.id) !== "")
-      .forEach(option => element.append(new Option(option.text, String(option.id))));
+      .filter(option => option.children || String(option.id) !== "")
+      .forEach(option => element.append(option.children
+        ? $("<optgroup>").attr("label", option.text).append(option.children.map(optionOf))
+        : optionOf(option)));
     element.val(value ? String(value) : "").trigger("change.select2");
   }, [options, value]);
   useEffect(() => { $(select.current).prop("disabled", Boolean(disabled || saving)); }, [disabled, saving]);

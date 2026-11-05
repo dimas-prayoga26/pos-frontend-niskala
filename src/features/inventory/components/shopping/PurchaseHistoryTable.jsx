@@ -3,7 +3,7 @@ import { costDisplay, currency, quantityDisplay } from "../../utils/format";
 import { packedQuantityLabel } from "../../utils/shopping";
 
 // The "Per Item" history: one row per item showing its most recent purchase;
-// clicking opens the detail. costLabel names the moving average (COGS, or
+// clicking opens the detail (with the harga satuan). costLabel names the moving average (COGS, or
 // Harga Rata-rata for Lainnya). Jumlah is the last column, so TOTAL
 // PENGELUARAN closes the table right under it: what every purchase of the tab, period and search cost (with its
 // share of ongkir/diskon/PPN), on all pages (itemCount items). hasStock false
@@ -32,8 +32,8 @@ const PurchaseHistoryTable = ({
             <th className="p-3">Barang</th>
             <th className="p-3">Tanggal</th>
             <th className="p-3">Toko</th>
+            <th className="p-3">Merk</th>
             <th className="p-3">{showUnits ? "Gramasi" : "Qty"}</th>
-            <th className="p-3 text-right">{showUnits ? "Harga Satuan" : "Harga per Barang"}</th>
             <th className="p-3 text-right">Masuk Stok</th>
             <th className="p-3 text-right">{costLabel} Setelah</th>
             <th className="p-3 text-right">Jumlah</th>
@@ -73,10 +73,10 @@ const PurchaseHistoryTable = ({
                   </p>
                 </td>
                 <td className="p-3">{item.supplierName}</td>
+                <td className="p-3">{item.merkName || <span className="text-[#ababab]">-</span>}</td>
                 <td className="p-3">
                   {showUnits ? packedQuantityLabel(item.quantity, item.unit, item.packSize, item.stockUnit) : qty(item.quantity, item.unit)}
                 </td>
-                <td className="p-3 text-right">{currency(item.unitPrice)}</td>
                 <td className="p-3 text-right">
                   {hasStock(group) ? qty(item.stockQuantity, item.stockUnit) : <span className="text-[#ababab]">-</span>}
                 </td>

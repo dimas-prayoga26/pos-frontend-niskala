@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { PURCHASE_KINDS } from "../utils/purchaseKinds";
 
-// Draft nota waiting to be posted, for the badge of the "Belanja Bahan" menu. Shares
+// Draft nota waiting to be posted, for the badge of the "Belanja" menu. Shares
 // its queries (and their realtime refresh) with the drafts panel.
 const usePurchaseDraftCount = () => {
   const raw = useQuery({ queryKey: ["purchase-drafts", "raw"], queryFn: PURCHASE_KINDS.raw.listDrafts });

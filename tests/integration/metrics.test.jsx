@@ -12,7 +12,6 @@ vi.mock("../../src/https/index", async (importOriginal) => ({
   getOrders: vi.fn(),
   getRecaps: vi.fn(),
   getStockItems: vi.fn(),
-  getStockOpnames: vi.fn(),
   getStockWastes: vi.fn(),
 }));
 
@@ -55,38 +54,6 @@ describe("dashboard metrics", () => {
     api.getStockItems.mockResolvedValue(empty);
     api.getOrders.mockResolvedValue({ data: { data: orders } });
     api.getStockWastes.mockResolvedValue({ data: { data: { wastes: [], dailyTotals: [] } } });
-    api.getStockOpnames.mockResolvedValue({ data: { data: { opnames: [], dailyTotals: [] } } });
-  });
-
-  it("shows the Kehilangan Persediaan of the period from Stock Opname, apart from HPP", async () => {
-    api.getStockOpnames.mockResolvedValue({
-      data: {
-        data: {
-          opnames: [],
-          dailyTotals: [
-            { date: today, cost: 4500, entries: 2 },
-            { date: "2025-01-15", cost: 9270, entries: 1 },
-          ],
-        },
-      },
-    });
-    renderWithProviders(<Metrics />, { route: "/dashboard" });
-
-    await waitFor(() =>
-      expect(screen.getByText("Kehilangan Persediaan").closest(".min-w-0")).toHaveTextContent(/Rp\s4\.500$/)
-    );
-  });
-
-  it("shows more stock lebih than kurang as a Kelebihan Persediaan, not a negative loss", async () => {
-    api.getStockOpnames.mockResolvedValue({
-      data: { data: { opnames: [], dailyTotals: [{ date: today, cost: -13180, entries: 1 }] } },
-    });
-    renderWithProviders(<Metrics />, { route: "/dashboard" });
-
-    await waitFor(() =>
-      expect(screen.getByText("Kelebihan Persediaan").closest(".min-w-0")).toHaveTextContent(/Rp\s13\.180$/)
-    );
-    expect(screen.queryByText("Kehilangan Persediaan")).not.toBeInTheDocument();
   });
 
   it("shows the Biaya Wastage of the period apart from HPP", async () => {

@@ -20,7 +20,7 @@ const Dashboard = () => {
   }`;
   const [activeTab, setActiveTab] = useState("metrics");
   // Bahan baku a Catat Masak is short of ({ stockItemId, unit }): Belanja
-  // Bahan opens Tambah Belanja Bahan with them. Any tab click drops them.
+  // Bahan opens Tambah Belanja with them. Any tab click drops them.
   const [restockItems, setRestockItems] = useState(null);
   const [lastSeenOrderId, setLastSeenOrderId] = useState(() => {
     const storedValue = localStorage.getItem(orderBadgeStorageKey);
@@ -69,7 +69,7 @@ const Dashboard = () => {
         { key: "metrics", label: "Metrik" },
         { key: "orders", label: "Pesanan", badge: newOrderCount },
         { key: "stock", label: "Stok Bahan", badge: lowStockCount },
-        { key: "shopping", label: "Belanja Bahan", badge: draftCount },
+        { key: "shopping", label: "Belanja", badge: draftCount },
         { key: "menu", label: "Menu" },
         { key: "recap", label: "Rekap" },
         { key: "setting", label: "Pengaturan" },
@@ -78,7 +78,7 @@ const Dashboard = () => {
         { key: "metrics", label: "Metrik" },
         { key: "orders", label: "Pesanan", badge: newOrderCount },
         { key: "stock", label: "Stok Bahan", badge: lowStockCount },
-        { key: "shopping", label: "Belanja Bahan", badge: draftCount },
+        { key: "shopping", label: "Belanja", badge: draftCount },
         { key: "recap", label: "Rekap" },
       ];
 

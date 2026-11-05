@@ -62,7 +62,10 @@ const PurchaseNotaDialog = ({
             {nota.items.map((item) => (
               <li key={item.id} className="py-2">
                 <div className="flex items-start justify-between gap-3">
-                  <span className="font-semibold">{item.itemName}</span>
+                  <span>
+                    <span className="font-semibold">{item.itemName}</span>
+                    {item.merkName && <span className="ml-2 text-xs text-[#ababab]">{item.merkName}</span>}
+                  </span>
                   <span className="whitespace-nowrap font-semibold">{currency(item.total)}</span>
                 </div>
                 <p className="text-xs text-[#ababab]">

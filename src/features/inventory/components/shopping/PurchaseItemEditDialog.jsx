@@ -12,7 +12,8 @@ const pricePerUnit = (total, quantity) =>
 // from (pcs of a bahan in ml, a dus) asks its isi too: 10 pcs × 1.000 ml.
 // "Masuk stok" shows what the line puts into stock, and what it was, so a
 // wrong gramasi or isi is seen before saving. gr or ml for a bahan counted in
-// pcs moves its satuan stok there, 1 pcs = what this line weighs.
+// pcs moves its satuan stok there, 1 pcs = what this line weighs. With
+// merkOptions the line's merk can be changed or created too.
 const PurchaseItemEditDialog = ({
   itemName,
   form,
@@ -23,6 +24,8 @@ const PurchaseItemEditDialog = ({
   showUnits = true,
   stockUnit = "",
   previousStockQuantity,
+  merkOptions,
+  onCreateMerk,
 }) => {
   const quantity = parseShoppingQuantity(form.quantity);
   const switching = showUnits && switchesStockUnit(form.unit, stockUnit);
@@ -61,6 +64,20 @@ const PurchaseItemEditDialog = ({
             Tutup
           </button>
         </div>
+        {merkOptions && (
+          <div className="mb-3">
+            <span className="mb-1 block text-sm">Merk</span>
+            <CreatableSelect2
+              options={merkOptions}
+              value={form.merkId}
+              onSelect={(option) => onChange({ merkId: option?.id || "" })}
+              onCreate={onCreateMerk}
+              placeholder="Cari atau buat merk"
+              label="Merk"
+              disabled={isSaving}
+            />
+          </div>
+        )}
         <div className={`grid gap-3 ${showUnits && !withIsi ? "sm:grid-cols-3" : "sm:grid-cols-2"}`}>
           <label>
             <span className="mb-1 block text-sm">{!showUnits ? "Qty" : withIsi ? "Jumlah" : "Gramasi"}</span>

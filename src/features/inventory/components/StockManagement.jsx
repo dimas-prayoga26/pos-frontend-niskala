@@ -3,19 +3,16 @@ import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { enqueueSnackbar } from "notistack";
 import { useSelector } from "react-redux";
 import { getSemiItems, getStockItems } from "../api";
-import useOpnameActions from "../hooks/useOpnameActions";
 import usePreparedItemActions from "../hooks/usePreparedItemActions";
 import useStockItemActions from "../hooks/useStockItemActions";
 import useWasteActions from "../hooks/useWasteActions";
 import DeleteStockItemDialog from "./stock/DeleteStockItemDialog";
-import OpnamesPanel from "./stock/OpnamesPanel";
 import PreparedHistoryDialog from "./stock/PreparedHistoryDialog";
 import PreparedItemDialog from "./stock/PreparedItemDialog";
 import PreparedItemsPanel from "./stock/PreparedItemsPanel";
 import PreparedProductionDialog from "./stock/PreparedProductionDialog";
 import StockCogsDialog from "./stock/StockCogsDialog";
 import StockItemsPanel from "./stock/StockItemsPanel";
-import StockOpnameDialog from "./stock/StockOpnameDialog";
 import WasteDialog from "./stock/WasteDialog";
 import WastesPanel from "./stock/WastesPanel";
 
@@ -29,19 +26,18 @@ const STOCK_TABS = [
 
 // Dashboard "Stok" menu, what is on hand: bahan baku (stock_raw_items) and
 // bahan olahan (stock_semi_items) cooked from bahan baku. Buying them is
-// the separate "Belanja Bahan" menu, which also shows the barang Lainnya
+// the separate "Belanja" menu, which also shows the barang Lainnya
 // (stock_supply_items: peralatan, perlengkapan, promosi, lain-lain). A new
-// bahan baku comes from Tambah Belanja Bahan; there is no Tambah Stok. Both tabs
+// bahan baku comes from Tambah Belanja; there is no Tambah Stok. Both tabs
 // have Buang per item (Modul 3, with a bukti foto) and a Riwayat Kerugian
-// button that shows that tab's own write-offs in place of the list, and a
-// Stock Opname (physical count) with its Riwayat Opname, shown the same way.
+// button that shows that tab's own write-offs in place of the list.
 // onRestock(items) takes the bahan baku a Catat Masak is short of to Belanja
 // Bahan.
 const StockManagement = ({ onRestock }) => {
   const userRole = useSelector((state) => state.user.role);
   const isAdmin = userRole?.toLowerCase() === "admin";
   const [activeStockTab, setActiveStockTab] = useState("stock");
-  // The list, or its Riwayat Kerugian ("wastes") / Riwayat Opname ("opnames").
+  // The list, or its Riwayat Kerugian ("wastes").
   const [historyView, setHistoryView] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [pendingDeleteItem, setPendingDeleteItem] = useState(null);
@@ -53,8 +49,6 @@ const StockManagement = ({ onRestock }) => {
   const [historyItem, setHistoryItem] = useState(null);
   // { kind: "raw" | "semi", item } being thrown away.
   const [wasting, setWasting] = useState(null);
-  // "raw" | "semi": the Stock Opname dialog of that kind.
-  const [opnameKind, setOpnameKind] = useState(null);
   const stockActions = useStockItemActions({
     onDeleted: () => setPendingDeleteItem(null),
     onCogsSaved: () => setEditingCogsItem(null),
@@ -65,7 +59,6 @@ const StockManagement = ({ onRestock }) => {
     onProduced: () => setProducingItem(null),
   });
   const wasteActions = useWasteActions({ onWasted: () => setWasting(null) });
-  const opnameActions = useOpnameActions({ onRecorded: () => setOpnameKind(null) });
 
   const { data: stockItemsRes, isError } = useQuery({
     queryKey: ["stock-items"],
@@ -91,8 +84,7 @@ const StockManagement = ({ onRestock }) => {
       editingSemiItem ||
       producingItem ||
       historyItem ||
-      wasting ||
-      opnameKind
+      wasting
   );
 
   // Lock page scrolling while a dialog is open.
@@ -113,7 +105,7 @@ const StockManagement = ({ onRestock }) => {
         <div>
           <h2 className="text-[#f5f5f5] text-xl font-semibold">Stok Management</h2>
           <p className="mt-1 text-sm text-[#ababab]">
-            Isi gudang: bahan baku dan bahan olahan. Belanjanya, termasuk barang Lainnya, lewat menu Belanja Bahan.
+            Isi gudang: bahan baku dan bahan olahan. Belanjanya, termasuk barang Lainnya, lewat menu Belanja.
           </p>
         </div>
         <div className="flex w-full shrink-0 gap-2 rounded-lg bg-[#1f1f1f] p-1 sm:w-fit">
@@ -148,8 +140,6 @@ const StockManagement = ({ onRestock }) => {
           onWaste={(item) => setWasting({ kind: "semi", item })}
           onDelete={setPendingDeleteSemiItem}
           onShowWastes={() => setHistoryView("wastes")}
-          onOpname={() => setOpnameKind("semi")}
-          onShowOpnames={() => setHistoryView("opnames")}
         />
       )}
       {historyView === "wastes" && (
@@ -158,15 +148,6 @@ const StockManagement = ({ onRestock }) => {
           isAdmin={isAdmin}
           onUndo={wasteActions.undoWaste}
           isUndoing={wasteActions.isUndoingWaste}
-          onBack={() => setHistoryView(null)}
-        />
-      )}
-      {historyView === "opnames" && (
-        <OpnamesPanel
-          kind={activeStockTab === "semi" ? "semi" : "raw"}
-          isAdmin={isAdmin}
-          onUndo={opnameActions.undo}
-          isUndoing={opnameActions.isUndoing}
           onBack={() => setHistoryView(null)}
         />
       )}
@@ -182,8 +163,6 @@ const StockManagement = ({ onRestock }) => {
           recipeUsePendingId={stockActions.recipeUsePendingId}
           onWaste={(item) => setWasting({ kind: "raw", item })}
           onShowWastes={() => setHistoryView("wastes")}
-          onOpname={() => setOpnameKind("raw")}
-          onShowOpnames={() => setHistoryView("opnames")}
         />
       )}
 
@@ -224,16 +203,6 @@ const StockManagement = ({ onRestock }) => {
           onUndo={semiActions.undoProduction}
           isUndoing={semiActions.isUndoing}
           onClose={() => setHistoryItem(null)}
-        />
-      )}
-
-      {opnameKind && (
-        <StockOpnameDialog
-          kind={opnameKind}
-          items={opnameKind === "semi" ? semiItems : stockItems}
-          onSave={opnameActions.record}
-          onCancel={() => setOpnameKind(null)}
-          isSaving={opnameActions.isRecording}
         />
       )}
 

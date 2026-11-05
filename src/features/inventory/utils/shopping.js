@@ -8,13 +8,15 @@ export const HISTORY_PAGE_SIZE = 10;
 
 let rowKey = 0;
 
-// stockItemId holds the chosen item of either Jenis Belanja; category is only
-// asked for a new barang lainnya. packSize/packUnit (Isi per Kemasan, bahan
+// stockItemId holds the chosen item of either Jenis Belanja; merkId its merk
+// (optional, "draft:" for a new one); category is only asked for a new barang
+// lainnya. packSize/packUnit (Isi per Kemasan, bahan
 // baku: the qty is packages of packSize packUnit each) are no longer asked by
 // the form; they only stay on a draft saved with them.
 export const blankRow = () => ({
   key: ++rowKey,
   stockItemId: "",
+  merkId: "",
   category: "",
   quantity: "",
   unit: "",
@@ -123,11 +125,12 @@ export const isPurchaseFormComplete = (form, rows, { requireUnit = true } = {}) 
 // Names created in the form ("draft:" ids) are sent as names so the server
 // creates the supplier/item inside the purchase transaction.
 // itemIdKey is the API's name for an existing item: stockItemId (bahan baku)
-// or supplyItemId (perlengkapan).
+// or supplyItemId (perlengkapan). merkPayloadOf turns a line's merkId into
+// { merkId }, { merkName } (new) or {} (useMerkOptions).
 export const buildPurchasePayload = (
   form,
   rows,
-  { extraSuppliers, extraItems, itemIdKey = "stockItemId" }
+  { extraSuppliers, extraItems, itemIdKey = "stockItemId", merkPayloadOf = () => ({}) }
 ) => {
   const supplierDraft = extraSuppliers.find((item) => item.id === form.suplierId);
   const { suplierId, ...details } = form;
@@ -137,7 +140,7 @@ export const buildPurchasePayload = (
   return {
     ...details,
     ...(supplierDraft ? { suplierName: supplierDraft.name } : { suplierId }),
-    items: rows.map(({ stockItemId, category, quantity, unit, packSize, packUnit, unitPrice }) => {
+    items: rows.map(({ stockItemId, merkId, category, quantity, unit, packSize, packUnit, unitPrice }) => {
       const draft = extraItems.find((item) => item.id === stockItemId);
       const parsedQuantity = parseShoppingQuantity(quantity);
 
@@ -145,6 +148,7 @@ export const buildPurchasePayload = (
         ...(draft
           ? { itemName: draft.name, ...(category && { category }) }
           : { [itemIdKey]: stockItemId }),
+        ...merkPayloadOf(merkId),
         quantity: parsedQuantity,
         // Lines without unit (barang Lainnya) take their item's unit on the server.
         ...(unit && { unit }),
