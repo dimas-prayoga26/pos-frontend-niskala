@@ -23,6 +23,7 @@ import {
   getSummaryDateRangeLabel,
 } from "../../features/orders/utils/orderFilters";
 import CreatableSelect2 from "../shared/CreatableSelect2";
+import RecapItemCostDialog from "./RecapItemCostDialog";
 import {
   formatCurrency,
   getOrderGrossRevenue,
@@ -572,6 +573,8 @@ const RecapManagement = () => {
     getMonthDateRange()
   );
   const [isRecapModalOpen, setIsRecapModalOpen] = useState(false);
+  // The Rekap New row whose rincian HPP is open.
+  const [costItem, setCostItem] = useState(null);
   const [pendingDailyRecapPayload, setPendingDailyRecapPayload] = useState(null);
   const [recapForm, setRecapForm] = useState(createEmptyRecapForm);
   const [weeklyRecapForm, setWeeklyRecapForm] = useState(
@@ -844,6 +847,7 @@ const RecapManagement = () => {
 
           return {
             id: `${order.id || order._id || order.orderId}-${item.id || index}`,
+            orderItemId: item._id,
             orderCode: order.orderId || order.orderCode || order.id || "-",
             date: order.orderDate,
             isFirstOrderItem: index === 0,
@@ -1807,9 +1811,20 @@ const RecapManagement = () => {
                         </td>
                       )}
                       <td className="min-w-[220px] px-4 py-4 align-middle">
-                        <span className="block max-w-[240px] truncate text-sm font-semibold text-[#f5f5f5]">
-                          {row.menu}
-                        </span>
+                        {row.orderItemId ? (
+                          <button
+                            type="button"
+                            onClick={() => setCostItem(row)}
+                            title="Lihat rincian HPP"
+                            className="block max-w-[240px] truncate text-left text-sm font-semibold text-[#f5f5f5] underline-offset-4 hover:text-[#f6d365] hover:underline"
+                          >
+                            {row.menu}
+                          </button>
+                        ) : (
+                          <span className="block max-w-[240px] truncate text-sm font-semibold text-[#f5f5f5]">
+                            {row.menu}
+                          </span>
+                        )}
                       </td>
                       <td className="px-4 py-4 text-center align-middle">
                         <span className="inline-flex min-w-[44px] justify-center rounded-md bg-[#303030] px-2.5 py-1 text-sm font-bold text-[#f5f5f5]">
@@ -2049,6 +2064,8 @@ const RecapManagement = () => {
         </table>
         </div>
       </div>
+
+      {costItem && <RecapItemCostDialog item={costItem} onClose={() => setCostItem(null)} />}
 
       {isRecapModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">

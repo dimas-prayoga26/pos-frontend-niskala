@@ -46,6 +46,8 @@ export const createThermalPrintUrl = ({ orderId, payload }) =>
 export const createDraftThermalPrintUrl = ({ payload }) =>
   axiosWrapper.post("/api/order/draft/thermal-print-url", { payload });
 export const getOrders = () => axiosWrapper.get("/api/order");
+// Rincian HPP of one sold item: its bahan, per portion and in total.
+export const getOrderItemCosts = (itemId) => axiosWrapper.get(`/api/order/items/${itemId}/costs`);
 export const deleteOrder = (orderId) =>
   axiosWrapper.delete(`/api/order/${orderId}`);
 export const updateOrderStatus = ({ orderId, orderStatus }) =>

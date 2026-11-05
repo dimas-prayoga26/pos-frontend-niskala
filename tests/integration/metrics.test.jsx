@@ -29,7 +29,11 @@ const makeOrder = (id, totalWithTax, extra = {}) => ({
 const orders = [
   makeOrder(1, 100000, { paymentMethod: "QRIS" }),
   // A bahan olahan waits for the day to close (Modul 2).
-  makeOrder(2, 50000, { hppStatus: "pending" }),
+  // 2 Nasi Telur: HPP 3.800 a portion, 1.800 of it the Nasi (olahan).
+  makeOrder(2, 50000, {
+    hppStatus: "pending",
+    items: [{ id: "1-5", name: "Nasi Telur", quantity: 2, pricePerQuantity: 25000, price: 50000, hppCost: 3800, hppOlahan: 1800 }],
+  }),
   makeOrder(3, 90000, {
     orderType: "Online",
     orderPlatform: "ShopeeFood",
@@ -92,7 +96,12 @@ describe("dashboard metrics", () => {
     expect(
       screen.getByText("Penjualan Bersih").closest(".min-w-0")
     ).toHaveTextContent(/Rp\s438\.600$/);
-    // Its HPP is counted, marked as provisional until the day closes.
-    expect(screen.getByText("Sementara: 1 nota HPP Pending")).toBeInTheDocument();
+    // HPP apart: the telur (standar) and the Nasi (olahan), which is
+    // provisional until the day closes; Untung Kotor takes off both.
+    const flowStep = (label) => screen.getByText(label).closest(".min-w-0");
+    expect(flowStep("HPP Standar")).toHaveTextContent(/Rp\s4\.000$/);
+    expect(flowStep("HPP Olahan")).toHaveTextContent(/Rp\s3\.600Sementara: 1 nota HPP Pending$/);
+    expect(flowStep("Untung Kotor")).toHaveTextContent(/Rp\s431\.000$/);
+    expect(screen.queryByText("HPP")).not.toBeInTheDocument();
   });
 });

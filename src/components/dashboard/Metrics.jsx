@@ -44,6 +44,7 @@ import {
   getOrdersHppTotal,
   getOrdersNetRevenueTotal,
 } from "../../utils";
+import { getOrdersHppSplit } from "../../features/orders/utils/orderMetrics";
 import CreatableSelect2 from "../shared/CreatableSelect2";
 
 const jakartaDateFormatter = new Intl.DateTimeFormat("en-CA", {
@@ -512,13 +513,17 @@ const MetricCardSlider = ({ items, renderItem }) => {
   );
 };
 
-// pendingHppCount: notas whose HPP is still pending (Modul 2): their bahan
-// olahan already carry the day's cooking cost, locked when the day closes.
+// pendingHppCount: notas whose HPP is still pending (Modul 2): a bahan olahan
+// sold short of stock, settled by the next Catat Masak or when the day closes.
 const PENDING_HPP_NOTE =
-  " Nota berlabel HPP Pending sudah memakai biaya masak (Daily Prep) hari itu, tapi angkanya masih bisa berubah sampai hari ditutup (otomatis pukul 00.00).";
+  " Nota berlabel HPP Pending terjual saat stok bahan olahan kurang; HPP-nya ditetapkan saat Catat Masak berikutnya, atau dikunci saat hari ditutup (otomatis pukul 00.00).";
 
-// wasteCost: Biaya Wastage (Modul 3), bahan thrown away; it is not in HPP.
-const ProfitFlow = ({ revenue, cost, grossProfit, wasteCost, netProfit, isLoading, pendingHppCount = 0 }) => {
+const HPP_STANDAR_NOTE = "Modal bahan baku dari resep menu × jumlah menu yang terjual, tetap sejak penjualan.";
+const HPP_OLAHAN_NOTE = "Modal bahan olahan (Nasi, sambal, dll.) per porsi dari biaya masak hari itu × porsi yang terjual.";
+
+// hpp: { standar, olahan } (getOrdersHppSplit). wasteCost: Biaya Wastage
+// (Modul 3), bahan thrown away; it is not in HPP.
+const ProfitFlow = ({ revenue, hpp, grossProfit, wasteCost, netProfit, isLoading, pendingHppCount = 0 }) => {
   const steps = [
     {
       label: "Penjualan Bersih",
@@ -529,17 +534,23 @@ const ProfitFlow = ({ revenue, cost, grossProfit, wasteCost, netProfit, isLoadin
     ...(SHOW_HPP_FIELDS
       ? [
           {
-            label: "HPP",
-            value: isLoading ? "..." : cost === null ? "-" : formatCurrency(cost),
+            label: "HPP Standar",
+            value: isLoading ? "..." : formatCurrency(hpp.standar),
             tone: "cost",
-            description: `Modal bahan dari resep menu × jumlah menu yang terjual.${PENDING_HPP_NOTE}`,
+            description: HPP_STANDAR_NOTE,
+          },
+          {
+            label: "HPP Olahan",
+            value: isLoading ? "..." : formatCurrency(hpp.olahan),
+            tone: "cost",
+            description: `${HPP_OLAHAN_NOTE}${PENDING_HPP_NOTE}`,
             note: !isLoading && pendingHppCount > 0 ? `Sementara: ${pendingHppCount} nota HPP Pending` : "",
           },
           {
             label: "Untung Kotor",
             value: isLoading ? "..." : formatCurrency(grossProfit),
             tone: "profit",
-            description: "Penjualan Bersih dikurangi HPP.",
+            description: "Penjualan Bersih dikurangi HPP Standar dan HPP Olahan.",
           },
           {
             label: "Biaya Wastage",
@@ -562,7 +573,7 @@ const ProfitFlow = ({ revenue, cost, grossProfit, wasteCost, netProfit, isLoadin
       : []),
   ];
   const gridColumnsClass =
-    { 1: "md:grid-cols-1", 3: "md:grid-cols-3", 4: "md:grid-cols-4", 5: "md:grid-cols-5" }[
+    { 1: "md:grid-cols-1", 3: "md:grid-cols-3", 4: "md:grid-cols-4", 5: "md:grid-cols-5", 6: "md:grid-cols-6" }[
       steps.length
     ] || "md:grid-cols-1";
 
@@ -835,6 +846,7 @@ const Metrics = () => {
   // Same source as Rekap New: every order in the period, recapped or not.
   const netRevenueTotal = getOrdersNetRevenueTotal(filteredOrders);
   const materialSpendTotal = getOrdersHppTotal(filteredOrders, menuItems);
+  const hppSplit = getOrdersHppSplit(filteredOrders, menuItems);
   const pendingHppCount = filteredOrders.filter((order) => order.hppStatus === "pending").length;
   const grossProfitTotal = netRevenueTotal - materialSpendTotal;
   const wasteCostTotal = (wastesRes?.data?.data?.dailyTotals || []).reduce(
@@ -949,12 +961,18 @@ const Metrics = () => {
           tone: "cash",
         },
         {
-          title: "HPP",
-          value: isFinancialLoading
-            ? "..."
-            : formatCurrency(materialSpendTotal),
+          title: "HPP Standar",
+          value: isFinancialLoading ? "..." : formatCurrency(hppSplit.standar),
           badge: activePeriod.badge,
-          description: `Modal bahan dari resep menu.${pendingHppCount ? PENDING_HPP_NOTE : ""}`,
+          description: HPP_STANDAR_NOTE,
+          icon: FiPackage,
+          tone: "cost",
+        },
+        {
+          title: "HPP Olahan",
+          value: isFinancialLoading ? "..." : formatCurrency(hppSplit.olahan),
+          badge: activePeriod.badge,
+          description: `${HPP_OLAHAN_NOTE}${pendingHppCount ? PENDING_HPP_NOTE : ""}`,
           icon: FiPackage,
           tone: "cost",
         },
@@ -1421,7 +1439,7 @@ const Metrics = () => {
         {SHOW_HPP_FIELDS && (
           <ProfitFlow
             revenue={netRevenueTotal}
-            cost={materialSpendTotal}
+            hpp={hppSplit}
             grossProfit={grossProfitTotal}
             wasteCost={wasteCostTotal}
             netProfit={netProfitTotal}

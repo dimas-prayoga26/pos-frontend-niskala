@@ -66,7 +66,7 @@ const PurchaseItemEditDialog = ({
         </div>
         {merkOptions && (
           <div className="mb-3">
-            <span className="mb-1 block text-sm">Merk</span>
+            <span className="mb-1 block text-sm">Merk (opsional)</span>
             <CreatableSelect2
               options={merkOptions}
               value={form.merkId}
