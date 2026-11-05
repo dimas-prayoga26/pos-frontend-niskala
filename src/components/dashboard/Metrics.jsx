@@ -8,7 +8,6 @@ import {
 import { enqueueSnackbar } from "notistack";
 import { useSelector } from "react-redux";
 import {
-  FiAlertTriangle,
   FiArchive,
   FiBookOpen,
   FiCalendar,
@@ -33,7 +32,6 @@ import {
   getOrders,
   getRecaps,
   getStockItems,
-  getStockOpnames,
   getStockWastes,
 } from "../../https";
 import {
@@ -519,22 +517,8 @@ const MetricCardSlider = ({ items, renderItem }) => {
 const PENDING_HPP_NOTE =
   " Nota berlabel HPP Pending sudah memakai biaya masak (Daily Prep) hari itu, tapi angkanya masih bisa berubah sampai hari ditutup (otomatis pukul 00.00).";
 
-// wasteCost: Biaya Wastage (Modul 3), bahan thrown away; shrinkageCost:
-// Kehilangan Persediaan, the selisih of Stock Opname. Neither is in HPP.
-// A shrinkageCost below 0 (more stock lebih than kurang) is shown as a
-// Kelebihan Persediaan, not a negative loss.
-const shrinkageLabel = (cost) => (cost < 0 ? "Kelebihan Persediaan" : "Kehilangan Persediaan");
-
-const ProfitFlow = ({
-  revenue,
-  cost,
-  grossProfit,
-  wasteCost,
-  shrinkageCost,
-  netProfit,
-  isLoading,
-  pendingHppCount = 0,
-}) => {
+// wasteCost: Biaya Wastage (Modul 3), bahan thrown away; it is not in HPP.
+const ProfitFlow = ({ revenue, cost, grossProfit, wasteCost, netProfit, isLoading, pendingHppCount = 0 }) => {
   const steps = [
     {
       label: "Penjualan Bersih",
@@ -563,12 +547,6 @@ const ProfitFlow = ({
             tone: "warning",
             description: "Bahan baku dan bahan olahan yang dibuang. Tidak masuk HPP.",
           },
-          {
-            label: shrinkageLabel(shrinkageCost),
-            value: isLoading ? "..." : formatCurrency(Math.abs(shrinkageCost)),
-            tone: "warning",
-            description: "Selisih stok fisik dengan sistem dari Stock Opname (stok lebih mengurangi). Tidak masuk HPP.",
-          },
           ...(SHOW_NET_PROFIT
             ? [
                 {
@@ -576,7 +554,7 @@ const ProfitFlow = ({
                   value: isLoading ? "..." : formatCurrency(netProfit),
                   tone: "net",
                   description:
-                    "Untung Kotor dikurangi pengeluaran harian di rekap, Biaya Wastage, dan Kehilangan Persediaan.",
+                    "Untung Kotor dikurangi pengeluaran harian di rekap dan Biaya Wastage.",
                 },
               ]
             : []),
@@ -584,13 +562,7 @@ const ProfitFlow = ({
       : []),
   ];
   const gridColumnsClass =
-    {
-      1: "md:grid-cols-1",
-      3: "md:grid-cols-3",
-      4: "md:grid-cols-4",
-      5: "md:grid-cols-5",
-      6: "md:grid-cols-3 xl:grid-cols-6",
-    }[
+    { 1: "md:grid-cols-1", 3: "md:grid-cols-3", 4: "md:grid-cols-4", 5: "md:grid-cols-5" }[
       steps.length
     ] || "md:grid-cols-1";
 
@@ -719,16 +691,6 @@ const Metrics = () => {
   } = useQuery({
     queryKey: ["stock-wastes", "metrics"],
     queryFn: () => getStockWastes(),
-    placeholderData: keepPreviousData,
-  });
-
-  // Kehilangan Persediaan per business day (Riwayat Opname).
-  const {
-    data: opnamesRes,
-    isLoading: isOpnamesLoading,
-  } = useQuery({
-    queryKey: ["stock-opnames", "metrics"],
-    queryFn: () => getStockOpnames(),
     placeholderData: keepPreviousData,
   });
 
@@ -875,17 +837,14 @@ const Metrics = () => {
   const materialSpendTotal = getOrdersHppTotal(filteredOrders, menuItems);
   const pendingHppCount = filteredOrders.filter((order) => order.hppStatus === "pending").length;
   const grossProfitTotal = netRevenueTotal - materialSpendTotal;
-  const sumDailyTotalsInPeriod = (dailyTotals = []) =>
-    dailyTotals.reduce(
-      (total, day) =>
-        isDateKeyInRange(String(day.date).slice(0, 10), periodRange.startKey, periodRange.endKey)
-          ? total + (Number(day.cost) || 0)
-          : total,
-      0
-    );
-  const wasteCostTotal = sumDailyTotalsInPeriod(wastesRes?.data?.data?.dailyTotals);
-  const shrinkageCostTotal = sumDailyTotalsInPeriod(opnamesRes?.data?.data?.dailyTotals);
-  const netProfitTotal = grossProfitTotal - dailyExpenseTotal - wasteCostTotal - shrinkageCostTotal;
+  const wasteCostTotal = (wastesRes?.data?.data?.dailyTotals || []).reduce(
+    (total, day) =>
+      isDateKeyInRange(String(day.date).slice(0, 10), periodRange.startKey, periodRange.endKey)
+        ? total + (Number(day.cost) || 0)
+        : total,
+    0
+  );
+  const netProfitTotal = grossProfitTotal - dailyExpenseTotal - wasteCostTotal;
   const netCashTotal = cashRecordedTotal - dailyExpenseTotal;
 
   const isLoading =
@@ -894,7 +853,7 @@ const Metrics = () => {
     isMenuItemsLoading ||
     isStockItemsLoading;
   const isFinancialLoading =
-    isDailyRecapsLoading || isOrdersLoading || isMenuItemsLoading || isWastesLoading || isOpnamesLoading;
+    isDailyRecapsLoading || isOrdersLoading || isMenuItemsLoading || isWastesLoading;
   const isExportDisabled =
     isLoading ||
     isFinancialLoading ||
@@ -1016,18 +975,10 @@ const Metrics = () => {
           tone: "warning",
         },
         {
-          title: shrinkageLabel(shrinkageCostTotal),
-          value: isFinancialLoading ? "..." : formatCurrency(Math.abs(shrinkageCostTotal)),
-          badge: activePeriod.badge,
-          description: "Selisih Stock Opname, di luar HPP.",
-          icon: FiAlertTriangle,
-          tone: "warning",
-        },
-        {
           title: "Untung Bersih",
           value: isFinancialLoading ? "..." : formatCurrency(netProfitTotal),
           badge: activePeriod.badge,
-          description: "Untung setelah pengeluaran harian, biaya wastage, dan kehilangan persediaan.",
+          description: "Untung setelah pengeluaran harian dan biaya wastage.",
           icon: FiDollarSign,
           tone: "net",
         },
@@ -1473,7 +1424,6 @@ const Metrics = () => {
             cost={materialSpendTotal}
             grossProfit={grossProfitTotal}
             wasteCost={wasteCostTotal}
-            shrinkageCost={shrinkageCostTotal}
             netProfit={netProfitTotal}
             isLoading={isLoading || isFinancialLoading}
             pendingHppCount={pendingHppCount}

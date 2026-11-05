@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { enqueueSnackbar } from "notistack";
-import { getPaymentSources, getShoppingSummary, getShoppingSuppliers } from "../api";
+import { getMerks, getPaymentSources, getShoppingSummary, getShoppingSuppliers } from "../api";
+import useMerkOptions from "../hooks/useMerkOptions";
 import usePurchaseForm from "../hooks/usePurchaseForm";
 import usePurchaseHistory from "../hooks/usePurchaseHistory";
 import usePurchaseItemActions from "../hooks/usePurchaseItemActions";
@@ -29,7 +30,7 @@ const toggleClass = (active) =>
     active ? "bg-[#a79981] text-[#101010]" : "text-[#ababab] hover:bg-[#333] hover:text-white"
   }`;
 
-// The one place for belanja (the "Belanja Bahan" menu): the "Tambah Belanja Bahan" form for both Jenis
+// The one place for belanja (the "Belanja" menu): the "Tambah Belanja" form for both Jenis
 // Belanja (bahan baku, lainnya), the draft nota waiting to be posted, and
 // the searchable history, in tabs Bahan Baku and the kategori of barang
 // Lainnya (Peralatan, Perlengkapan, Promosi, Lain-lain), shown Per Struk (each
@@ -42,7 +43,7 @@ const toggleClass = (active) =>
 // (assets, lifetime), and exports it to Excel or PDF. Summary cards show the
 // spending of the period per kind and the lifetime value of the assets. Every staff member may
 // save a draft; only admins post. See SHOPPING.md in pos-backend.
-// restockItems ({ stockItemId, unit }) open Tambah Belanja Bahan at once with
+// restockItems ({ stockItemId, unit }) open Tambah Belanja at once with
 // a line for each.
 export default function ShoppingManagement({ stockItems, supplyItems = NO_ITEMS, isAdmin, restockItems }) {
   const [showForm, setShowForm] = useState(() => Boolean(restockItems?.length));
@@ -77,6 +78,10 @@ export default function ShoppingManagement({ stockItems, supplyItems = NO_ITEMS,
     queryKey: ["shopping-suppliers"],
     queryFn: getShoppingSuppliers,
   });
+  const merks = useQuery({ queryKey: ["shopping-merks"], queryFn: getMerks });
+  const merkList = merks.data?.data?.data || NO_ITEMS;
+  // The merk picked or created while editing a posted line.
+  const editMerk = useMerkOptions(merkList);
   // Active sources; kasir get them without saldo.
   const paymentSources = useQuery({
     queryKey: ["payment-sources", "active"],
@@ -111,7 +116,7 @@ export default function ShoppingManagement({ stockItems, supplyItems = NO_ITEMS,
   const itemDetail = usePurchaseItemDetail(historyKind, notaLine);
   // The barang whose detail is open: a line of a struk, or a Per Item row.
   const openGroup = notaLine ? itemDetail.group : selectedGroup;
-  const itemActions = usePurchaseItemActions(historyKind);
+  const itemActions = usePurchaseItemActions(historyKind, { merkPayloadOf: editMerk.payloadOf });
   // A bahan baku that is not a Bahan Resep never reaches an HPP: no COGS shown.
   const noCostItemIds = useMemo(
     () =>
@@ -180,6 +185,7 @@ export default function ShoppingManagement({ stockItems, supplyItems = NO_ITEMS,
   };
   const purchaseForm = usePurchaseForm({
     suppliers: suppliers.data?.data?.data || [],
+    merks: merkList,
     stockItems,
     supplyItems,
     paymentSources: paymentSources.data?.data?.data || NO_SOURCES,
@@ -255,13 +261,13 @@ export default function ShoppingManagement({ stockItems, supplyItems = NO_ITEMS,
             onClick={() => setShowForm(true)}
             type="button"
           >
-            Tambah Belanja Bahan
+            Tambah Belanja
           </button>
           <input
             className={`${inputClass} sm:w-64`}
             type="search"
             aria-label="Cari riwayat belanja"
-            placeholder="Nama toko atau barang"
+            placeholder="Nama toko, barang, atau merk"
             value={historyState.search}
             onChange={(event) => historyState.changeSearch(event.target.value)}
           />
@@ -459,6 +465,11 @@ export default function ShoppingManagement({ stockItems, supplyItems = NO_ITEMS,
           showUnits={historyKind.showUnits}
           stockUnit={editingItem.stockUnit || ""}
           previousStockQuantity={editingItem.stockQuantity}
+          merkOptions={editMerk.optionsFor(
+            historyKind.key,
+            editingItem[historyKind.itemIdKey] ?? openGroup?.stockItemId
+          )}
+          onCreateMerk={editMerk.create}
         />
       )}
 

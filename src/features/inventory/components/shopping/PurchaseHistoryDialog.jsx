@@ -131,6 +131,7 @@ const PurchaseHistoryDialog = ({
                 <tr>
                   <th className="p-2">Tanggal</th>
                   <th className="p-2">Toko</th>
+                  <th className="p-2">Merk</th>
                   <th className="p-2">{showUnits ? "Gramasi" : "Qty"}</th>
                   <th className="p-2 text-right">{showUnits ? "Harga Satuan" : "Harga per Barang"}</th>
                   <th className="p-2 text-right">Jumlah</th>
@@ -158,6 +159,7 @@ const PurchaseHistoryDialog = ({
                       )}
                     </td>
                     <td className="p-2">{item.supplierName}</td>
+                    <td className="p-2">{item.merkName || <span className="text-[#ababab]">-</span>}</td>
                     <td className="p-2">
                       {showUnits ? packedQuantityLabel(item.quantity, item.unit, item.packSize, item.stockUnit) : qty(item.quantity, item.unit)}
                     </td>

@@ -25,7 +25,7 @@ const Suffix = ({ children }) => (
 // day's notas whose HPP is still pending (Modul 2). Simpan asks once more,
 // since saving takes the bahan baku out of stock; editing a field cancels
 // that confirmation. A bahan baku short of stock can be bought at once
-// (onRestock: Tambah Belanja Bahan with those bahan).
+// (onRestock: Tambah Belanja with those bahan).
 const PreparedProductionDialog = ({ item, stockItems, onSave, onCancel, onRestock, isSaving }) => {
   const today = getJakartaDateKey();
   const [form, setForm] = useState(() => ({

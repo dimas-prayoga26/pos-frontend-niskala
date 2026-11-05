@@ -58,6 +58,7 @@ const useRealtimeData = () => {
       queryClient.invalidateQueries({ queryKey: ["purchase-drafts"] });
       queryClient.invalidateQueries({ queryKey: ["purchase-summary"] });
       queryClient.invalidateQueries({ queryKey: ["shopping-suppliers"] });
+      queryClient.invalidateQueries({ queryKey: ["shopping-merks"] });
       queryClient.invalidateQueries({ queryKey: ["payment-sources"] });
       queryClient.invalidateQueries({ queryKey: ["payment-source-mutations"] });
     };

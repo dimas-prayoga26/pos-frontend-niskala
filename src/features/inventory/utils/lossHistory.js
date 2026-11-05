@@ -1,5 +1,5 @@
-// Shared by the Riwayat Kerugian (wastes) and Riwayat Opname panels: rows
-// listed under their business day, and period totals of the days' costs.
+// Used by the Riwayat Kerugian (wastes) panel: rows listed under their
+// business day, and period totals of the days' costs.
 
 export const formatDay = (date) =>
   new Date(`${date}T00:00:00`).toLocaleDateString("id-ID", {

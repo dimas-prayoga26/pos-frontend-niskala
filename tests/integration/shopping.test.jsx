@@ -7,6 +7,7 @@ import * as XLSX from "xlsx-js-style";
 import * as api from "../../src/https/index";
 import ShoppingManagement from "../../src/features/inventory/components/ShoppingManagement";
 import ReceiptPicker from "../../src/features/inventory/components/shopping/ReceiptPicker";
+import useMerkOptions from "../../src/features/inventory/hooks/useMerkOptions";
 import usePurchaseForm from "../../src/features/inventory/hooks/usePurchaseForm";
 import { periodRange, rangeLabel } from "../../src/features/inventory/utils/periods";
 import { historyTabOf } from "../../src/features/inventory/utils/purchaseKinds";
@@ -18,6 +19,7 @@ vi.mock("../../src/https/index", async (importOriginal) => ({
   deletePurchaseAttachment: vi.fn(),
   deletePurchaseDraft: vi.fn(),
   deletePurchaseItem: vi.fn(),
+  getMerks: vi.fn(() => Promise.resolve({ data: { data: [] } })),
   getPaymentSources: vi.fn(),
   getPurchaseDrafts: vi.fn(),
   getPurchaseNotas: vi.fn(),
@@ -144,6 +146,9 @@ const itemGroups = [
   },
 ];
 const stockItems = [{ id: 5, name: "Gula", unit: "gr" }];
+// The <optgroup>s of a select2: [label, option texts].
+const groupsOf = (select) =>
+  Array.from(select.querySelectorAll("optgroup"), (group) => [group.label, Array.from(group.children, (option) => option.text)]);
 
 const renderShopping = (isAdmin = true) =>
   renderWithProviders(<ShoppingManagement stockItems={stockItems} isAdmin={isAdmin} />);
@@ -191,6 +196,7 @@ describe("shopping history", () => {
     // Jumlah is the last column.
     const headers = screen.getAllByRole("columnheader").map((cell) => cell.textContent);
     expect(headers.at(-1)).toBe("Jumlah");
+    expect(headers).not.toContain("Harga Satuan");
     expect(row.cells[7]).toHaveTextContent("Rp 30.000");
     expect(screen.getByText("1 / 2")).toBeInTheDocument();
     expect(api.getPurchases).toHaveBeenLastCalledWith({ search: "", page: 1, ...thisMonth });
@@ -274,6 +280,72 @@ describe("shopping history", () => {
     );
   });
 
+  it("shows the merk of each purchase and lets admins change it", async () => {
+    const [gula, ...otherLines] = postedNota(7).items;
+    api.getPurchaseNotas.mockResolvedValue({
+      data: { data: { notas: [postedNota(7, { items: [{ ...gula, merkId: 3, merkName: "Gulaku" }, ...otherLines] })], total: 1, page: 1 } },
+    });
+    api.getMerks.mockResolvedValue({
+      data: {
+        data: [
+          { id: 3, name: "Gulaku", rawItemIds: [5], supplyItemIds: [] },
+          { id: 4, name: "Kapal Api", rawItemIds: [6], supplyItemIds: [] },
+        ],
+      },
+    });
+    api.getPurchases.mockResolvedValue({
+      data: {
+        data: {
+          purchases: [],
+          itemGroups: [{ ...itemGroups[0], histories: [history(91, { merkId: 3, merkName: "Gulaku" }), itemGroups[0].histories[1]] }],
+          groupTotal: 1,
+          totalSpending: 37500,
+          total: 2,
+        },
+      },
+    });
+    api.updatePurchaseItem.mockResolvedValue({ data: { success: true } });
+    renderShopping();
+
+    // Per Struk: the merk next to its barang.
+    const nota = await screen.findByRole("rowgroup", { name: "Nota #7 Pasar Uji" });
+    expect(within(nota).getByText("Gula").closest("td")).toHaveTextContent("GulaGulaku");
+    expect(within(nota).getByText("Kopi").closest("td")).toHaveTextContent(/^Kopi$/);
+
+    // Per Item: a Merk column, "-" when none.
+    fireEvent.click(screen.getByRole("button", { name: "Per Item" }));
+    const row = (await screen.findByText("2 history")).closest("tr");
+    expect(screen.getByRole("columnheader", { name: "Merk" })).toBeInTheDocument();
+    expect(row.cells[3]).toHaveTextContent("Gulaku");
+    fireEvent.click(row);
+    const detail = await screen.findByRole("dialog", { name: "Gula" });
+    const [latest, older] = within(detail).getAllByRole("row").slice(1);
+    expect(latest.cells[2]).toHaveTextContent("Gulaku");
+    expect(older.cells[2]).toHaveTextContent(/^-$/);
+
+    // A new merk typed in the edit is sent by name.
+    fireEvent.click(within(detail).getAllByRole("button", { name: "Update" })[0]);
+    const editForm = screen.getByText(/^Edit Belanja/).closest("form");
+    const merk = editForm.querySelector('select[aria-label="Merk"]');
+    expect(merk).toHaveValue("3");
+    expect(groupsOf(merk)).toEqual([["Pernah dibeli", ["Gulaku"]], ["Merk lain", ["Kapal Api"]]]);
+    await act(async () => {
+      $(merk).trigger($.Event("select2:select", { params: { data: { id: "new:Rose Brand", text: "Rose Brand", newTag: true } } }));
+    });
+    fireEvent.click(within(editForm).getByRole("button", { name: "Simpan" }));
+    await waitFor(() =>
+      expect(api.updatePurchaseItem.mock.calls[0][0]).toEqual({
+        id: 91,
+        quantity: 2000,
+        unit: "gr",
+        unitPrice: 15,
+        total: 30000,
+        merkId: "",
+        merkName: "Rose Brand",
+      })
+    );
+  });
+
   it("hides admin actions for cashiers and validates an empty purchase form", async () => {
     const { unmount } = await openGulaDetail(false);
     expect(screen.queryByRole("button", { name: "Update" })).not.toBeInTheDocument();
@@ -282,13 +354,13 @@ describe("shopping history", () => {
     expect(screen.queryByRole("button", { name: "Update" })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Tutup" }));
     // Kasir may write a draft nota but not post it.
-    fireEvent.click(screen.getByRole("button", { name: "Tambah Belanja Bahan" }));
+    fireEvent.click(screen.getByRole("button", { name: "Tambah Belanja" }));
     expect(within(screen.getByRole("dialog")).getByRole("button", { name: "Simpan Draft" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Simpan & Posting" })).not.toBeInTheDocument();
     unmount();
 
     renderShopping(true);
-    fireEvent.click(await screen.findByRole("button", { name: "Tambah Belanja Bahan" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Tambah Belanja" }));
     const form = screen.getByRole("dialog");
     // The gramasi is in the stock unit: no Isi per Kemasan to fill.
     expect(within(form).queryByText("Isi per Kemasan")).not.toBeInTheDocument();
@@ -303,7 +375,7 @@ describe("shopping history", () => {
 
     // The draft survives closing and reopening the form.
     fireEvent.click(screen.getByRole("button", { name: "Tutup form" }));
-    fireEvent.click(screen.getByRole("button", { name: "Tambah Belanja Bahan" }));
+    fireEvent.click(screen.getByRole("button", { name: "Tambah Belanja" }));
     expect(screen.getByDisplayValue("draft note")).toBeInTheDocument();
   });
 
@@ -311,7 +383,7 @@ describe("shopping history", () => {
     renderWithProviders(
       <ShoppingManagement stockItems={[...stockItems, { id: 9, name: "Air Isi Ulang", unit: "galon" }]} isAdmin />
     );
-    fireEvent.click(await screen.findByRole("button", { name: "Tambah Belanja Bahan" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Tambah Belanja" }));
     const form = screen.getByRole("dialog");
     const unitOptions = () => Array.from(within(form).getByLabelText("Satuan").options, (option) => option.value).filter(Boolean);
     // A new line takes any unit.
@@ -327,7 +399,41 @@ describe("shopping history", () => {
     expect(form).toHaveTextContent("Satuan stok: galon. Isi gramasi sesuai satuan stok");
   });
 
-  it("opens Tambah Belanja Bahan at once with the bahan a Catat Masak is short of", async () => {
+  it("offers the merk bought for the barang first once it is picked", async () => {
+    api.getMerks.mockResolvedValue({
+      data: {
+        data: [
+          { id: 3, name: "Gulaku", rawItemIds: [5], supplyItemIds: [] },
+          { id: 4, name: "Kapal Api", rawItemIds: [6], supplyItemIds: [] },
+          { id: 7, name: "Rose Brand", rawItemIds: [5], supplyItemIds: [2] },
+        ],
+      },
+    });
+    renderShopping();
+    fireEvent.click(await screen.findByRole("button", { name: "Tambah Belanja" }));
+    const form = screen.getByRole("dialog");
+    const merk = () => form.querySelector('select[aria-label="Merk barang 1"]');
+    // No barang yet: every merk, ungrouped.
+    await waitFor(() =>
+      expect(Array.from(merk().options, (option) => option.text).filter(Boolean)).toEqual(["Gulaku", "Kapal Api", "Rose Brand"])
+    );
+    expect(groupsOf(merk())).toEqual([]);
+
+    const item = form.querySelector('select[aria-label="Cari atau buat barang"]');
+    act(() => {
+      $(item).val("5").trigger($.Event("select2:select", { params: { data: { id: "5", text: "Gula" } } }));
+    });
+    await waitFor(() =>
+      expect(groupsOf(merk())).toEqual([["Pernah dibeli", ["Gulaku", "Rose Brand"]], ["Merk lain", ["Kapal Api"]]])
+    );
+    // A merk inside a group is picked like any other.
+    act(() => {
+      $(merk()).val("7").trigger($.Event("select2:select", { params: { data: { id: "7", text: "Rose Brand" } } }));
+    });
+    await waitFor(() => expect(merk()).toHaveValue("7"));
+  });
+
+  it("opens Tambah Belanja at once with the bahan a Catat Masak is short of", async () => {
     const bahan = [...stockItems, { id: 10, name: "Air Galon", unit: "pcs", isRecipeIngredient: false }];
     renderWithProviders(
       <ShoppingManagement
@@ -337,25 +443,25 @@ describe("shopping history", () => {
       />
     );
     const form = await screen.findByRole("dialog");
-    expect(form).toHaveTextContent("Tambah Belanja Bahan");
+    expect(form).toHaveTextContent("Tambah Belanja");
     const items = Array.from(form.querySelectorAll('select[aria-label="Cari atau buat barang"]'));
     // A line per bahan, picked, even one that is not a Bahan Resep.
     await waitFor(() => expect(items.map((select) => select.value)).toEqual(["5", "10"]));
     expect(Array.from(form.querySelectorAll('select[aria-label="Satuan"]'), (select) => select.value)).toEqual(["gr", "pcs"]);
   });
 
-  it("lists only Bahan Resep in Tambah Belanja Bahan Baku", async () => {
+  it("lists only Bahan Resep in Tambah Belanja (bahan baku)", async () => {
     renderWithProviders(
       <ShoppingManagement stockItems={[...stockItems, { id: 10, name: "Aqua Botol", unit: "pcs", isRecipeIngredient: false }]} isAdmin />
     );
-    fireEvent.click(await screen.findByRole("button", { name: "Tambah Belanja Bahan" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Tambah Belanja" }));
     const item = screen.getByRole("dialog").querySelector('select[aria-label="Cari atau buat barang"]');
     expect(Array.from(item.options, (option) => option.text).filter(Boolean)).toEqual(["Gula"]);
   });
 
   it("pays from the first payment source and shows its saldo after the purchase", async () => {
     renderShopping(true);
-    fireEvent.click(await screen.findByRole("button", { name: "Tambah Belanja Bahan" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Tambah Belanja" }));
     const form = screen.getByRole("dialog");
     expect(within(form).getByText("Informasi Nota")).toBeInTheDocument();
 
@@ -375,7 +481,7 @@ describe("shopping history", () => {
 
   it("adds bukti nota from the camera or the gallery", async () => {
     renderShopping(true);
-    fireEvent.click(await screen.findByRole("button", { name: "Tambah Belanja Bahan" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Tambah Belanja" }));
     const form = screen.getByRole("dialog");
     const camera = within(form).getByLabelText("Ambil foto bukti nota");
     const gallery = within(form).getByLabelText("Unggah foto bukti nota");
@@ -740,6 +846,81 @@ describe("purchase form submit", () => {
     ]);
   });
 
+  it("sends the merk of each line: a saved one by id, a new one by name, none when empty", async () => {
+    const { result } = renderHook(
+      () =>
+        usePurchaseForm({
+          suppliers: [{ id: 1, name: "Pasar Uji" }],
+          merks: [{ id: 3, name: "Gulaku" }],
+          stockItems,
+          paymentSources: sources,
+          onSaved: vi.fn(),
+        }),
+      { wrapper }
+    );
+    expect(result.current.merkOptions).toEqual([{ id: 3, text: "Gulaku" }]);
+    // A name already listed, in any case, is that merk.
+    expect(result.current.createMerk("gulaku")).toEqual({ id: 3, text: "Gulaku" });
+    let created;
+    act(() => {
+      created = result.current.createMerk("Kapal Api");
+    });
+    act(() => {
+      result.current.setForm((current) => ({ ...current, suplierId: 1 }));
+      result.current.updateRow(result.current.rows[0].key, { stockItemId: 5, merkId: 3, quantity: "2", unit: "gr", unitPrice: "30" });
+      result.current.addRow();
+      result.current.addRow();
+    });
+    act(() => {
+      result.current.updateRow(result.current.rows[1].key, { stockItemId: 6, merkId: created.id, quantity: "1", unit: "kg", unitPrice: "50000" });
+      result.current.updateRow(result.current.rows[2].key, { stockItemId: 7, quantity: "500", unit: "gr", unitPrice: "15000" });
+    });
+    await act(() => result.current.submit({ preventDefault() {} }));
+    expect(
+      api.savePurchase.mock.calls[0][0].items.map(({ stockItemId, merkId, merkName }) => ({ stockItemId, merkId, merkName }))
+    ).toEqual([
+      { stockItemId: 5, merkId: 3, merkName: undefined },
+      { stockItemId: 6, merkId: undefined, merkName: "Kapal Api" },
+      { stockItemId: 7, merkId: undefined, merkName: undefined },
+    ]);
+
+    // A draft comes back with its merk, even one the list does not have yet.
+    act(() =>
+      result.current.loadDraft({
+        id: 9,
+        kind: "raw",
+        date: "2026-10-01",
+        suplierId: 1,
+        items: [{ stockItemId: 5, merkId: 8, merkName: "Rose Brand", quantity: 1, unit: "kg", total: 15000 }],
+        attachments: [],
+      })
+    );
+    expect(result.current.rows[0].merkId).toBe(8);
+    expect(result.current.merkOptions).toContainEqual({ id: 8, text: "Rose Brand" });
+  });
+
+  it("groups the merk bought for a barang per Jenis Belanja", () => {
+    const merks = [
+      { id: 3, name: "Gulaku", rawItemIds: [5], supplyItemIds: [] },
+      { id: 4, name: "Joyko", rawItemIds: [], supplyItemIds: [5] },
+    ];
+    const { result } = renderHook(() => useMerkOptions(merks));
+    const gulaku = { id: 3, text: "Gulaku" };
+    const joyko = { id: 4, text: "Joyko" };
+    expect(result.current.optionsFor("raw", 5)).toEqual([
+      { text: "Pernah dibeli", children: [gulaku] },
+      { text: "Merk lain", children: [joyko] },
+    ]);
+    expect(result.current.optionsFor("supply", "5")).toEqual([
+      { text: "Pernah dibeli", children: [joyko] },
+      { text: "Merk lain", children: [gulaku] },
+    ]);
+    // A barang never bought with a merk, or none picked: the plain list.
+    expect(result.current.optionsFor("raw", 9)).toEqual([gulaku, joyko]);
+    expect(result.current.optionsFor("raw", "")).toBe(result.current.options);
+    expect(result.current.optionsFor("raw", 5)).toBe(result.current.optionsFor("raw", 5));
+  });
+
   it("sends the payment source and uploads the bukti nota after the purchase is saved", async () => {
     api.uploadPurchaseAttachments.mockResolvedValue({ data: { data: [] } });
     const onSaved = vi.fn();
@@ -891,9 +1072,9 @@ describe("belanja lainnya in the same form", () => {
     URL.revokeObjectURL = vi.fn();
   });
 
-  it("switches Jenis Belanja inside Tambah Belanja Bahan", async () => {
+  it("switches Jenis Belanja inside Tambah Belanja", async () => {
     renderBoth();
-    fireEvent.click(await screen.findByRole("button", { name: "Tambah Belanja Bahan" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Tambah Belanja" }));
     const form = screen.getByRole("dialog");
     const kinds = within(form).getByRole("group", { name: "Jenis Belanja" });
     expect(within(kinds).getByRole("button", { name: "Bahan Baku" })).toHaveAttribute("aria-pressed", "true");
@@ -940,6 +1121,7 @@ describe("belanja lainnya in the same form", () => {
     expect(screen.getByRole("columnheader", { name: "Qty" })).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: "Harga Rata-rata Setelah" })).toBeInTheDocument();
     expect(screen.queryByRole("columnheader", { name: "COGS Setelah" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("columnheader", { name: "Harga per Barang" })).not.toBeInTheDocument();
     expect(screen.getByTestId("total-spending")).toHaveTextContent("Rp 46.000");
     // Perlengkapan are spent, not kept: no Masuk Stok or harga rata-rata.
     expect(row.cells[5]).toHaveTextContent(/^-$/);
@@ -1163,7 +1345,7 @@ describe("ringkasan and draft nota", () => {
 
   it("adds ongkir, diskon and PPN into the Grand Total that leaves the saldo", async () => {
     renderShopping(true);
-    fireEvent.click(await screen.findByRole("button", { name: "Tambah Belanja Bahan" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Tambah Belanja" }));
     const form = screen.getByRole("dialog");
     fireEvent.change(within(form).getByLabelText("Harga Total"), { target: { value: "100000" } });
     const summary = within(form).getByRole("region", { name: "Ringkasan nota" });

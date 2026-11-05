@@ -5,11 +5,12 @@ import { PURCHASE_KINDS } from "../utils/purchaseKinds";
 import { lineTotal, parseShoppingQuantity, unitPriceFromTotal } from "../utils/shopping";
 import { needsIsi } from "../utils/units";
 
-const EMPTY_EDIT_FORM = { quantity: "", unit: "", packSize: "", unitPrice: "" };
+const EMPTY_EDIT_FORM = { quantity: "", unit: "", packSize: "", unitPrice: "", merkId: "" };
 
 // Edit and delete of a single purchase line (admin only). Both change stock on
 // the server, so stock items and purchases are refetched afterwards.
-const usePurchaseItemActions = (kind = PURCHASE_KINDS.raw) => {
+// merkPayloadOf (useMerkOptions) sends the merk of the line.
+const usePurchaseItemActions = (kind = PURCHASE_KINDS.raw, { merkPayloadOf } = {}) => {
   const queryClient = useQueryClient();
   const [editingItem, setEditingItem] = useState(null);
   const [editForm, setEditForm] = useState(EMPTY_EDIT_FORM);
@@ -19,6 +20,7 @@ const usePurchaseItemActions = (kind = PURCHASE_KINDS.raw) => {
       queryClient.invalidateQueries({ queryKey: [kind.stockKey] }),
       queryClient.invalidateQueries({ queryKey: [kind.historyKey] }),
       queryClient.invalidateQueries({ queryKey: ["purchase-summary"] }),
+      queryClient.invalidateQueries({ queryKey: ["shopping-merks"] }),
       queryClient.invalidateQueries({ queryKey: ["payment-sources"] }),
       queryClient.invalidateQueries({ queryKey: ["payment-source-mutations"] }),
     ]);
@@ -63,6 +65,7 @@ const usePurchaseItemActions = (kind = PURCHASE_KINDS.raw) => {
       unit: (opensAsStock && item.stockUnit) || item.unit || "",
       packSize: keepsIsi ? String(item.packSize) : "",
       unitPrice: String(item.total ?? ""),
+      merkId: item.merkId || "",
     });
   };
 
@@ -90,6 +93,7 @@ const usePurchaseItemActions = (kind = PURCHASE_KINDS.raw) => {
       return;
     }
 
+    const merkChanged = String(editForm.merkId || "") !== String(editingItem.merkId || "");
     updateItemMutation.mutate({
       id: editingItem.id,
       quantity,
@@ -99,6 +103,9 @@ const usePurchaseItemActions = (kind = PURCHASE_KINDS.raw) => {
       unitPrice: unitPriceFromTotal(quantity, editForm.unitPrice),
       // Kept as typed (see buildPurchasePayload).
       total: lineTotal({ unitPrice: editForm.unitPrice }),
+      // A changed merk: the chosen one, or an empty one to drop it. The
+      // server keeps the merk when none is sent.
+      ...(merkPayloadOf && merkChanged && { merkId: "", ...merkPayloadOf(editForm.merkId) }),
     });
   };
 

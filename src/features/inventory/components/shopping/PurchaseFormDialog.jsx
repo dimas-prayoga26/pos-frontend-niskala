@@ -16,7 +16,7 @@ const kindButtonClass = (active) =>
     active ? "bg-[#a79981] text-[#101010]" : "text-[#ababab] hover:bg-[#333] hover:text-white"
   }`;
 
-// "Tambah Belanja Bahan" form for every belanja: Jenis Belanja picks bahan
+// "Tambah Belanja" form for every belanja: Jenis Belanja picks bahan
 // baku or perlengkapan. All state comes from usePurchaseForm.
 const PurchaseFormDialog = ({ purchaseForm, onClose }) => {
   const {
@@ -31,6 +31,7 @@ const PurchaseFormDialog = ({ purchaseForm, onClose }) => {
     saving,
     supplierOptions,
     itemOptions,
+    merkOptionsFor,
     paymentSourceOptions,
     selectedSource,
     totals,
@@ -47,6 +48,7 @@ const PurchaseFormDialog = ({ purchaseForm, onClose }) => {
     removeSavedReceipt,
     createSupplier,
     createItem,
+    createMerk,
     submit,
   } = purchaseForm;
   const isSupply = kind.key === "supply";
@@ -68,7 +70,7 @@ const PurchaseFormDialog = ({ purchaseForm, onClose }) => {
         <div className="mb-4 flex items-start justify-between gap-3">
           <div>
             <h2 id="shopping-form-title" className="text-xl font-bold">
-              {editingDraft ? `Draft Nota #${editingDraft.id}` : "Tambah Belanja Bahan"}
+              {editingDraft ? `Draft Nota #${editingDraft.id}` : "Tambah Belanja"}
             </h2>
             <p className="mt-1 text-sm text-[#ababab]">
               Pilih &quot;Buat&quot; jika nama belum tersedia. Simpan Draft belum mengubah stok dan saldo;
@@ -192,8 +194,8 @@ const PurchaseFormDialog = ({ purchaseForm, onClose }) => {
                   <div
                     className={`grid gap-3 sm:grid-cols-2 ${
                       isSupply
-                        ? "lg:grid-cols-[minmax(220px,2fr)_minmax(140px,1fr)_minmax(80px,.6fr)_minmax(120px,1fr)_minmax(110px,.9fr)]"
-                        : "lg:grid-cols-[minmax(220px,2fr)_minmax(80px,.6fr)_minmax(90px,.7fr)_minmax(120px,1fr)_minmax(120px,1fr)]"
+                        ? "lg:grid-cols-[minmax(200px,2fr)_minmax(140px,1fr)_minmax(140px,1fr)_minmax(80px,.6fr)_minmax(120px,1fr)_minmax(110px,.9fr)]"
+                        : "lg:grid-cols-[minmax(200px,2fr)_minmax(140px,1fr)_minmax(80px,.6fr)_minmax(90px,.7fr)_minmax(120px,1fr)_minmax(110px,.9fr)]"
                     }`}
                   >
                     <div>
@@ -209,6 +211,18 @@ const PurchaseFormDialog = ({ purchaseForm, onClose }) => {
                         }
                         onCreate={createItem}
                         placeholder={isSupply ? "Cari atau buat barang lainnya" : "Cari atau buat barang"}
+                        disabled={saving}
+                      />
+                    </div>
+                    <div>
+                      <span className="mb-1 block text-sm">Merk</span>
+                      <CreatableSelect2
+                        options={merkOptionsFor(row.stockItemId)}
+                        value={row.merkId}
+                        onSelect={(option) => updateRow(row.key, { merkId: option?.id || "" })}
+                        onCreate={createMerk}
+                        placeholder="Cari atau buat merk"
+                        label={`Merk barang ${index + 1}`}
                         disabled={saving}
                       />
                     </div>

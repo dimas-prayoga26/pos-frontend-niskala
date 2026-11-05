@@ -95,6 +95,7 @@ const PurchaseNotaTable = ({
                     <button type="button" className="text-left hover:underline">
                       {item.itemName}
                     </button>
+                    {item.merkName && <span className="ml-2 text-xs text-[#ababab]">{item.merkName}</span>}
                   </td>
                   {index === 0 && sourceCell}
                   <td className="whitespace-nowrap p-3 text-right">

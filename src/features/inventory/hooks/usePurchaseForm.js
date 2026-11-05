@@ -6,6 +6,7 @@ import { signedCurrency } from "../utils/format";
 import { DEFAULT_TAX_PERCENT, computeNotaTotals, parsePercent } from "../utils/notaTotals";
 import { PURCHASE_KINDS } from "../utils/purchaseKinds";
 import { isRecipeIngredient } from "../utils/stockItems";
+import useMerkOptions from "./useMerkOptions";
 import {
   MAX_RECEIPTS_PER_PURCHASE,
   MAX_RECEIPTS_PER_UPLOAD,
@@ -66,13 +67,15 @@ const footerOf = (form) => ({
   taxPercent: form.taxEnabled ? parsePercent(form.taxPercent) : 0,
 });
 
-// State of the "Tambah Belanja Bahan" form, for both Jenis Belanja. It lives
+// State of the "Tambah Belanja" form, for both Jenis Belanja. It lives
 // in the parent so a closed form keeps its draft until it is saved or the page
 // reloads. A saved draft nota (Simpan Draft) can be opened again with
 // loadDraft; only admins post (Simpan & Posting). initialItems ({ stockItemId,
-// unit }): bahan baku the form starts with, one line each.
+// unit }): bahan baku the form starts with, one line each. merks: the saved
+// merk, offered on every line (useMerkOptions).
 const usePurchaseForm = ({
   suppliers,
+  merks = NO_ITEMS,
   stockItems,
   supplyItems = NO_ITEMS,
   paymentSources = [],
@@ -93,6 +96,7 @@ const usePurchaseForm = ({
   );
   const [extraItems, setExtraItems] = useState([]);
   const [extraSuppliers, setExtraSuppliers] = useState([]);
+  const merk = useMerkOptions(merks);
   const [receipts, setReceipts] = useState([]);
   const [preparingReceipts, setPreparingReceipts] = useState(false);
   // The draft nota being changed: { id, kind, attachments }.
@@ -225,6 +229,7 @@ const usePurchaseForm = ({
     setForm(initialForm());
     setExtraItems([]);
     setExtraSuppliers([]);
+    merk.reset();
     receiptsRef.current.forEach(revokeReceipt);
     setReceipts([]);
     setEditingDraft(null);
@@ -238,6 +243,7 @@ const usePurchaseForm = ({
     receiptsRef.current.forEach(revokeReceipt);
     setReceipts([]);
     setExtraSuppliers([]);
+    merk.remember(draft.items);
     setExtraItems(newNames.map((item) => ({ id: draftItemId(item.itemName), name: item.itemName, unit: "" })));
     setForm({
       ...initialForm(),
@@ -256,6 +262,7 @@ const usePurchaseForm = ({
       draft.items.map((item) => ({
         ...blankRow(),
         stockItemId: item[draftKind.itemIdKey] || draftItemId(item.itemName),
+        merkId: item.merkId || "",
         category: item.category || "",
         quantity: String(item.quantity),
         unit: item.unit,
@@ -330,6 +337,7 @@ const usePurchaseForm = ({
         extraSuppliers,
         extraItems,
         itemIdKey: kind.itemIdKey,
+        merkPayloadOf: merk.payloadOf,
       }),
       ...footer,
       status,
@@ -364,6 +372,7 @@ const usePurchaseForm = ({
         queryClient.invalidateQueries({ queryKey: ["purchase-drafts"] }),
         queryClient.invalidateQueries({ queryKey: ["purchase-summary"] }),
         queryClient.invalidateQueries({ queryKey: ["shopping-suppliers"] }),
+        queryClient.invalidateQueries({ queryKey: ["shopping-merks"] }),
         queryClient.invalidateQueries({ queryKey: ["payment-sources"] }),
         queryClient.invalidateQueries({ queryKey: ["payment-source-mutations"] }),
       ]);
@@ -415,6 +424,8 @@ const usePurchaseForm = ({
     saving,
     supplierOptions,
     itemOptions,
+    merkOptions: merk.options,
+    merkOptionsFor: (itemId) => merk.optionsFor(kind.key, itemId),
     paymentSourceOptions,
     selectedSource,
     totals,
@@ -431,6 +442,7 @@ const usePurchaseForm = ({
     removeSavedReceipt,
     createSupplier,
     createItem,
+    createMerk: merk.create,
     submit,
     saveDraft: () => save("draft"),
   };

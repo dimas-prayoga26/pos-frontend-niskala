@@ -70,11 +70,11 @@ const WasteDialog = ({ item, isAdmin, onSave, onCancel, isSaving }) => {
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
       <form
         onSubmit={handleSubmit}
-        aria-label="Form buang"
+        aria-label="Form penyesuaian stok"
         className="max-h-[92vh] overflow-y-auto rounded-lg bg-[#262626] p-5 text-[#f5f5f5] shadow-2xl"
         style={{ width: "min(92vw, 440px)" }}
       >
-        <h3 className="text-lg font-bold">Buang {item.name}</h3>
+        <h3 className="text-lg font-bold">Penyesuaian Stok {item.name}</h3>
         <p className="mt-1 text-sm text-[#ababab]">Sisa stok: {quantityDisplay(available, item.unit)}</p>
 
         <label className="mt-4 block">
@@ -155,7 +155,7 @@ const WasteDialog = ({ item, isAdmin, onSave, onCancel, isSaving }) => {
             disabled={!isValid || isSaving || preparing}
             className="rounded-lg bg-red-500 px-4 py-2 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {isSaving ? "Menyimpan..." : "Buang"}
+            {isSaving ? "Menyimpan..." : "Simpan"}
           </button>
         </div>
       </form>
