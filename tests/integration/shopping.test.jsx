@@ -138,7 +138,7 @@ const itemGroups = [
     averageCost: 14.5,
     stockValue: 36250,
     purchaseCount: 2,
-    histories: [history(91, { attachments: receipts }), history(90, { purchaseId: 6, purchaseDate: "2026-09-01", quantity: 500, total: 7500 })],
+    histories: [history(91, { attachments: receipts }), history(90, { purchaseId: 6, purchaseDate: "2026-09-01", quantity: 500, total: 7500, stockQuantity: 500 })],
     logs: [
       { id: 1, action: "create", userName: "Admin Uji", createdAt: "2026-09-15T03:00:00Z", newData: { quantity: 2000, unit: "gr", unitPrice: 15 } },
       { id: 2, action: "edit", userName: "Admin Uji", createdAt: "2026-09-16T03:00:00Z", oldData: { quantity: 400, unit: "gr", unitPrice: 20 }, newData: { quantity: 500, unit: "gr", unitPrice: 15 } },
@@ -175,15 +175,18 @@ describe("shopping history", () => {
     URL.revokeObjectURL = vi.fn();
   });
 
-  it("lists Per Item: the latest purchase per item with its COGS and the TOTAL PENGELUARAN, paged and searchable", async () => {
+  it("lists Per Item: every purchase of an item summed, the date and COGS of the latest, and the TOTAL PENGELUARAN, paged and searchable", async () => {
     renderShopping();
     fireEvent.click(await screen.findByRole("button", { name: "Per Item" }));
 
     const row = (await screen.findByText("2 history")).closest("tr");
     expect(row).toHaveTextContent("Gula");
-    expect(row).toHaveTextContent("#7 - Cash · 2 bukti");
-    expect(row).toHaveTextContent("2.000 gr");
-    expect(row).toHaveTextContent("Rp 30.000");
+    // The latest purchase: 15 September, nota #7.
+    expect(screen.getByRole("columnheader", { name: "Terakhir Dibeli" })).toBeInTheDocument();
+    expect(row.cells[1]).toHaveTextContent("#7 - Cash · 2 bukti");
+    // Both purchases: 2.000 gr + 500 gr, Rp 30.000 + Rp 7.500.
+    expect(row.cells[4]).toHaveTextContent(/^2\.500 gr$/);
+    expect(row.cells[5]).toHaveTextContent(/^2\.500 gr$/);
     expect(row).toHaveTextContent("Rp 15 / gr");
     expect(screen.getByRole("columnheader", { name: "COGS Setelah" })).toBeInTheDocument();
     // What every purchase of the 12 items cost (all pages) closes the table, under Jumlah.
@@ -197,7 +200,7 @@ describe("shopping history", () => {
     const headers = screen.getAllByRole("columnheader").map((cell) => cell.textContent);
     expect(headers.at(-1)).toBe("Jumlah");
     expect(headers).not.toContain("Harga Satuan");
-    expect(row.cells[7]).toHaveTextContent("Rp 30.000");
+    expect(row.cells[7]).toHaveTextContent(/^Rp 37\.500$/);
     expect(screen.getByText("1 / 2")).toBeInTheDocument();
     expect(api.getPurchases).toHaveBeenLastCalledWith({ search: "", page: 1, ...thisMonth });
 
@@ -216,6 +219,63 @@ describe("shopping history", () => {
     fireEvent.click(screen.getByRole("button", { name: "Per Struk" }));
     expect(await screen.findByText("Belum ada belanja bahan baku tersimpan.")).toBeInTheDocument();
     expect(api.getPurchaseNotas).toHaveBeenLastCalledWith({ search: "gul", page: 1, ...thisMonth });
+  });
+
+  it("keeps each kemasan of a bahan on its own row: Beras by weight, per karung and per kantong", async () => {
+    const beras = (id, overrides) =>
+      history(id, { purchaseId: id, itemName: "Beras", stockUnit: "kg", stockAverageCost: 13180, ...overrides });
+    api.getPurchases.mockResolvedValue({
+      data: {
+        data: {
+          purchases: [],
+          itemGroups: [
+            {
+              ...itemGroups[0],
+              stockItemId: 4,
+              itemName: "Beras",
+              stockUnit: "kg",
+              purchaseCount: 5,
+              histories: [
+                beras(95, { purchaseDate: "2026-10-30", supplierName: "Toko A", quantity: 1, unit: "karung", packSize: 5, stockQuantity: 5, total: 70000 }),
+                beras(94, { purchaseDate: "2026-10-22", supplierName: "Toko C", merkId: 1, merkName: "Rojolele", quantity: 10, unit: "kg", stockQuantity: 10, total: 140000 }),
+                beras(93, { purchaseDate: "2026-10-10", supplierName: "Toko B", quantity: 30000, unit: "gr", stockQuantity: 30, total: 420000 }),
+                beras(92, { purchaseDate: "2026-10-05", supplierName: "Toko A", quantity: 2, unit: "karung", packSize: 5, stockQuantity: 10, total: 140000 }),
+                beras(91, { purchaseDate: "2026-10-01", supplierName: "Toko A", quantity: 1, unit: "kantong", packSize: 3, stockQuantity: 3, total: 45000 }),
+              ],
+            },
+          ],
+          groupTotal: 1,
+          totalSpending: 815000,
+          total: 5,
+        },
+      },
+    });
+    renderShopping();
+    fireEvent.click(await screen.findByRole("button", { name: "Per Item" }));
+
+    await screen.findByText("Toko C, Toko B");
+    const rows = screen.getAllByRole("button").filter((element) => element.tagName === "TR");
+    expect(rows.map((row) => [row.cells[0].textContent, row.cells[4].textContent, row.cells[5].textContent, row.cells[7].textContent])).toEqual([
+      ["Beras· karung isi 5 kg2 history", "3 karung (isi 5 kg)", "15 kg", "Rp 210.000"],
+      // kg and gr of Beras by weight add up in its stock unit.
+      ["Beras2 history", "40 kg", "40 kg", "Rp 560.000"],
+      ["Beras· kantong isi 3 kg1 history", "1 kantong (isi 3 kg)", "3 kg", "Rp 45.000"],
+    ]);
+    const [karung, kiloan] = rows;
+    // The latest purchase of each row, and each toko and merk once, latest first.
+    expect(karung.cells[1]).toHaveTextContent("30 Oktober 2026#95");
+    expect(karung.cells[2]).toHaveTextContent(/^Toko A$/);
+    expect(kiloan.cells[1]).toHaveTextContent("22 Oktober 2026#94");
+    expect(kiloan.cells[3]).toHaveTextContent(/^Rojolele$/);
+
+    // The detail of a row holds only its own purchases.
+    fireEvent.click(kiloan);
+    const detail = await screen.findByRole("dialog", { name: "Beras" });
+    expect(detail).toHaveTextContent("2 history pembelian");
+    expect(within(detail).getAllByRole("row").slice(1).map((row) => row.cells[0].textContent)).toEqual([
+      expect.stringContaining("22 Oktober 2026"),
+      expect.stringContaining("10 Oktober 2026"),
+    ]);
   });
 
   it("shows no COGS for a bahan baku that is not a Bahan Resep", async () => {
@@ -1092,6 +1152,44 @@ describe("belanja lainnya in the same form", () => {
     expect(within(form).getByLabelText("Qty")).toHaveValue("");
     expect(selectByLabel(form, "Sumber Pembayaran")).toHaveValue("1");
     expect(within(form).getByRole("button", { name: "Ambil Foto" })).toBeInTheDocument();
+  });
+
+  it("sums the Qty and Jumlah of every purchase of a barang lainnya, dated by the latest", async () => {
+    api.getSupplyPurchases.mockResolvedValue({
+      data: {
+        data: {
+          itemGroups: [
+            {
+              stockItemId: 40,
+              itemName: "Token Listrik",
+              category: "Lain-lain",
+              stock: null,
+              stockUnit: "pcs",
+              purchaseCount: 2,
+              histories: [
+                history(96, { purchaseId: 96, purchaseDate: "2026-10-22", itemName: "Token Listrik", supplierName: "Listrik", paymentMethod: "Rekening Penjualan", quantity: 1, unit: "pcs", total: 1004000, stockQuantity: 1, stockUnit: "pcs" }),
+                history(70, { purchaseId: 70, purchaseDate: "2026-09-20", itemName: "Token Listrik", supplierName: "Listrik", paymentMethod: "Niskala", quantity: 1, unit: "pcs", total: 1002000, stockQuantity: 1, stockUnit: "pcs" }),
+              ],
+              logs: [],
+            },
+          ],
+          groupTotal: 1,
+          totalSpending: 2006000,
+          page: 1,
+        },
+      },
+    });
+    renderBoth();
+    fireEvent.click(within(screen.getByRole("group", { name: "Riwayat jenis belanja" })).getByRole("button", { name: "Lain-lain" }));
+    fireEvent.click(within(screen.getByRole("group", { name: "Tampilan riwayat" })).getByRole("button", { name: "Per Item" }));
+
+    const row = (await screen.findByText("Token Listrik")).closest("tr");
+    expect(row.cells[1]).toHaveTextContent("22 Oktober 2026#96 - Rekening Penjualan");
+    expect(row.cells[2]).toHaveTextContent(/^Listrik$/);
+    expect(row.cells[4]).toHaveTextContent(/^2$/);
+    expect(row.cells[7]).toHaveTextContent(/^Rp 2\.006\.000$/);
+    // The rows add up to the TOTAL PENGELUARAN.
+    expect(screen.getByTestId("total-spending")).toHaveTextContent("Rp 2.006.000");
   });
 
   it("shows the nota of barang lainnya per kategori next to bahan baku", async () => {

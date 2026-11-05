@@ -1,18 +1,18 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { rangeParams } from "../utils/periods";
 import { PURCHASE_KINDS } from "../utils/purchaseKinds";
-import { HISTORY_PAGE_SIZE } from "../utils/shopping";
+import { HISTORY_PAGE_SIZE, splitByKemasan } from "../utils/shopping";
 
 const NO_ROWS = [];
-const groupKey = (group) => String(group.stockItemId || group.itemName);
+const groupKey = (group) => `${group.stockItemId || group.itemName}|${group.kemasanKey ?? ""}`;
 
 // Paged, searchable purchase history of one Jenis Belanja (PURCHASE_KINDS),
 // optionally of one kategori (barang Lainnya) and of a period (range: from/to),
 // in one of two views:
 // - "nota" (Per Struk): posted nota with their barang, plus the count and
 //   Grand Total of every matching nota (TOTAL PENGELUARAN, all pages);
-// - "item" (Per Item): one group per item, its purchases newest first, the
+// - "item" (Per Item): one group per item and kemasan (splitByKemasan), its purchases newest first, the
 //   count of items and the cost of every matching line (TOTAL PENGELUARAN, all
 //   pages), and the group whose detail dialog is open (kept in sync with
 //   refetched data).
@@ -35,7 +35,8 @@ const usePurchaseHistory = (kind = PURCHASE_KINDS.raw, { category = "", view = "
   });
   const historyData = history.data?.data?.data;
   const notas = (isNota && historyData?.notas) || NO_ROWS;
-  const itemGroups = (!isNota && historyData?.itemGroups) || NO_ROWS;
+  const groups = (!isNota && historyData?.itemGroups) || NO_ROWS;
+  const itemGroups = useMemo(() => (groups === NO_ROWS ? NO_ROWS : splitByKemasan(groups)), [groups]);
   const notaCount = isNota ? Number(historyData?.total || 0) : 0;
   const itemCount = isNota ? 0 : Number(historyData?.groupTotal || 0);
   const totalSpending = historyData?.totalSpending ?? null;

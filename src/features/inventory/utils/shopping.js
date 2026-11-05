@@ -31,6 +31,29 @@ export const packedQuantityLabel = (quantity, unit, packSize, packUnit) =>
     ? `${quantityDisplay(quantity, unit)} (isi ${quantityDisplay(packSize, packUnit)})`
     : quantityDisplay(quantity, unit);
 
+// Per Item rows: the purchases of a barang apart per kemasan, so Beras by
+// weight (kg and gr together), Beras per karung isi 5 kg and per kantong isi
+// 3 kg are three rows, each with only its own purchases (newest first, as the
+// group has them). kemasan is { unit, packSize, packUnit } or null.
+export const splitByKemasan = (groups) =>
+  groups.flatMap((group) => {
+    const rows = new Map();
+    group.histories.forEach((history) => {
+      const packed = history.packSize != null;
+      const kemasanKey = packed ? `${history.unit}|${history.packSize}` : "";
+      if (!rows.has(kemasanKey)) {
+        rows.set(kemasanKey, {
+          ...group,
+          kemasanKey,
+          kemasan: packed ? { unit: history.unit, packSize: history.packSize, packUnit: history.stockUnit } : null,
+          histories: [],
+        });
+      }
+      rows.get(kemasanKey).histories.push(history);
+    });
+    return [...rows.values()].map((row) => ({ ...row, purchaseCount: row.histories.length }));
+  });
+
 // Random id sent with a purchase; the server ignores replays of the same id.
 export const createRequestId = () =>
   Array.from(crypto.getRandomValues(new Uint8Array(16)), (n) =>
