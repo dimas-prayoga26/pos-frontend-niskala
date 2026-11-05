@@ -121,11 +121,11 @@ const OrderCard = ({
                     {onlineBadgeLabel}
                   </span>
                 )}
-                {/* Modul 2: a bahan olahan (Nasi, ...) waits for the Daily Prep. */}
+                {/* Modul 2: a bahan olahan (Nasi, ...) sold short of stock waits for the Daily Prep. */}
                 {order.hppStatus === "pending" && (
                   <span
                     className="rounded-md bg-[#4a390b] px-2 py-1 text-xs font-bold text-[#f6d365]"
-                    title="HPP bahan olahan menunggu Daily Prep (Catat Masak) dan dikunci saat hari ditutup (otomatis pukul 00.00)."
+                    title="Terjual saat stok bahan olahan kurang. HPP ditetapkan saat Catat Masak berikutnya, atau dikunci saat hari ditutup (otomatis pukul 00.00)."
                   >
                     HPP Pending
                   </span>

@@ -142,6 +142,30 @@ export const getOrderItemHpp = (item, menuItems = []) => {
   return Number(menuItem?.hppCost ?? menuItem?.hpp ?? 0) || 0;
 };
 
+// HPP of one portion in two parts: olahan, from its bahan olahan lines
+// (hppOlahan, priced by the day's cooking), and standar, the rest (bahan
+// baku, or the menu's HPP when the sale kept no lines).
+export const getOrderItemHppSplit = (item, menuItems = []) => {
+  const total = getOrderItemHpp(item, menuItems);
+  const olahan = Math.min(Math.max(Number(item?.hppOlahan) || 0, 0), total);
+  return { standar: total - olahan, olahan };
+};
+
+// HPP Standar and HPP Olahan of every item sold; they add up to getOrdersHppTotal.
+export const getOrdersHppSplit = (orders = [], menuItems = []) =>
+  orders.reduce(
+    (split, order) => {
+      (order?.items || []).forEach((item) => {
+        const quantity = Math.max(Number(item.quantity) || 0, 0);
+        const { standar, olahan } = getOrderItemHppSplit(item, menuItems);
+        split.standar += standar * quantity;
+        split.olahan += olahan * quantity;
+      });
+      return split;
+    },
+    { standar: 0, olahan: 0 }
+  );
+
 export const getOrderHppTotal = (order, menuItems = []) =>
   (order?.items || []).reduce((total, item) => {
     const quantity = Math.max(Number(item.quantity) || 0, 0);

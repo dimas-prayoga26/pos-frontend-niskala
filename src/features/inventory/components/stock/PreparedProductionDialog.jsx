@@ -21,8 +21,8 @@ const Suffix = ({ children }) => (
 // "Catat Masak", the kitchen's Daily Prep, in the order it happens: how much
 // of each bahan baku was cooked (starting from the latest cooking's), then
 // how many portions came out, on which business day (today, or an earlier
-// day not yet closed). Its cost per portion goes to that
-// day's notas whose HPP is still pending (Modul 2). Simpan asks once more,
+// day not yet closed). Its cost per portion goes to that day's notas sold
+// short of stock (HPP pending, Modul 2), settled once the stock covers them. Simpan asks once more,
 // since saving takes the bahan baku out of stock; editing a field cancels
 // that confirmation. A bahan baku short of stock can be bought at once
 // (onRestock: Tambah Belanja with those bahan).
