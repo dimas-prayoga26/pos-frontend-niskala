@@ -13,7 +13,7 @@ const disabledPickerClass =
 //   app (<input capture="environment">, back camera); computers get a webcam
 //   preview (CameraCaptureDialog), because desktop browsers ignore capture.
 //   Without a usable camera API it falls back to the file chooser.
-// - "Pilih dari Galeri" picks saved pictures.
+// - "Unggah Foto" picks saved pictures.
 // subject names the photos in labels: "bukti nota" or "bukti buang".
 const ReceiptPicker = ({
   receipts = [],
@@ -71,7 +71,7 @@ const ReceiptPicker = ({
         />
         <label className={blocked ? disabledPickerClass : pickerClass}>
           <FiImage size={16} aria-hidden="true" />
-          Pilih dari Galeri
+          Unggah Foto
           <input
             type="file"
             accept="image/*"
@@ -79,7 +79,7 @@ const ReceiptPicker = ({
             className="sr-only"
             disabled={blocked}
             onChange={handleChange}
-            aria-label={`Pilih ${subject} dari galeri`}
+            aria-label={`Unggah foto ${subject}`}
           />
         </label>
       </div>

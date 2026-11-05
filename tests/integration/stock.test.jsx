@@ -14,16 +14,20 @@ vi.mock("../../src/https/index", async (importOriginal) => ({
   deleteSemiProduction: vi.fn(),
   deleteSemiWaste: vi.fn(),
   deleteStockItem: vi.fn(),
+  deleteStockOpname: vi.fn(),
   deleteStockWaste: vi.fn(),
   getPurchases: vi.fn(),
   getSemiItems: vi.fn(),
   getSemiProductions: vi.fn(),
   getShoppingSuppliers: vi.fn(),
   getStockItems: vi.fn(),
+  getStockOpnameUsage: vi.fn(),
+  getStockOpnames: vi.fn(),
   getStockWastes: vi.fn(),
   getSupplyItems: vi.fn(),
   recordSemiProduction: vi.fn(),
   recordSemiWaste: vi.fn(),
+  recordStockOpname: vi.fn(),
   recordStockWaste: vi.fn(),
   updateStockCogs: vi.fn(),
   updateStockRecipeUse: vi.fn(),
@@ -101,11 +105,176 @@ describe("stock management", () => {
     api.getStockItems.mockResolvedValue({ data: { data: items } });
     api.getSemiItems.mockResolvedValue({ data: { data: [nasi] } });
     api.getStockWastes.mockResolvedValue({ data: { data: { wastes: [], dailyTotals: [] } } });
+    api.getStockOpnameUsage.mockResolvedValue({ data: { data: { usage: [] } } });
     receiptImages.compressReceiptImage.mockImplementation(async (file) => file);
     URL.createObjectURL = vi.fn((file) => `blob:${file.name}`);
     URL.revokeObjectURL = vi.fn();
     api.getPurchases.mockResolvedValue({ data: { data: { purchases: [], itemGroups: [], total: 0 } } });
     api.getShoppingSuppliers.mockResolvedValue({ data: { data: [] } });
+  });
+
+  it("Stock Opname: staff type only the fisik, the selisih and kehilangan follow", async () => {
+    api.recordStockOpname.mockResolvedValue({ data: { success: true, message: "Stock opname disimpan." } });
+    renderWithProviders(<StockManagement />, { preloadedState: asCashier });
+
+    await findRow("Susu Segar");
+    fireEvent.click(screen.getByRole("button", { name: "Stock Opname" }));
+    const dialog = screen.getByRole("form", { name: "Form stock opname" });
+    expect(dialog).toHaveTextContent("Stock Opname Bahan Baku");
+    // Bebas Stok is not counted.
+    expect(within(dialog).queryByText("Air Galon")).not.toBeInTheDocument();
+    const fisik = (name) => within(dialog).getByRole("textbox", { name: `Fisik ${name}` });
+    const lineOf = (name) => within(dialog).getByText(name).closest("tr");
+
+    // Susu 100 ml kurang at Rp 25,61 / ml; Bahan 03 2 pcs lebih; Bahan 04 cocok.
+    fireEvent.change(fisik("Susu Segar"), { target: { value: "700" } });
+    fireEvent.change(fisik("Bahan 03"), { target: { value: "12" } });
+    fireEvent.change(fisik("Bahan 04"), { target: { value: "10" } });
+    expect(lineOf("Susu Segar")).toHaveTextContent("Kurang 100 ml");
+    expect(lineOf("Susu Segar")).toHaveTextContent("-Rp 2.561");
+    expect(lineOf("Bahan 03")).toHaveTextContent("Lebih 2 pcs");
+    expect(lineOf("Bahan 03")).toHaveTextContent("+Rp 2.000");
+    expect(lineOf("Bahan 04")).toHaveTextContent("Cocok");
+    expect(dialog).toHaveTextContent("Dihitung3 bahan");
+    expect(dialog).toHaveTextContent("Selisih2 bahan");
+    expect(dialog).toHaveTextContent("Kehilangan PersediaanRp 561");
+
+    // A count below 0 is refused.
+    fireEvent.change(fisik("Bahan 05"), { target: { value: "-1" } });
+    expect(lineOf("Bahan 05")).toHaveTextContent("Tidak valid");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Simpan" }));
+    expect(await screen.findByText("Stok fisik harus angka 0 atau lebih.")).toBeInTheDocument();
+    fireEvent.change(fisik("Bahan 05"), { target: { value: "" } });
+
+    // The search narrows the list but keeps the counts.
+    fireEvent.change(within(dialog).getByRole("searchbox", { name: "Cari bahan" }), { target: { value: "susu" } });
+    expect(within(dialog).queryByText("Bahan 03")).not.toBeInTheDocument();
+    expect(dialog).toHaveTextContent("Dihitung3 bahan");
+
+    fireEvent.click(within(dialog).getByRole("button", { name: "Simpan" }));
+    expect(dialog).toHaveTextContent("Stok 2 bahan disesuaikan ke angka fisik.");
+    expect(api.recordStockOpname).not.toHaveBeenCalled();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Ya, Simpan" }));
+    await waitFor(() =>
+      expect(api.recordStockOpname.mock.calls[0][0]).toEqual({
+        kind: "raw",
+        counts: [
+          { itemId: 1, actualStock: 700 },
+          { itemId: 3, actualStock: 12 },
+          { itemId: 4, actualStock: 10 },
+        ],
+        note: "",
+      })
+    );
+    expect(await screen.findByText("Stock opname disimpan.")).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole("form", { name: "Form stock opname" })).not.toBeInTheDocument());
+  });
+
+  it("Stock Opname opens on the bahan today's orders used, with how much", async () => {
+    api.getStockItems.mockResolvedValue({
+      data: { data: [...items, stockItem(13, { name: "Aqua Botol", isRecipeIngredient: false })] },
+    });
+    api.getStockOpnameUsage.mockResolvedValue({
+      data: { data: { usage: [{ itemId: 1, quantity: 200 }, { itemId: 5, quantity: 3 }, { itemId: 2, quantity: 1 }] } },
+    });
+    renderWithProviders(<StockManagement />, { preloadedState: asCashier });
+
+    await findRow("Susu Segar");
+    fireEvent.click(screen.getByRole("button", { name: "Stock Opname" }));
+    const dialog = screen.getByRole("form", { name: "Form stock opname" });
+    await waitFor(() => expect(api.getStockOpnameUsage).toHaveBeenCalledWith("raw"));
+    const used = await within(dialog).findByRole("button", { name: "Terpakai Pesanan (2)" });
+    expect(used).toHaveAttribute("aria-pressed", "true");
+    // Bebas Stok is not counted, even when orders used it.
+    expect(within(dialog).queryByText("Air Galon")).not.toBeInTheDocument();
+    expect(within(dialog).queryByText("Bahan 03")).not.toBeInTheDocument();
+    expect(within(dialog).getByText("Susu Segar").closest("tr")).toHaveTextContent("800 ml200 ml");
+    expect(within(dialog).getByText("Bahan 05").closest("tr")).toHaveTextContent("10 pcs3 pcs");
+
+    // Semua lists every bahan; a count typed before stays.
+    fireEvent.change(within(dialog).getByRole("textbox", { name: "Fisik Susu Segar" }), { target: { value: "590" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Semua (11)" }));
+    // Only Bahan Resep are counted: not the Bukan Resep Aqua Botol.
+    expect(within(dialog).queryByText("Aqua Botol")).not.toBeInTheDocument();
+    expect(within(dialog).getByText("Bahan 03").closest("tr")).toHaveTextContent("10 pcs-");
+    expect(within(dialog).getByRole("textbox", { name: "Fisik Susu Segar" })).toHaveValue("590");
+    expect(dialog).toHaveTextContent("Dihitung1 bahan");
+  });
+
+  it("Stock Opname of bahan olahan counts portions", async () => {
+    api.recordStockOpname.mockResolvedValue({ data: { success: true, message: "Stock opname disimpan." } });
+    renderWithProviders(<StockManagement />, { preloadedState: asAdmin });
+
+    await findRow("Susu Segar");
+    fireEvent.click(screen.getByRole("button", { name: "Bahan Olahan" }));
+    fireEvent.click(screen.getByRole("button", { name: "Stock Opname" }));
+    const dialog = screen.getByRole("form", { name: "Form stock opname" });
+    expect(dialog).toHaveTextContent("Stock Opname Bahan Olahan");
+    // Nasi: 78 porsi worth Rp 68.250, 70 counted.
+    fireEvent.change(within(dialog).getByRole("textbox", { name: "Fisik Nasi" }), { target: { value: "70" } });
+    expect(within(dialog).getByText("Nasi").closest("tr")).toHaveTextContent("Kurang 8 porsi-Rp 7.000");
+    fireEvent.change(within(dialog).getByPlaceholderText("Opsional"), { target: { value: "sisa malam" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Simpan" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Ya, Simpan" }));
+    await waitFor(() =>
+      expect(api.recordStockOpname.mock.calls[0][0]).toEqual({
+        kind: "semi",
+        counts: [{ itemId: 20, actualStock: 70 }],
+        note: "sisa malam",
+      })
+    );
+  });
+
+  it("lists the Riwayat Opname of its tab and lets admins undo the latest count of an item", async () => {
+    const today = getJakartaDateKey();
+    const opname = (id, itemId, itemName, systemStock, actualStock, cost, unit = "ml") => ({
+      id,
+      kind: "raw",
+      itemId,
+      itemName,
+      opnameDate: today,
+      systemStock,
+      actualStock,
+      difference: systemStock - actualStock,
+      unit,
+      cost,
+      note: "",
+      userName: "Kasir",
+      createdAt: `${today} 09:00:00`,
+    });
+    api.getStockOpnames.mockResolvedValue({
+      data: {
+        data: {
+          opnames: [
+            opname(5, 1, "Susu Segar", 700, 650, 1280),
+            opname(4, 3, "Bahan 03", 10, 12, -2000, "pcs"),
+            opname(3, 1, "Susu Segar", 800, 700, 2561),
+          ],
+          dailyTotals: [{ date: today, cost: 1841, entries: 3 }],
+        },
+      },
+    });
+    api.deleteStockOpname.mockResolvedValue({ data: { success: true } });
+    renderWithProviders(<StockManagement />, { preloadedState: asAdmin });
+
+    await findRow("Susu Segar");
+    fireEvent.click(screen.getByRole("button", { name: "Riwayat Opname" }));
+    const history = screen.getByRole("region", { name: "Riwayat opname" });
+    await waitFor(() => expect(api.getStockOpnames).toHaveBeenCalledWith({ kind: "raw" }));
+    const rows = await within(history).findAllByText("Susu Segar");
+    expect(rows[0].closest("tr")).toHaveTextContent("700 ml650 mlkurang 50 ml");
+    expect(within(history).getByText("Bahan 03").closest("tr")).toHaveTextContent("lebih 2 pcs");
+    expect(within(history).getByText("Bahan 03").closest("tr")).toHaveTextContent("+Rp 2.000");
+    expect(within(history).getByRole("list", { name: "Total nilai selisih" })).toHaveTextContent("Hari ini-Rp 1.841");
+
+    // Only the latest count of each item can be undone.
+    expect(within(rows[1].closest("tr")).queryByRole("button", { name: "Batalkan" })).not.toBeInTheDocument();
+    fireEvent.click(within(rows[0].closest("tr")).getByRole("button", { name: "Batalkan" }));
+    fireEvent.click(within(history).getByRole("button", { name: "Ya, batalkan" }));
+    await waitFor(() => expect(api.deleteStockOpname.mock.calls[0][0]).toEqual({ kind: "raw", id: 5 }));
+
+    fireEvent.click(within(history).getByRole("button", { name: "Kembali" }));
+    expect(await findRow("Susu Segar")).toBeInTheDocument();
   });
 
   it("has no Lainnya tab: barang Lainnya are seen in Belanja Bahan", async () => {

@@ -42,7 +42,8 @@ const RecipeUseCell = ({ item, onToggle, isPending }) => {
 // the tab is reopened or the search changes. "Ubah" only shows when
 // onEditCogs is given. Admins switch "Bahan Resep" (offered in the recipe
 // editors) per bahan. Staff throw bahan away with Buang (not those with
-// Bebas Stok); Riwayat Kerugian opens the write-offs.
+// Bebas Stok); Riwayat Kerugian opens the write-offs. Stock Opname counts
+// the stock on hand and Riwayat Opname lists its selisih.
 const StockItemsPanel = ({
   stockItems,
   searchQuery,
@@ -54,6 +55,8 @@ const StockItemsPanel = ({
   recipeUsePendingId,
   onWaste,
   onShowWastes,
+  onOpname,
+  onShowOpnames,
 }) => {
   const [currentPage, setCurrentPage] = useState(1);
   const [recipeUse, setRecipeUse] = useState("all");
@@ -85,7 +88,7 @@ const StockItemsPanel = ({
             menu dan bahan olahan.
           </p>
         </div>
-        <div className="flex shrink-0 gap-2">
+        <div className="flex shrink-0 flex-wrap gap-2">
           <input
             value={searchQuery}
             onChange={(event) => onSearchChange(event.target.value)}
@@ -99,6 +102,20 @@ const StockItemsPanel = ({
             className="shrink-0 rounded-lg bg-[#333] px-4 py-2 text-sm font-bold text-[#f5f5f5] hover:bg-[#3a3a3a]"
           >
             Riwayat Kerugian
+          </button>
+          <button
+            type="button"
+            onClick={onShowOpnames}
+            className="rounded-lg bg-[#333] px-4 py-2 text-sm font-bold text-[#f5f5f5] hover:bg-[#3a3a3a]"
+          >
+            Riwayat Opname
+          </button>
+          <button
+            type="button"
+            onClick={onOpname}
+            className="rounded-lg bg-[#a79981] px-4 py-2 text-sm font-bold text-[#101010]"
+          >
+            Stock Opname
           </button>
         </div>
       </div>
