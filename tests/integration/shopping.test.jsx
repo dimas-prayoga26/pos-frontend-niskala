@@ -378,7 +378,7 @@ describe("shopping history", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Tambah Belanja Bahan" }));
     const form = screen.getByRole("dialog");
     const camera = within(form).getByLabelText("Ambil foto bukti nota");
-    const gallery = within(form).getByLabelText("Pilih bukti nota dari galeri");
+    const gallery = within(form).getByLabelText("Unggah foto bukti nota");
     expect(camera).toHaveAttribute("capture", "environment");
     expect(camera).toHaveAttribute("accept", "image/*");
     expect(gallery).toHaveAttribute("multiple");

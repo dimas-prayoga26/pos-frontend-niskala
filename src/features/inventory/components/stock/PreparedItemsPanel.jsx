@@ -8,7 +8,8 @@ const linkClass = "font-semibold text-[#d6c7ae] hover:text-[#f5f5f5]";
 // "Bahan Olahan" tab: items cooked in-house (Nasi, Sambal, ...). Portions come
 // from "Catat Masak"; selling a menu uses them like any stock item. Each row keeps
 // the daily actions (Catat Masak, Buang) apart from the rarer ones. The Riwayat
-// Kerugian button opens the thrown-away portions (WastesPanel).
+// Kerugian button opens the thrown-away portions (WastesPanel); Stock Opname
+// counts the portions on hand and Riwayat Opname lists its selisih.
 const PreparedItemsPanel = ({
   preparedItems,
   isAdmin,
@@ -19,6 +20,8 @@ const PreparedItemsPanel = ({
   onWaste,
   onDelete,
   onShowWastes,
+  onOpname,
+  onShowOpnames,
 }) => (
   <div className="rounded-lg bg-[#1f1f1f] p-4">
     <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -26,7 +29,7 @@ const PreparedItemsPanel = ({
         <h3 className="text-lg font-bold text-[#f5f5f5]">Bahan Olahan</h3>
         <p className="mt-1 text-sm text-[#ababab]">Bahan yang dimasak sendiri dari bahan baku lalu dipakai di menu.</p>
       </div>
-      <div className="flex shrink-0 gap-2">
+      <div className="flex shrink-0 flex-wrap gap-2">
         <button
           type="button"
           onClick={onShowWastes}
@@ -34,6 +37,20 @@ const PreparedItemsPanel = ({
           className="rounded-lg bg-[#333] px-4 py-2 text-sm font-bold text-[#f5f5f5] hover:bg-[#3a3a3a]"
         >
           Riwayat Kerugian
+        </button>
+        <button
+          type="button"
+          onClick={onShowOpnames}
+          className="rounded-lg bg-[#333] px-4 py-2 text-sm font-bold text-[#f5f5f5] hover:bg-[#3a3a3a]"
+        >
+          Riwayat Opname
+        </button>
+        <button
+          type="button"
+          onClick={onOpname}
+          className="rounded-lg bg-[#a79981] px-4 py-2 text-sm font-bold text-[#101010]"
+        >
+          Stock Opname
         </button>
         {isAdmin && (
           <button

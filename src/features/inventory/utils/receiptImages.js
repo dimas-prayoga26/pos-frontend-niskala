@@ -77,13 +77,13 @@ export const cameraErrorMessage = (error) => {
   switch (error?.name) {
     case "NotAllowedError":
     case "SecurityError":
-      return "Izin kamera ditolak. Izinkan kamera di pengaturan browser, atau pakai Pilih dari Galeri.";
+      return "Izin kamera ditolak. Izinkan kamera di pengaturan browser, atau pakai Unggah Foto.";
     case "NotFoundError":
     case "OverconstrainedError":
-      return "Kamera tidak ditemukan di perangkat ini. Pakai Pilih dari Galeri.";
+      return "Kamera tidak ditemukan di perangkat ini. Pakai Unggah Foto.";
     case "NotReadableError":
       return "Kamera sedang dipakai aplikasi lain. Tutup aplikasi itu lalu coba lagi.";
     default:
-      return "Kamera tidak bisa dibuka. Pakai Pilih dari Galeri.";
+      return "Kamera tidak bisa dibuka. Pakai Unggah Foto.";
   }
 };

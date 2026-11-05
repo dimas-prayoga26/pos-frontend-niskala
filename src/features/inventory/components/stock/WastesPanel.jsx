@@ -4,6 +4,7 @@ import { backendBaseUrl } from "../../../../shared/api/backendUrl";
 import { formatDateAndTime, getJakartaDateKey } from "../../../../shared/lib/dates";
 import { getStockWastes } from "../../api";
 import { quantityDisplay, signedCurrency } from "../../utils/format";
+import { costClassName, formatDay, groupByDay, latestIdByItem as findLatestIds, periodTotals } from "../../utils/lossHistory";
 import { STOCK_PAGE_SIZE } from "../../utils/stockItems";
 
 const REASON_CLASS_NAMES = {
@@ -26,50 +27,6 @@ const KIND_TEXTS = {
 const pagerButtonClass =
   "rounded-lg bg-[#262626] px-3 py-2 font-semibold text-[#f5f5f5] disabled:cursor-not-allowed disabled:opacity-40";
 
-const costClassName = (cost) => (cost < 0 ? "text-green-400" : "text-red-400");
-
-const formatDay = (date) =>
-  new Date(`${date}T00:00:00`).toLocaleDateString("id-ID", {
-    weekday: "short",
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
-
-// The write-offs (newest first) per business day, each day with its total
-// kerugian from the server (all its rows, not only the ones listed).
-const groupByDay = (wastes, dailyTotals) => {
-  const totalByDate = new Map(dailyTotals.map((day) => [day.date, day.cost]));
-  const days = [];
-
-  for (const waste of wastes) {
-    if (days[days.length - 1]?.date !== waste.wasteDate) days.push({ date: waste.wasteDate, wastes: [] });
-    days[days.length - 1].wastes.push(waste);
-  }
-
-  return days.map((day) => ({
-    ...day,
-    cost: totalByDate.get(day.date) ?? day.wastes.reduce((total, waste) => total + waste.cost, 0),
-  }));
-};
-
-// Kerugian of today, this week (from Monday) and this month, summed from the
-// days' totals. Dates are business days ("YYYY-MM-DD", Asia/Jakarta).
-const periodTotals = (dailyTotals, today) => {
-  const monday = new Date(`${today}T00:00:00Z`);
-  monday.setUTCDate(monday.getUTCDate() - ((monday.getUTCDay() + 6) % 7));
-  const sumFrom = (from) =>
-    dailyTotals
-      .filter((day) => day.date >= from && day.date <= today)
-      .reduce((total, day) => total + day.cost, 0);
-
-  return [
-    { label: "Hari ini", cost: sumFrom(today) },
-    { label: "Minggu ini", cost: sumFrom(monday.toISOString().slice(0, 10)) },
-    { label: "Bulan ini", cost: sumFrom(`${today.slice(0, 7)}-01`) },
-  ];
-};
-
 // "Riwayat Kerugian" of one kind, opened from its tab of the Stok menu: bahan
 // baku (kind "raw") or bahan olahan (kind "semi") thrown away (Buang,
 // the leftover at the daily recap, a lower stock count) with their bukti
@@ -87,12 +44,13 @@ const WastesPanel = ({ kind, isAdmin, onUndo, isUndoing, onBack }) => {
   const totalPages = Math.max(Math.ceil(wastes.length / STOCK_PAGE_SIZE), 1);
   // An undo can leave the last page empty.
   const page = Math.min(currentPage, totalPages);
-  const days = groupByDay(wastes.slice((page - 1) * STOCK_PAGE_SIZE, page * STOCK_PAGE_SIZE), dailyTotals);
-  // The newest write-off of each item (highest id) is the one that can be undone.
-  const latestIdByItem = new Map();
-  for (const waste of wastes) {
-    if (waste.itemId && waste.id > (latestIdByItem.get(waste.itemId) || 0)) latestIdByItem.set(waste.itemId, waste.id);
-  }
+  const days = groupByDay(
+    wastes.slice((page - 1) * STOCK_PAGE_SIZE, page * STOCK_PAGE_SIZE),
+    dailyTotals,
+    (waste) => waste.wasteDate
+  );
+  // The newest write-off of each item is the one that can be undone.
+  const latestIdByItem = findLatestIds(wastes);
   const columnCount = isAdmin ? 7 : 6;
 
   return (
@@ -163,7 +121,7 @@ const WastesPanel = ({ kind, isAdmin, onUndo, isUndoing, onBack }) => {
                 </td>
                 {isAdmin && <td />}
               </tr>
-              {day.wastes.map((waste) => (
+              {day.rows.map((waste) => (
                 <tr key={waste.id} className="border-t border-[#333]">
                   <td className="p-3">
                     <span className="font-semibold">{waste.itemName}</span>

@@ -186,6 +186,17 @@ export const recordSemiWaste = ({ semiItemId, ...data }) =>
   postWaste(`/api/stock-item/semi/${semiItemId}/wastes`, data);
 export const deleteSemiWaste = (wasteId) =>
   axiosWrapper.delete(`/api/stock-item/semi/wastes/${wasteId}`);
+// Stock Opname (Modul 3): physical counts of one kind ({ kind, counts:
+// [{ itemId, actualStock }], note }), their riwayat (Kehilangan Persediaan)
+// and the undo of the latest count of an item.
+export const getStockOpnames = (params = {}) =>
+  axiosWrapper.get("/api/stock-item/opnames", { params });
+export const recordStockOpname = (data) => axiosWrapper.post("/api/stock-item/opnames", data);
+// What today's orders took from each bahan of one kind since its last count.
+export const getStockOpnameUsage = (kind) =>
+  axiosWrapper.get("/api/stock-item/opnames/usage", { params: { kind } });
+export const deleteStockOpname = ({ kind, id }) =>
+  axiosWrapper.delete(`/api/stock-item/opnames/${kind}/${id}`);
 // Perlengkapan (stock_supply_items): peralatan, operasional, promosi.
 export const getSupplyItems = () => axiosWrapper.get("/api/stock-item/supply");
 export const addSupplyItem = (data) => axiosWrapper.post("/api/stock-item/supply", data);
