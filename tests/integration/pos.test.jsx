@@ -339,6 +339,27 @@ describe("POS menu", () => {
     ).toEqual([["3-40~1", 18000, 100, 0]]);
   });
 
+  it("makes a Kategori Promo stand out among the category cards", async () => {
+    api.getCategories.mockResolvedValue({
+      data: {
+        data: [
+          ...categories,
+          { id: 3, name: "PROMO", taxRate: null, isBundle: true },
+          { id: 4, name: "Spesial", taxRate: null, isBundle: true },
+        ],
+      },
+    });
+    renderWithProviders(<MenuContainer />, { route: "/menu" });
+    await screen.findByText("Kopi Susu");
+
+    const cardOf = (name) => screen.getAllByText(name).at(-1).closest("div.cursor-pointer");
+    expect(cardOf("PROMO")).toHaveAttribute("data-promo", "true");
+    expect(cardOf("Snack")).not.toHaveAttribute("data-promo");
+    // A promo whose name does not say so gets a Promo tag.
+    expect(within(cardOf("Spesial")).getByText("Promo")).toBeInTheDocument();
+    expect(within(cardOf("PROMO")).queryByText("Promo")).not.toBeInTheDocument();
+  });
+
   it("switches category from the category cards", async () => {
     renderWithProviders(<MenuContainer />, { route: "/menu" });
     await screen.findByText("Kopi Susu");
