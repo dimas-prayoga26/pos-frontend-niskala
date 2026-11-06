@@ -2,6 +2,7 @@
 import { useRef } from "react";
 import { enqueueSnackbar } from "notistack";
 import { createDraftThermalPrintUrl, createThermalPrintUrl } from "../../https";
+import { bundleChoicesText } from "../../features/pos/utils/bundleChoices";
 import {
   formatCurrency,
   formatJakartaReceiptDate,
@@ -186,6 +187,13 @@ const buildReceiptHtml = (orderInfo, { logoSrc = receiptMark } = {}) => {
             .map((addOn) => escapeHtml(addOn.name))
             .join(", ")}</div>`
         : "";
+      const bundleChoices = item.bundleChoices?.length
+        ? `<div class="line-note">Isi: ${escapeHtml(bundleChoicesText(item.bundleChoices))}</div>`
+        : "";
+      const discount =
+        Number(item.discountPercent) > 0
+          ? `<div class="line-note">Diskon ${Number(item.discountPercent)}%</div>`
+          : "";
       const variantParts = getVariantParts(item.variant);
       const temperature = variantParts.temperature
         ? `<div class="line-note item-option">Varian: ${escapeHtml(variantParts.temperature)}</div>`
@@ -197,6 +205,8 @@ const buildReceiptHtml = (orderInfo, { logoSrc = receiptMark } = {}) => {
             <span>${escapeHtml(item.name)}</span>
           </div>
           ${temperature}
+          ${bundleChoices}
+          ${discount}
           <div class="item-detail">
             <span class="line-note">Qty: ${item.quantity}</span>
             <strong>${formatReceiptCurrency(item.price)}</strong>

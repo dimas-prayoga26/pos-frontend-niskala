@@ -546,6 +546,11 @@ const dailyAmountToneClass = {
   danger: "text-[#ff7b7b]",
 };
 
+// A promo discount is shown as a bracketed minus, e.g. (-Rp 15.000): a marker
+// only, it is never taken off the income.
+const formatPromoAmount = (value) =>
+  value > 0 ? `(-${formatCurrency(value)})` : formatCurrency(0);
+
 const renderDailyAmountCell = (value, tone = "default") => (
   <td className="px-4 py-4 align-middle">
     <span
@@ -658,7 +663,18 @@ const RecapManagement = () => {
     : currentUser?._id
       ? [currentUser]
       : [];
-  const menuItems = menuItemsRes?.data?.data || [];
+  const menuItemsData = menuItemsRes?.data?.data;
+  const menuItems = useMemo(() => menuItemsData || [], [menuItemsData]);
+  // Menus of a Kategori Promo, marked in Rekap New.
+  const promoMenuIds = useMemo(
+    () =>
+      new Set(
+        menuItems
+          .filter((item) => item.isBundle || item.category?.isBundle)
+          .map((item) => Number(item.id || item._id))
+      ),
+    [menuItems]
+  );
   const userOptions = useMemo(
     () =>
       users.map((user) => ({
@@ -774,6 +790,11 @@ const RecapManagement = () => {
         summary.grossSales += grossAmount;
         summary.netSales += netAmount;
         summary.discounts += incomeDeduction;
+        // Promo discounts (shown only: neither income nor a loss).
+        summary.promo += (order.items || []).reduce(
+          (total, item) => total + (Number(item.discountAmount) || 0),
+          0
+        );
 
         if (order.orderType !== "Online" && isCashPayment(order.paymentMethod)) {
           summary.cashSales += netAmount;
@@ -803,6 +824,7 @@ const RecapManagement = () => {
         grossSales: 0,
         netSales: 0,
         discounts: 0,
+        promo: 0,
         cashSales: 0,
         qrSales: 0,
         shopeeFoodSales: 0,
@@ -840,6 +862,18 @@ const RecapManagement = () => {
           const totalIncome = grossRevenue * revenueShare;
           const incomeDeduction = incomeDeductionTotal * revenueShare;
           const netIncome = Math.max(totalIncome - incomeDeduction, 0);
+          // A promo line is marked; with a discount it shows its price and
+          // the discount as a minus.
+          const discountAmount = Number(item.discountAmount) || 0;
+          const isPromo =
+            discountAmount > 0 ||
+            Number(item.discountPercent) > 0 ||
+            (item.bundleChoices?.length || 0) > 0 ||
+            promoMenuIds.has(Number(item.menuItemId ?? item.sourceMenuItemId));
+          const listUnitPrice =
+            discountAmount > 0 && quantity > 0
+              ? ((Number(item.price) || 0) + discountAmount) / quantity
+              : unitPrice;
           // Historical items may still carry a size/temperature label.
           const variant = String(item.variant || "").trim();
           const menuName =
@@ -859,6 +893,9 @@ const RecapManagement = () => {
             weekKey: weekInfo.key,
             weekLabel: weekInfo.label,
             menu: menuName || "-",
+            isPromo,
+            discountAmount,
+            listUnitPrice,
             quantity,
             unitPrice,
             totalPrice,
@@ -869,7 +906,7 @@ const RecapManagement = () => {
           };
         });
       }).sort((first, second) => first.sortValue - second.sortValue),
-    [newRecapMonthOrders]
+    [newRecapMonthOrders, promoMenuIds]
   );
   const newRecapDisplayRows = useMemo(() => {
     const displayRows = [];
@@ -1253,6 +1290,11 @@ const RecapManagement = () => {
       title: "Total Potongan",
       value: formatCurrency(newRecapTotals.discounts),
       color: "#b58105",
+    },
+    {
+      title: "Total Promo",
+      value: formatPromoAmount(newRecapTotals.promo),
+      color: "#be3e3f",
     },
     {
       title: "Total Penjualan dengan Tunai",
@@ -1811,28 +1853,45 @@ const RecapManagement = () => {
                         </td>
                       )}
                       <td className="min-w-[220px] px-4 py-4 align-middle">
-                        {row.orderItemId ? (
-                          <button
-                            type="button"
-                            onClick={() => setCostItem(row)}
-                            title="Lihat rincian HPP"
-                            className="block max-w-[240px] truncate text-left text-sm font-semibold text-[#f5f5f5] underline-offset-4 hover:text-[#f6d365] hover:underline"
-                          >
-                            {row.menu}
-                          </button>
-                        ) : (
-                          <span className="block max-w-[240px] truncate text-sm font-semibold text-[#f5f5f5]">
-                            {row.menu}
-                          </span>
-                        )}
+                        <div className="flex items-center gap-2">
+                          {row.orderItemId ? (
+                            <button
+                              type="button"
+                              onClick={() => setCostItem(row)}
+                              title="Lihat rincian HPP"
+                              className="block max-w-[240px] truncate text-left text-sm font-semibold text-[#f5f5f5] underline-offset-4 hover:text-[#f6d365] hover:underline"
+                            >
+                              {row.menu}
+                            </button>
+                          ) : (
+                            <span className="block max-w-[240px] truncate text-sm font-semibold text-[#f5f5f5]">
+                              {row.menu}
+                            </span>
+                          )}
+                          {row.isPromo && (
+                            <span className="shrink-0 rounded-md bg-amber-900/50 px-2 py-0.5 text-xs font-bold text-amber-200">
+                              Promo
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="px-4 py-4 text-center align-middle">
                         <span className="inline-flex min-w-[44px] justify-center rounded-md bg-[#303030] px-2.5 py-1 text-sm font-bold text-[#f5f5f5]">
                           {row.quantity}
                         </span>
                       </td>
-                      {renderDailyAmountCell(row.unitPrice, "muted")}
-                      {renderDailyAmountCell(row.totalPrice)}
+                      {renderDailyAmountCell(row.listUnitPrice, "muted")}
+                      {row.discountAmount > 0
+                        ? (
+                          <td className="px-4 py-4 align-middle">
+                            <span
+                              className={`${dailyAmountBaseClass} ${dailyAmountToneClass.danger}`}
+                            >
+                              {formatPromoAmount(row.discountAmount)}
+                            </span>
+                          </td>
+                        )
+                        : renderDailyAmountCell(row.totalPrice)}
                       {row.isFirstOrderItem && (
                         <td
                           className="border-l border-[#303030] px-4 py-4 align-middle"

@@ -12,11 +12,20 @@ export const getItemUnitPrice = (item, isOnlineOrder) => {
   return Number(getBaseItemPrice(item)) || 0;
 };
 
+// The price on a menu card: a promo's price less its discount percent.
+export const getMenuCardPrice = (item, isOnlineOrder) => {
+  const price = getItemUnitPrice(item, isOnlineOrder);
+  const discountPercent = Number(item.discountPercent) || 0;
+
+  return discountPercent ? Math.round((price * (100 - discountPercent)) / 100) : price;
+};
+
 // Cart line id: "<categoryId>-<menuItemId>".
 export const getCartItemId = (item, category) => `${category.id}-${item.id}`;
 
 export const buildCartItem = (item, { category, isOnlineOrder }) => {
   const cartItemId = getCartItemId(item, category);
+  const discountPercent = Number(item.discountPercent) || 0;
   const menuPrice = getItemUnitPrice(item, isOnlineOrder);
 
   return {
@@ -30,5 +39,9 @@ export const buildCartItem = (item, { category, isOnlineOrder }) => {
     originalPrice: getBaseItemPrice(item),
     addOns: [],
     pricePerQuantity: menuPrice,
+    // A promo package shows its fixed menus in the order details.
+    ...(item.bundleItems?.length ? { bundleItems: item.bundleItems } : {}),
+    // A promo with a discount: the cart takes the percent off its price.
+    ...(discountPercent ? { discountPercent } : {}),
   };
 };

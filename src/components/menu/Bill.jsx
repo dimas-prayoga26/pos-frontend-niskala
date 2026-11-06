@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { getTotalPrice } from "../../redux/slices/cartSlice";
+import { getTotalDiscount, getTotalPrice } from "../../redux/slices/cartSlice";
 import { addOrder } from "../../https/index";
 import { enqueueSnackbar } from "notistack";
 import { useMutation } from "@tanstack/react-query";
@@ -8,6 +8,10 @@ import { removeAllItems } from "../../redux/slices/cartSlice";
 import { removeCustomer, setCustomer } from "../../redux/slices/customerSlice";
 import Invoice, { printOrderReceipt } from "../invoice/Invoice";
 import NonCashPaymentModal from "./NonCashPaymentModal";
+import {
+  bundleChoicesText,
+  hasMissingBundlePicks,
+} from "../../features/pos/utils/bundleChoices";
 import { MdWarningAmber } from "react-icons/md";
 import {
   formatCurrency,
@@ -66,6 +70,7 @@ const Bill = () => {
   const customerData = useSelector((state) => state.customer);
   const cartData = useSelector((state) => state.cart);
   const total = useSelector(getTotalPrice);
+  const totalDiscount = useSelector(getTotalDiscount);
   const orderType = customerData.orderType || "Offline";
   const onlineOrderCharge = 0;
   const taxableTotal = total + onlineOrderCharge;
@@ -167,6 +172,11 @@ const Bill = () => {
       enqueueSnackbar("Please add at least one menu item!", {
         variant: "warning",
       });
+      return;
+    }
+
+    if (hasMissingBundlePicks(cartData)) {
+      enqueueSnackbar("Pilih menu isi paket dulu.", { variant: "warning" });
       return;
     }
 
@@ -336,6 +346,13 @@ const Bill = () => {
         const variantLine = variantText
           ? `<div class="line-note">Pilihan: ${escapeHtml(variantText)}</div>`
           : "";
+        const bundleChoicesLine = item.bundleChoices?.length
+          ? `<div class="line-note">Isi: ${escapeHtml(bundleChoicesText(item.bundleChoices))}</div>`
+          : "";
+        const discountLine =
+          Number(item.discountPercent) > 0
+            ? `<div class="line-note">Diskon ${Number(item.discountPercent)}%</div>`
+            : "";
 
         return `
           <div class="item">
@@ -346,6 +363,8 @@ const Bill = () => {
               <span class="line-note">Qty: ${item.quantity}</span>
               <strong>${formatReceiptCurrency(item.price)}</strong>
             </div>
+              ${bundleChoicesLine}
+              ${discountLine}
               ${addOnsText}
               ${variantLine}
           </div>
@@ -565,7 +584,12 @@ const Bill = () => {
               </div>
               <div>${receiptRows}</div>
               <div class="totals">
-                <div class="total-block"><span>Subtotal</span><strong>${formatReceiptCurrency(total)}</strong></div>
+                <div class="total-block"><span>Subtotal</span><strong>${formatReceiptCurrency(total + totalDiscount)}</strong></div>
+                ${
+                  totalDiscount > 0
+                    ? `<div class="total-block"><span>Diskon</span><strong>-${formatReceiptCurrency(totalDiscount)}</strong></div>`
+                    : ""
+                }
                 ${
                   onlineOrderCharge > 0
                     ? `<div class="total-block"><span>Online</span><strong>${formatReceiptCurrency(onlineOrderCharge)}</strong></div>`
@@ -607,9 +631,17 @@ const Bill = () => {
           Items({cartData.length})
         </p>
         <h1 className="text-[#f5f5f5] text-md font-bold">
-          {formatCurrency(total)}
+          {formatCurrency(total + totalDiscount)}
         </h1>
       </div>
+      {totalDiscount > 0 && (
+        <div className="flex items-center justify-between px-5 mt-2">
+          <p className="text-xs text-[#ababab] font-medium mt-2">Diskon</p>
+          <h1 className="text-emerald-300 text-md font-bold">
+            -{formatCurrency(totalDiscount)}
+          </h1>
+        </div>
+      )}
       {onlineOrderCharge > 0 && (
         <div className="flex items-center justify-between px-5 mt-2">
           <p className="text-xs text-[#ababab] font-medium mt-2">

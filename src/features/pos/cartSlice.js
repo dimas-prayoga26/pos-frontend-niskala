@@ -1,8 +1,17 @@
 import { createSlice } from "@reduxjs/toolkit";
+import { pickedBundleChoices } from "./utils/bundleChoices";
 
 const initialState = [];
 
-const getItemPrice = (item) => item.pricePerQuantity * item.quantity;
+// A promo with a discount (discountPercent, 0-100) takes the percent off the
+// line, rounded to whole rupiah.
+const clampDiscount = (value) => Math.min(Math.max(Number(value) || 0, 0), 100);
+const getItemPrice = (item) => {
+  const listPrice = item.pricePerQuantity * item.quantity;
+  const discountPercent = clampDiscount(item.discountPercent);
+
+  return discountPercent ? Math.round((listPrice * (100 - discountPercent)) / 100) : listPrice;
+};
 const getAddOnTotal = (item) =>
   (item.addOns || []).reduce((total, addOn) => total + (Number(addOn.price) || 0), 0);
 // Re-adding an item picks up its current tax and price (e.g. after switching
@@ -37,7 +46,7 @@ const cartSlice = createSlice({
       state.push({
         ...item,
         quantity,
-        price: item.pricePerQuantity * quantity,
+        price: getItemPrice({ ...item, quantity }),
       });
     },
 
@@ -77,7 +86,7 @@ const cartSlice = createSlice({
       state.push({
         ...item,
         quantity: parsedQuantity,
-        price: item.pricePerQuantity * parsedQuantity,
+        price: getItemPrice({ ...item, quantity: parsedQuantity }),
       });
     },
 
@@ -99,6 +108,18 @@ const cartSlice = createSlice({
       existingItem.price = getItemPrice(existingItem);
     },
 
+    // Picks the menu of one portion of a package's choice on a cart line.
+    pickBundleChoice: (state, action) => {
+      const { id, slotIndex, pickIndex, menuItemId } = action.payload;
+      const line = state.find((item) => item.id === id);
+      const slot = line?.bundleSlots?.[slotIndex];
+
+      if (!slot || pickIndex < 0 || pickIndex >= slot.picks.length) return;
+
+      slot.picks[pickIndex] = Number(menuItemId) || null;
+      line.bundleChoices = pickedBundleChoices(line.bundleSlots);
+    },
+
     removeAllItems: () => {
       return [];
     },
@@ -107,11 +128,19 @@ const cartSlice = createSlice({
 
 export const getTotalPrice = (state) =>
   state.cart.reduce((total, item) => total + item.price, 0);
+// Rupiah taken off by discount promos (shown only; never counted as income).
+export const getTotalDiscount = (state) =>
+  state.cart.reduce(
+    (total, item) =>
+      total + Math.max(item.pricePerQuantity * item.quantity - item.price, 0),
+    0
+  );
 export const {
   addItems,
   decreaseItem,
   removeItem,
   setItemQuantity,
+  pickBundleChoice,
   updateItemCustomization,
   removeAllItems,
 } =
