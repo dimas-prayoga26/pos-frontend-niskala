@@ -10,6 +10,7 @@ import { printOrderReceipt } from "../../../components/invoice/Invoice";
 import { formatCurrency } from "../../../shared/lib/format";
 import { formatDateAndTime, formatJakartaReceiptDate } from "../../../shared/lib/dates";
 import { getDisplayOrderCode } from "../utils/orderMetrics";
+import { bundleChoicesText } from "../../pos/utils/bundleChoices";
 
 // Deleting orders is hidden for now: a deleted order disappears from the live
 // recap (Rekap New) for good. Set to true to show "Hapus Pesanan" again.
@@ -383,6 +384,16 @@ const OrderCard = ({
                             ? ` / Pilihan: ${getOrderVariantText(item.variant)}`
                             : ""}
                         </p>
+                        {item.bundleChoices?.length > 0 && (
+                          <p className="mt-1 text-xs text-[#ababab]">
+                            Isi: {bundleChoicesText(item.bundleChoices)}
+                          </p>
+                        )}
+                        {item.discountPercent > 0 && (
+                          <p className="mt-1 text-xs text-emerald-300">
+                            Diskon {item.discountPercent}%
+                          </p>
+                        )}
                         {item.addOns?.length > 0 && (
                           <p className="mt-1 text-xs text-[#a79981]">
                             Add-ons:{" "}

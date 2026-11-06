@@ -2,12 +2,15 @@ import { describe, expect, it } from "vitest";
 import cartReducer, {
   addItems,
   decreaseItem,
+  getTotalDiscount,
   getTotalPrice,
+  pickBundleChoice,
   removeAllItems,
   removeItem,
   setItemQuantity,
   updateItemCustomization,
 } from "../../src/features/pos/cartSlice";
+import { hasMissingBundlePicks } from "../../src/features/pos/utils/bundleChoices";
 import customerReducer, { removeCustomer, setCustomer } from "../../src/redux/slices/customerSlice";
 import { removeUser, setUser, userReducer } from "../../src/features/auth";
 import { getJakartaDateKey } from "../../src/utils";
@@ -55,6 +58,67 @@ describe("cart slice", () => {
     expect(state[0]).toMatchObject({ pricePerQuantity: 25000, price: 25000 });
     state = cartReducer(state, addItems({ ...coffee, basePrice: 24000, originalPrice: 20000 }));
     expect(state[0]).toMatchObject({ quantity: 2, basePrice: 24000, originalPrice: 20000, pricePerQuantity: 29000, price: 58000 });
+  });
+});
+
+describe("discount promos in the cart", () => {
+  it("takes the promo's percent off its price, whatever menus are picked", () => {
+    const review = {
+      id: "3-40~1",
+      name: "Review GMaps",
+      basePrice: 18000,
+      pricePerQuantity: 18000,
+      discountPercent: 50,
+      bundleSlots: [
+        {
+          categoryId: 1,
+          categoryName: "Coffee",
+          options: [{ id: 11, name: "Kopi Susu" }],
+          picks: [null],
+        },
+      ],
+      bundleChoices: [],
+    };
+    let state = cartReducer([], addItems(review));
+    expect(state[0].price).toBe(9000);
+
+    state = cartReducer(state, pickBundleChoice({ id: "3-40~1", slotIndex: 0, pickIndex: 0, menuItemId: 11 }));
+    expect([state[0].pricePerQuantity, state[0].price]).toEqual([18000, 9000]);
+
+    state = cartReducer(state, addItems({ ...state[0], quantity: 1 }));
+    expect([state[0].quantity, state[0].price]).toEqual([2, 18000]);
+    expect(getTotalPrice({ cart: state })).toBe(18000);
+    expect(getTotalDiscount({ cart: state })).toBe(18000);
+  });
+});
+
+describe("package choices in the cart", () => {
+  it("keeps the picked menus of a package line, counted per menu", () => {
+    const paket = {
+      id: "3-32~1",
+      name: "Paket Ngopi",
+      pricePerQuantity: 35000,
+      bundleSlots: [
+        {
+          categoryId: 1,
+          categoryName: "Coffee",
+          options: [{ id: 11, name: "Kopi Susu" }, { id: 12, name: "Americano" }],
+          picks: [null, null],
+        },
+      ],
+      bundleChoices: [],
+    };
+    let state = cartReducer([], addItems(paket));
+    expect(hasMissingBundlePicks(state)).toBe(true);
+
+    state = cartReducer(state, pickBundleChoice({ id: "3-32~1", slotIndex: 0, pickIndex: 0, menuItemId: "11" }));
+    state = cartReducer(state, pickBundleChoice({ id: "3-32~1", slotIndex: 0, pickIndex: 1, menuItemId: "11" }));
+    expect(state[0].bundleChoices).toEqual([{ menuItemId: 11, name: "Kopi Susu", quantity: 2 }]);
+    expect(hasMissingBundlePicks(state)).toBe(false);
+
+    state = cartReducer(state, pickBundleChoice({ id: "3-32~1", slotIndex: 0, pickIndex: 1, menuItemId: "" }));
+    expect(state[0].bundleChoices).toEqual([{ menuItemId: 11, name: "Kopi Susu", quantity: 1 }]);
+    expect(hasMissingBundlePicks(state)).toBe(true);
   });
 });
 
