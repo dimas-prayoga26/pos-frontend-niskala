@@ -22,6 +22,7 @@ import {
 import { formatCurrency } from "../../utils";
 import { backendBaseUrl } from "../../https/backendUrl";
 import CreatableSelect2 from "../shared/CreatableSelect2";
+import { bundleContentsText } from "../../features/pos/utils/bundleChoices";
 import { MdErrorOutline } from "react-icons/md";
 
 const iconOptions = [
@@ -109,6 +110,7 @@ const emptyMenuForm = {
   grossProfit: "",
   ingredients: [],
   bundleItems: [],
+  discountPercent: "",
   imageFile: null,
   imagePath: "",
 };
@@ -173,9 +175,22 @@ const getMenuItemId = (item) => String(item?.id || item?._id || "");
 
 // Kategori Promo: a menu of a promo category (isBundle) is a package of other
 // menus (bundleItems), never of another package.
-const isPackageMenu = (item) => Boolean(item?.isBundle) || (item?.bundleItems?.length || 0) > 0;
-const bundleItemsLabel = (bundleItems = []) =>
-  bundleItems.map((line) => `${line.quantity}× ${line.name}`).join(" · ");
+const isPackageMenu = (item) =>
+  Boolean(item?.isBundle) ||
+  (item?.bundleItems?.length || 0) > 0 ||
+  (item?.bundleChoices?.length || 0) > 0;
+// A package line is a menu ({ menuItemId }) or a choice of a category
+// ({ categoryId }: N menus the cashier picks when ordering).
+const bundleLineKey = (line) =>
+  line.categoryId ? `category:${line.categoryId}` : String(line.menuItemId);
+// Normal price of one portion of a line; a choice has none (the cashier
+// picks the menus).
+const getBundleLinePrice = (line, menuItemsById) => {
+  if (line.categoryId) return 0;
+
+  const item = menuItemsById.get(String(line.menuItemId));
+  return Number(item?.regularPrice ?? item?.price ?? 0);
+};
 const normalizeStockUnit = (unit) => String(unit || "").trim().toLowerCase();
 
 const getCogsDisplay = (stockItem) => {
@@ -258,7 +273,8 @@ const MenuManagement = () => {
     placeholderData: keepPreviousData,
   });
 
-  const categories = categoriesRes?.data?.data || [];
+  const categoriesData = categoriesRes?.data?.data;
+  const categories = useMemo(() => categoriesData || [], [categoriesData]);
   const menuItemsData = menuItemsRes?.data?.data;
   const menuItems = useMemo(() => menuItemsData || [], [menuItemsData]);
   const stockItems = stockItemsRes?.data?.data || [];
@@ -271,12 +287,28 @@ const MenuManagement = () => {
       ?.isBundle
   );
   const editingMenuItemId = editingMenuItem ? getMenuItemId(editingMenuItem) : "";
-  const bundleKeys = menuForm.bundleItems.map((line) => line.menuItemId).join("|");
-  // Ordinary menus not yet in the package (and never the package itself).
+  const bundleKeys = menuForm.bundleItems.map(bundleLineKey).join("|");
+  // A promo sells at its price less its discount percent (e.g. 100% for a
+  // Google Maps review).
+  const discountText = String(menuForm.discountPercent ?? "").trim().replace(",", ".");
+  const promoDiscount = isBundleForm && discountText ? Number(discountText) : 0;
+  // Choices of ordinary categories and ordinary menus not yet in the package
+  // (and never the package itself).
   const bundleMenuOptions = useMemo(() => {
     const chosen = new Set(bundleKeys.split("|"));
     return [
       { id: "", text: "Pilih menu" },
+      ...categories
+        .filter(
+          (category) =>
+            !category.isBundle &&
+            category.isActive !== false &&
+            !chosen.has(`category:${getCategoryId(category)}`)
+        )
+        .map((category) => ({
+          id: `category:${getCategoryId(category)}`,
+          text: `Pilihan ${category.name}`,
+        })),
       ...menuItems
         .filter(
           (item) =>
@@ -284,25 +316,35 @@ const MenuManagement = () => {
             getMenuItemId(item) !== editingMenuItemId &&
             !chosen.has(getMenuItemId(item))
         )
-        .map((item) => ({ id: getMenuItemId(item), text: item.name })),
+        .map((item) => ({
+          id: getMenuItemId(item),
+          text: item.isAvailable === false ? `${item.name} (tidak tersedia)` : item.name,
+        })),
     ];
-  }, [menuItems, bundleKeys, editingMenuItemId]);
-  const bundleTotals = useMemo(
-    () =>
-      menuForm.bundleItems.reduce(
-        (totals, line) => {
-          const item = menuItemsById.get(String(line.menuItemId));
-          const quantity = Number(line.quantity) || 0;
+  }, [categories, menuItems, bundleKeys, editingMenuItemId]);
+  // Ordinary menus of a category: what a package's choice can offer.
+  const categoryMenusOf = (categoryId) =>
+    menuItems.filter(
+      (item) =>
+        !isPackageMenu(item) &&
+        String(item.categoryId ?? item.category?.id ?? "") === String(categoryId)
+    );
+  const hppOf = (item) => Number(item?.hppCost ?? item?.hpp ?? 0);
+  // Menus a choice line offers (its selected chips).
+  const offeredMenusOf = (line) =>
+    (line.menuItemIds || []).map((id) => menuItemsById.get(String(id))).filter(Boolean);
+  // HPP of a promo's menus for its gross profit: a choice counts the dearest
+  // menu it offers.
+  const bundleHpp = menuForm.bundleItems.reduce((total, line) => {
+    const quantity = Number(line.quantity) || 0;
+    if (line.categoryId) {
+      const hpps = offeredMenusOf(line).map(hppOf);
+      return total + (hpps.length ? quantity * Math.max(...hpps) : 0);
+    }
 
-          return {
-            price: totals.price + quantity * Number(item?.regularPrice ?? item?.price ?? 0),
-            hpp: totals.hpp + quantity * Number(item?.hppCost ?? item?.hpp ?? 0),
-          };
-        },
-        { price: 0, hpp: 0 }
-      ),
-    [menuForm.bundleItems, menuItemsById]
-  );
+    return total + quantity * hppOf(menuItemsById.get(String(line.menuItemId)));
+  }, 0);
+  const isDiscountPromo = promoDiscount > 0;
   const positionCategories = useMemo(
     () => categories.filter((category) => category.isActive !== false),
     [categories]
@@ -574,10 +616,20 @@ const MenuManagement = () => {
       }, 0),
     [menuForm.ingredients, stockItems]
   );
-  const autoHppCost = roundMoney(isBundleForm ? bundleTotals.hpp : autoIngredientCostTotal);
-  const autoGrossProfit = roundMoney(
-    parseMoneyInput(menuForm.regularPrice) - autoHppCost
-  );
+  // A promo package has no HPP of its own (each sale counts the HPP of its
+  // menus). With a discount its gross profit is the price less the discount
+  // less its menus' HPP; without one it is entered by hand.
+  const autoHppCost = isBundleForm ? 0 : roundMoney(autoIngredientCostTotal);
+  const autoGrossProfit = !isBundleForm
+    ? roundMoney(parseMoneyInput(menuForm.regularPrice) - autoHppCost)
+    : isDiscountPromo
+      ? roundMoney(
+          Math.round(
+            (parseMoneyInput(menuForm.regularPrice) * (100 - Math.min(promoDiscount, 100))) / 100
+          ) - bundleHpp
+        )
+      : roundMoney(parseMoneyInput(menuForm.grossProfit));
+  const isGrossProfitAuto = !isBundleForm || isDiscountPromo;
 
   useEffect(() => {
     setCategoryPage(1);
@@ -660,24 +712,48 @@ const MenuManagement = () => {
     }));
   };
 
-  const addBundleMenu = (menuItemId) => {
-    if (!menuItemId) return;
+  const addBundleMenu = (optionId) => {
+    if (!optionId) return;
+
+    const id = String(optionId);
+    const categoryId = id.startsWith("category:") ? id.slice("category:".length) : "";
+    // A choice starts empty: its menus are picked one by one.
+    const line = categoryId
+      ? { categoryId, quantity: "1", menuItemIds: [] }
+      : { menuItemId: id, quantity: "1" };
 
     setMenuForm((current) =>
-      current.bundleItems.some((line) => String(line.menuItemId) === String(menuItemId))
+      current.bundleItems.some((existing) => bundleLineKey(existing) === bundleLineKey(line))
         ? current
-        : {
-            ...current,
-            bundleItems: [...current.bundleItems, { menuItemId: String(menuItemId), quantity: "1" }],
-          }
+        : { ...current, bundleItems: [...current.bundleItems, line] }
     );
   };
 
-  const updateBundleQuantity = (index, quantity) => {
+  // Offers or withdraws a menu in a package's choice.
+  const toggleChoiceMenu = (index, menuItemId) => {
+    setMenuForm((current) => ({
+      ...current,
+      bundleItems: current.bundleItems.map((line, lineIndex) => {
+        if (lineIndex !== index) return line;
+
+        const ids = line.menuItemIds || [];
+        return {
+          ...line,
+          menuItemIds: ids.includes(menuItemId)
+            ? ids.filter((id) => id !== menuItemId)
+            : [...ids, menuItemId],
+        };
+      }),
+    }));
+  };
+
+  const addChoiceMenu = (index, menuItemId) => {
     setMenuForm((current) => ({
       ...current,
       bundleItems: current.bundleItems.map((line, lineIndex) =>
-        lineIndex === index ? { ...line, quantity } : line
+        lineIndex === index && !(line.menuItemIds || []).includes(menuItemId)
+          ? { ...line, menuItemIds: [...(line.menuItemIds || []), menuItemId] }
+          : line
       ),
     }));
   };
@@ -738,12 +814,19 @@ const MenuManagement = () => {
         : null;
     const hppCost = autoHppCost;
     const grossProfit = autoGrossProfit;
-    const bundleItems = isBundleForm
-      ? menuForm.bundleItems.map((line) => ({
-          menuItemId: Number(line.menuItemId),
-          quantity: Number(line.quantity),
-        }))
+    const bundleLines = isBundleForm
+      ? menuForm.bundleItems.map((line) => ({ ...line, quantity: Number(line.quantity) }))
       : [];
+    const bundleItems = bundleLines
+      .filter((line) => !line.categoryId)
+      .map((line) => ({ menuItemId: Number(line.menuItemId), quantity: line.quantity }));
+    const bundleChoices = bundleLines
+      .filter((line) => line.categoryId)
+      .map((line) => ({
+        categoryId: Number(line.categoryId),
+        quantity: line.quantity,
+        menuItemIds: (line.menuItemIds || []).map(Number),
+      }));
 
     const hasMenuImage =
       Boolean(menuForm.imageFile) || Boolean(menuForm.imagePath.trim());
@@ -764,17 +847,38 @@ const MenuManagement = () => {
     }
 
     if (
-      bundleItems.some((line) => !Number.isInteger(line.quantity) || line.quantity < 1)
+      bundleLines.some((line) => !Number.isInteger(line.quantity) || line.quantity < 1)
     ) {
       enqueueSnackbar("Jumlah menu paket minimal 1.", { variant: "warning" });
       return;
     }
 
+    const emptyChoice = bundleLines.find(
+      (line) => line.categoryId && !(line.menuItemIds || []).length
+    );
+    if (emptyChoice) {
+      const category = categories.find(
+        (candidate) => getCategoryId(candidate) === String(emptyChoice.categoryId)
+      );
+      enqueueSnackbar(`Pilih minimal 1 menu untuk Pilihan ${category?.name || emptyChoice.name || ""}.`, {
+        variant: "warning",
+      });
+      return;
+    }
+
     if (
       isBundleForm &&
-      bundleItems.reduce((total, line) => total + line.quantity, 0) < 2
+      bundleLines.reduce((total, line) => total + line.quantity, 0) < 1
     ) {
-      enqueueSnackbar("Paket minimal berisi 2 menu.", { variant: "warning" });
+      enqueueSnackbar("Paket minimal berisi 1 menu.", { variant: "warning" });
+      return;
+    }
+
+    if (
+      isBundleForm &&
+      (!Number.isFinite(promoDiscount) || promoDiscount < 0 || promoDiscount > 100)
+    ) {
+      enqueueSnackbar("Diskon harus 0-100%.", { variant: "warning" });
       return;
     }
 
@@ -786,6 +890,7 @@ const MenuManagement = () => {
     }
 
     const baseMoneyFields = [menuForm.regularPrice];
+    if (isBundleForm && !isDiscountPromo) baseMoneyFields.push(menuForm.grossProfit);
 
     if (menuForm.includeOnlinePlatform) {
       baseMoneyFields.push(menuForm.onlinePrice);
@@ -816,6 +921,8 @@ const MenuManagement = () => {
       grossProfit,
       ingredients: isBundleForm ? [] : ingredients,
       bundleItems,
+      bundleChoices,
+      discountPercent: isBundleForm ? promoDiscount : 0,
       imageFile: menuForm.imageFile,
       imagePath: menuForm.imagePath.trim(),
       isAvailable: Boolean(menuForm.isAvailable),
@@ -851,6 +958,7 @@ const MenuManagement = () => {
       isAvailable: item.isAvailable !== false,
       name: item.name,
       regularPrice: String(item.regularPrice ?? item.price ?? ""),
+      discountPercent: Number(item.discountPercent) > 0 ? String(item.discountPercent) : "",
       includeOnlinePlatform: Boolean(item.includeOnlinePlatform),
       onlinePrice:
         item.onlinePrice === null || item.onlinePrice === undefined
@@ -864,11 +972,22 @@ const MenuManagement = () => {
         quantity: String(ingredient.quantity ?? ""),
         note: ingredient.note || "",
       })),
-      bundleItems: (item.bundleItems || []).map((line) => ({
-        menuItemId: String(line.menuItemId),
-        name: line.name,
-        quantity: String(line.quantity ?? 1),
-      })),
+      bundleItems: [
+        ...(item.bundleItems || []).map((line) => ({
+          menuItemId: String(line.menuItemId),
+          name: line.name,
+          quantity: String(line.quantity ?? 1),
+        })),
+        ...(item.bundleChoices || []).map((choice) => ({
+          categoryId: String(choice.categoryId),
+          name: choice.categoryName,
+          quantity: String(choice.quantity ?? 1),
+          // A choice saved without its menus offers every menu of its category.
+          menuItemIds: choice.menuItemIds?.length
+            ? choice.menuItemIds.map(String)
+            : categoryMenusOf(choice.categoryId).map(getMenuItemId),
+        })),
+      ],
       imageFile: null,
       imagePath: item.imagePath || "",
     });
@@ -1371,31 +1490,44 @@ const MenuManagement = () => {
               </div>
               <div className="mt-3 space-y-2">
                 {menuForm.bundleItems.map((line, index) => {
-                  const bundleMenu = menuItemsById.get(String(line.menuItemId));
-                  const bundleMenuName = bundleMenu?.name || line.name || "-";
-                  const bundleMenuPrice = Number(
-                    bundleMenu?.regularPrice ?? bundleMenu?.price ?? 0
-                  );
+                  const choiceCategory = line.categoryId
+                    ? categories.find(
+                        (category) => getCategoryId(category) === String(line.categoryId)
+                      )
+                    : null;
+                  const bundleMenuName = line.categoryId
+                    ? `Pilihan ${choiceCategory?.name || line.name || "-"}`
+                    : menuItemsById.get(String(line.menuItemId))?.name || line.name || "-";
+                  const bundleMenuPrice = getBundleLinePrice(line, menuItemsById);
+                  // The POS hides the package while a line has no available menu.
+                  const isLineUnavailable = line.categoryId
+                    ? !menuItems.some(
+                        (item) =>
+                          String(item.categoryId ?? item.category?.id ?? "") ===
+                            String(line.categoryId) &&
+                          item.isAvailable !== false &&
+                          !isPackageMenu(item)
+                      )
+                    : menuItemsById.get(String(line.menuItemId))?.isAvailable === false;
 
                   return (
                     <div
-                      key={line.menuItemId}
-                      className="grid grid-cols-[minmax(0,1fr)_72px_minmax(0,0.7fr)_40px] items-center gap-2 rounded-lg border border-[#333] bg-[#202020] p-2"
+                      key={bundleLineKey(line)}
+                      className="rounded-lg border border-[#333] bg-[#202020] p-2"
                     >
-                      <span className="truncate px-1 text-sm font-semibold text-[#f5f5f5]">
-                        {bundleMenuName}
-                      </span>
-                      <input
-                        value={line.quantity}
-                        onChange={(event) => updateBundleQuantity(index, event.target.value)}
-                        type="number"
-                        min="1"
-                        step="1"
-                        aria-label={`Jumlah ${bundleMenuName}`}
-                        className="min-w-0 rounded-lg bg-[#262626] px-3 py-2 text-sm text-[#f5f5f5] outline-none"
-                      />
+                    <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,0.7fr)_40px] items-center gap-2">
+                      <div className="min-w-0 px-1">
+                        <p className="truncate text-sm font-semibold text-[#f5f5f5]">
+                          {bundleMenuName}
+                        </p>
+                        {isLineUnavailable && (
+                          <p className="text-xs font-semibold text-red-300">Tidak tersedia</p>
+                        )}
+                      </div>
                       <span className="truncate text-right text-sm font-semibold text-[#ababab]">
-                        {formatCurrency(bundleMenuPrice * (Number(line.quantity) || 0))}
+                        {line.categoryId
+                          ? ""
+                          : formatCurrency(bundleMenuPrice * (Number(line.quantity) || 0))}
                       </span>
                       <button
                         type="button"
@@ -1406,33 +1538,57 @@ const MenuManagement = () => {
                         X
                       </button>
                     </div>
+                    {line.categoryId && (
+                      <div className="mt-2 space-y-2 px-1">
+                        <CreatableSelect2
+                          options={[
+                            { id: "", text: "Pilih menu" },
+                            ...categoryMenusOf(line.categoryId)
+                              .filter(
+                                (item) => !(line.menuItemIds || []).includes(getMenuItemId(item))
+                              )
+                              .map((item) => ({
+                                id: getMenuItemId(item),
+                                text:
+                                  item.isAvailable === false
+                                    ? `${item.name} (tidak tersedia)`
+                                    : item.name,
+                              })),
+                          ]}
+                          value=""
+                          onSelect={(option) => option?.id && addChoiceMenu(index, String(option.id))}
+                          placeholder="Pilih menu"
+                          label={`Tambah menu ke ${bundleMenuName}`}
+                        />
+                        {offeredMenusOf(line).length > 0 && (
+                          <div className="flex flex-wrap gap-2">
+                            {offeredMenusOf(line).map((item) => (
+                              <span
+                                key={getMenuItemId(item)}
+                                className="flex items-center gap-2 rounded-lg border border-[#a79981] bg-[#a79981]/20 py-1 pl-3 pr-1 text-xs font-semibold text-[#f5f5f5]"
+                              >
+                                {item.name}
+                                <span className="font-normal text-amber-200">
+                                  {formatCurrency(hppOf(item))}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => toggleChoiceMenu(index, getMenuItemId(item))}
+                                  aria-label={`Hapus ${item.name} dari ${bundleMenuName}`}
+                                  className="h-6 w-6 rounded-md bg-[#333] font-bold text-red-300"
+                                >
+                                  ×
+                                </button>
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    </div>
                   );
                 })}
               </div>
-              {menuForm.bundleItems.length > 0 && (
-                <div className="mt-3 grid grid-cols-3 gap-2 rounded-lg bg-[#262626] p-3 text-sm">
-                  <div>
-                    <p className="text-xs text-[#777]">Harga normal</p>
-                    <p data-testid="bundle-normal-price" className="font-bold text-[#f5f5f5]">
-                      {formatCurrency(bundleTotals.price)}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-[#777]">HPP paket</p>
-                    <p data-testid="bundle-hpp" className="font-bold text-amber-200">
-                      {formatCurrency(bundleTotals.hpp)}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-[#777]">Hemat</p>
-                    <p data-testid="bundle-saving" className="font-bold text-emerald-200">
-                      {formatCurrency(
-                        Math.max(bundleTotals.price - parseMoneyInput(menuForm.regularPrice), 0)
-                      )}
-                    </p>
-                  </div>
-                </div>
-              )}
             </div>
             ) : (
             <div className="mt-4">
@@ -1575,11 +1731,11 @@ const MenuManagement = () => {
               </div>
               <div
                 className={`grid grid-cols-1 gap-3 ${
-                  menuForm.includeOnlinePlatform ? "sm:grid-cols-2" : ""
+                  menuForm.includeOnlinePlatform || isBundleForm ? "sm:grid-cols-2" : ""
                 }`}
               >
                 <label className="block text-sm font-semibold text-[#ababab]">
-                  {isBundleForm ? "Harga Promo" : "Harga Reguler"}
+                  {isBundleForm ? "Harga" : "Harga Reguler"}
                   <div className="mt-2 flex overflow-hidden rounded-lg bg-[#262626]">
                     <span className="flex shrink-0 items-center px-4 text-sm font-bold text-[#a79981]">
                       Rp
@@ -1589,13 +1745,33 @@ const MenuManagement = () => {
                       onChange={(event) =>
                         updateMenuForm("regularPrice", event.target.value)
                       }
+                      aria-label={isBundleForm ? "Harga" : "Harga Reguler"}
                       type="text"
                       inputMode="decimal"
                       placeholder="18000"
-                      className="min-w-0 w-full bg-transparent py-3 pr-4 text-sm text-[#f5f5f5] outline-none"
+                      className="min-w-0 w-full bg-transparent py-3 pr-4 text-sm text-[#f5f5f5] outline-none placeholder:text-[#5a5a5a]"
                     />
                   </div>
                 </label>
+                {isBundleForm && (
+                  <label className="block text-sm font-semibold text-[#ababab]">
+                    Diskon (%)
+                    <div className="mt-2 flex overflow-hidden rounded-lg bg-[#262626]">
+                      <input
+                        value={menuForm.discountPercent}
+                        onChange={(event) => updateMenuForm("discountPercent", event.target.value)}
+                        aria-label="Diskon (%)"
+                        type="text"
+                        inputMode="decimal"
+                        placeholder="0"
+                        className="min-w-0 w-full bg-transparent py-3 pl-4 text-sm text-[#f5f5f5] outline-none placeholder:text-[#5a5a5a]"
+                      />
+                      <span className="flex shrink-0 items-center px-4 text-sm font-bold text-[#a79981]">
+                        %
+                      </span>
+                    </div>
+                  </label>
+                )}
                 {menuForm.includeOnlinePlatform && (
                   <label className="block text-sm font-semibold text-sky-200">
                     Harga Online
@@ -1637,18 +1813,32 @@ const MenuManagement = () => {
                 </label>
               )}
               <label className="block text-sm font-semibold text-emerald-200">
-                Gross Profit <span className="text-xs text-[#777]">(Auto)</span>
+                Gross Profit{" "}
+                {isGrossProfitAuto && <span className="text-xs text-[#777]">(Auto)</span>}
                 <div className="mt-2 flex overflow-hidden rounded-lg border border-emerald-500/30 bg-emerald-500/10">
                   <span className="flex shrink-0 items-center px-4 text-sm font-bold text-emerald-200">
                     Rp
                   </span>
-                  <input
-                    value={formatMoneyDisplay(autoGrossProfit)}
-                    disabled
-                    type="text"
-                    placeholder="0"
-                    className="min-w-0 w-full bg-transparent py-3 pr-4 text-sm text-[#f5f5f5] outline-none disabled:opacity-100"
-                  />
+                  {!isGrossProfitAuto ? (
+                    <input
+                      value={menuForm.grossProfit}
+                      onChange={(event) => updateMenuForm("grossProfit", event.target.value)}
+                      type="text"
+                      inputMode="decimal"
+                      placeholder="0"
+                      aria-label="Gross Profit"
+                      className="min-w-0 w-full bg-transparent py-3 pr-4 text-sm text-[#f5f5f5] outline-none placeholder:text-[#5a5a5a]"
+                    />
+                  ) : (
+                    <input
+                      value={formatMoneyDisplay(autoGrossProfit)}
+                      disabled
+                      type="text"
+                      placeholder="0"
+                      aria-label="Gross Profit"
+                      className="min-w-0 w-full bg-transparent py-3 pr-4 text-sm text-[#f5f5f5] outline-none disabled:opacity-100"
+                    />
+                  )}
                 </div>
               </label>
             </div>
@@ -1774,9 +1964,9 @@ const MenuManagement = () => {
                     >
                       <td className="p-4 font-semibold">
                         {item.name}
-                        {item.bundleItems?.length > 0 && (
+                        {(item.bundleItems?.length > 0 || item.bundleChoices?.length > 0) && (
                           <p className="mt-1 text-xs font-normal text-[#ababab]">
-                            {bundleItemsLabel(item.bundleItems)}
+                            {bundleContentsText(item)}
                           </p>
                         )}
                       </td>
@@ -1794,6 +1984,11 @@ const MenuManagement = () => {
                       </td>
                       <td className="p-4 text-sm font-semibold">
                         {formatCurrency(item.regularPrice ?? item.price)}
+                        {Number(item.discountPercent) > 0 && (
+                          <p className="text-xs font-normal text-emerald-300">
+                            Diskon {Number(item.discountPercent)}%
+                          </p>
+                        )}
                       </td>
                       <td className="p-4 text-sm font-semibold text-sky-200">
                         {item.onlinePrice === null || item.onlinePrice === undefined
@@ -1801,7 +1996,8 @@ const MenuManagement = () => {
                           : formatCurrency(item.onlinePrice)}
                       </td>
                       <td className="p-4 text-sm font-semibold text-amber-200">
-                        {formatCurrency(item.hppCost || item.hpp || 0)}
+                        {/* A package's HPP is counted per sale from its menus. */}
+                        {isPackageMenu(item) ? "-" : formatCurrency(item.hppCost || item.hpp || 0)}
                       </td>
                       <td className="p-4 text-sm font-semibold text-emerald-200">
                         {formatCurrency(item.grossProfit || item.profit || 0)}

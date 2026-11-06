@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from "react";
 import { FaMinus, FaPlus } from "react-icons/fa6";
 import { useDispatch, useSelector } from "react-redux";
-import { addItems, decreaseItem } from "../cartSlice";
+import { addItems, decreaseItem, pickBundleChoice } from "../cartSlice";
 import { formatCurrency } from "../../../shared/lib/format";
 
 const CartInfo = () => {
@@ -51,6 +51,53 @@ const CartInfo = () => {
                     <h1 className="truncate text-[#ababab] font-semibold tracking-wide text-md">
                       {item.name}
                     </h1>
+                    {(item.bundleItems?.length > 0 || item.bundleSlots?.length > 0) && (
+                      <div className="mt-2 space-y-2">
+                        {(item.bundleItems || []).map((line) => (
+                          <p
+                            key={line.menuItemId}
+                            className="rounded-lg border border-transparent bg-[#262626] px-3 py-2 text-sm text-[#f5f5f5]"
+                          >
+                            {Number(line.quantity) > 1 ? `${line.quantity}× ${line.name}` : line.name}
+                          </p>
+                        ))}
+                        {(item.bundleSlots || []).map((slot, slotIndex) =>
+                          slot.picks.map((pick, pickIndex) => (
+                            <select
+                              key={`${slotIndex}-${pickIndex}`}
+                              value={pick ?? ""}
+                              onChange={(event) =>
+                                dispatch(
+                                  pickBundleChoice({
+                                    id: item.id,
+                                    slotIndex,
+                                    pickIndex,
+                                    menuItemId: event.target.value,
+                                  })
+                                )
+                              }
+                              aria-label={
+                                slot.picks.length > 1
+                                  ? `Pilih ${slot.categoryName} ${pickIndex + 1}`
+                                  : `Pilih ${slot.categoryName}`
+                              }
+                              className={`w-full rounded-lg bg-[#262626] px-3 py-2 text-sm outline-none ${
+                                pick
+                                  ? "border border-transparent text-[#f5f5f5]"
+                                  : "border border-[#a79981]/50 text-[#a79981]"
+                              }`}
+                            >
+                              <option value="">Pilih {slot.categoryName}</option>
+                              {slot.options.map((option) => (
+                                <option key={option.id} value={option.id}>
+                                  {option.name}
+                                </option>
+                              ))}
+                            </select>
+                          ))
+                        )}
+                      </div>
+                    )}
                     {item.addOns?.length > 0 && (
                       <p className="mt-1 text-xs text-[#a79981]">
                         {item.addOns.map((addOn) => addOn.name).join(", ")}
@@ -79,9 +126,16 @@ const CartInfo = () => {
                       <FaMinus size={14} />
                     </button>
                   </div>
-                  <p className="ml-auto min-w-0 max-w-full text-right text-[#f5f5f5] text-md font-bold [overflow-wrap:anywhere]">
-                    {formatCurrency(item.price)}
-                  </p>
+                  <div className="ml-auto min-w-0 max-w-full text-right">
+                    {item.discountPercent > 0 && item.pricePerQuantity * item.quantity > item.price && (
+                      <p className="text-xs text-[#777] line-through">
+                        {formatCurrency(item.pricePerQuantity * item.quantity)}
+                      </p>
+                    )}
+                    <p className="text-[#f5f5f5] text-md font-bold [overflow-wrap:anywhere]">
+                      {formatCurrency(item.price)}
+                    </p>
+                  </div>
                 </div>
               </div>
             );

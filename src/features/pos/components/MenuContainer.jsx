@@ -5,7 +5,8 @@ import { setCustomer } from "../../../redux/slices/customerSlice";
 import { getCategories, getMenuItems } from "../api";
 import { addItems, decreaseItem, setItemQuantity } from "../cartSlice";
 import { buildMenuCatalog } from "../utils/menuCatalog";
-import { buildCartItem, getCartItemId, getItemUnitPrice } from "../utils/menuPricing";
+import { buildBundleSlots, isBundleChoiceLineOf, nextBundleLineId } from "../utils/bundleChoices";
+import { buildCartItem, getCartItemId, getMenuCardPrice } from "../utils/menuPricing";
 import CategorySelector from "./CategorySelector";
 import MenuItemCard from "./MenuItemCard";
 
@@ -61,6 +62,22 @@ const MenuContainer = () => {
   const toCartItem = (item) =>
     buildCartItem(item, { category: selected, isOnlineOrder });
 
+  // A package with choices gets a cart line per package; its menus are
+  // picked in the order details.
+  const choiceLines = (cartItemId) =>
+    cartData.filter((line) => isBundleChoiceLineOf(line.id, cartItemId));
+
+  const addChoicePackage = (item, cartItemId) =>
+    dispatch(
+      addItems({
+        ...toCartItem(item),
+        id: nextBundleLineId(cartData, cartItemId),
+        bundleSlots: buildBundleSlots(item, menuData),
+        bundleChoices: [],
+        quantity: 1,
+      })
+    );
+
   return (
     <>
       <CategorySelector categories={menuData} selected={selected} onSelect={setSelected} />
@@ -70,12 +87,32 @@ const MenuContainer = () => {
       <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-3 sm:gap-4 px-4 md:px-10 py-4 w-full">
         {selected?.items.map((item) => {
           const cartItemId = getCartItemId(item, selected);
+          const cardPrice = getMenuCardPrice(item, isOnlineOrder);
+
+          if (item.bundleChoices?.length > 0) {
+            const lines = choiceLines(cartItemId);
+
+            return (
+              <MenuItemCard
+                key={item.id}
+                item={item}
+                price={cardPrice}
+                quantity={lines.reduce((total, line) => total + line.quantity, 0)}
+                quantityReadOnly
+                onIncrement={() => addChoicePackage(item, cartItemId)}
+                onDecrement={() => {
+                  const lastLine = lines[lines.length - 1];
+                  if (lastLine) dispatch(decreaseItem(lastLine.id));
+                }}
+              />
+            );
+          }
 
           return (
             <MenuItemCard
               key={item.id}
               item={item}
-              price={getItemUnitPrice(item, isOnlineOrder)}
+              price={cardPrice}
               quantity={getItemQuantity(cartItemId)}
               onIncrement={() => dispatch(addItems({ ...toCartItem(item), quantity: 1 }))}
               onDecrement={() => dispatch(decreaseItem(cartItemId))}

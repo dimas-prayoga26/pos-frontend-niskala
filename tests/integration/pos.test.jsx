@@ -2,6 +2,7 @@ import { fireEvent, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import * as api from "../../src/https/index";
 import { MenuContainer } from "../../src/features/pos";
+import CartInfo from "../../src/features/pos/components/CartInfo";
 import { renderWithProviders } from "../renderWithProviders";
 
 vi.mock("../../src/https/index", async (importOriginal) => ({
@@ -36,7 +37,12 @@ const menuItems = [
   { id: 21, categoryId: 2, name: "Kentang", price: 12000, regularPrice: 12000 },
 ];
 
-const itemCard = (name) => screen.getAllByText(name).at(-1).closest("div.flex.min-h-\\[210px\\]");
+// The menu card of an item (its name may also show in the cart).
+const itemCard = (name) =>
+  screen
+    .getAllByText(name)
+    .map((element) => element.closest("div.flex.min-h-\\[210px\\]"))
+    .find(Boolean);
 const cart = (store) => store.getState().cart;
 
 describe("POS menu", () => {
@@ -127,6 +133,170 @@ describe("POS menu", () => {
     expect(cart(store).map((item) => [item.id, item.quantity, item.price, item.sourceMenuItemId])).toEqual([
       ["3-31", 1, 28000, 31],
     ]);
+  });
+
+  it("picks the menus of a package's choice in the order details", async () => {
+    api.getCategories.mockResolvedValue({
+      data: { data: [...categories, { id: 3, name: "Promo", taxRate: null, isBundle: true }] },
+    });
+    api.getMenuItems.mockResolvedValue({
+      data: {
+        data: [
+          ...menuItems,
+          {
+            id: 32,
+            categoryId: 3,
+            name: "Paket Ngopi",
+            price: 35000,
+            regularPrice: 35000,
+            isBundle: true,
+            bundleItems: [{ menuItemId: 21, name: "Kentang", quantity: 1 }],
+            bundleChoices: [{ categoryId: 1, categoryName: "Coffee", quantity: 2 }],
+          },
+        ],
+      },
+    });
+    // jsdom has no scrolling; the cart scrolls to its newest line.
+    Element.prototype.scrollTo ??= () => {};
+    const { store } = renderWithProviders(
+      <>
+        <MenuContainer />
+        <CartInfo />
+      </>,
+      { route: "/menu" }
+    );
+    await screen.findByText("Kopi Susu");
+
+    fireEvent.click(screen.getAllByText("Promo").at(-1));
+    expect(await screen.findByText("1× Kentang · 2× Pilihan Coffee")).toBeInTheDocument();
+    fireEvent.click(within(itemCard("Paket Ngopi")).getByRole("button", { name: "+" }));
+
+    // The package goes straight to the cart with its fixed menu; its coffees
+    // are picked there.
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.getByText("Kentang")).toBeInTheDocument();
+    expect(cart(store).map((item) => [item.id, item.quantity, item.price, item.sourceMenuItemId, item.bundleChoices])).toEqual([
+      ["3-32~1", 1, 35000, 32, []],
+    ]);
+    const first = screen.getByLabelText("Pilih Coffee 1");
+    expect(Array.from(first.options).map((option) => option.textContent)).toEqual([
+      "Pilih Coffee",
+      "Kopi Susu",
+      "Americano",
+    ]);
+    fireEvent.change(first, { target: { value: "11" } });
+    fireEvent.change(screen.getByLabelText("Pilih Coffee 2"), { target: { value: "12" } });
+    expect(cart(store)[0].bundleChoices).toEqual([
+      { menuItemId: 11, name: "Kopi Susu", quantity: 1 },
+      { menuItemId: 12, name: "Americano", quantity: 1 },
+    ]);
+
+    // Each package gets its own line (and its own picks).
+    fireEvent.click(within(itemCard("Paket Ngopi")).getByRole("button", { name: "+" }));
+    expect(cart(store).map((item) => item.id)).toEqual(["3-32~1", "3-32~2"]);
+    expect(within(itemCard("Paket Ngopi")).getByRole("spinbutton")).toHaveValue(2);
+
+    // The card's minus takes back the last package.
+    fireEvent.click(within(itemCard("Paket Ngopi")).getByRole("button", { name: "−" }));
+    expect(cart(store).map((item) => item.id)).toEqual(["3-32~1"]);
+  });
+
+  it("offers only the menus a package's choice allows", async () => {
+    Element.prototype.scrollTo ??= () => {};
+    api.getCategories.mockResolvedValue({
+      data: { data: [...categories, { id: 3, name: "Promo", taxRate: null, isBundle: true }] },
+    });
+    api.getMenuItems.mockResolvedValue({
+      data: {
+        data: [
+          ...menuItems,
+          {
+            id: 42,
+            categoryId: 3,
+            name: "Paket Americano",
+            price: 15000,
+            regularPrice: 15000,
+            isBundle: true,
+            bundleItems: [],
+            bundleChoices: [{ categoryId: 1, categoryName: "Coffee", quantity: 1, menuItemIds: [12] }],
+          },
+        ],
+      },
+    });
+    renderWithProviders(
+      <>
+        <MenuContainer />
+        <CartInfo />
+      </>,
+      { route: "/menu" }
+    );
+    await screen.findByText("Kopi Susu");
+    fireEvent.click(screen.getAllByText("Promo").at(-1));
+    fireEvent.click(within(itemCard("Paket Americano")).getByRole("button", { name: "+" }));
+
+    expect(
+      Array.from(screen.getByLabelText("Pilih Coffee").options).map((option) => option.textContent)
+    ).toEqual(["Pilih Coffee", "Americano"]);
+  });
+
+  it("sells a promo at its price less its discount percent", async () => {
+    Element.prototype.scrollTo ??= () => {};
+    api.getCategories.mockResolvedValue({
+      data: { data: [...categories, { id: 3, name: "Promo", taxRate: null, isBundle: true }] },
+    });
+    api.getMenuItems.mockResolvedValue({
+      data: {
+        data: [
+          ...menuItems,
+          {
+            id: 40,
+            categoryId: 3,
+            name: "Review GMaps",
+            price: 18000,
+            regularPrice: 18000,
+            isBundle: true,
+            discountPercent: 100,
+            bundleItems: [],
+            bundleChoices: [{ categoryId: 1, categoryName: "Coffee", quantity: 1 }],
+          },
+          {
+            id: 41,
+            categoryId: 3,
+            name: "Paket Diskon",
+            price: 30000,
+            regularPrice: 30000,
+            isBundle: true,
+            discountPercent: 20,
+            bundleItems: [
+              { menuItemId: 11, name: "Kopi Susu", quantity: 1, price: 18000 },
+              { menuItemId: 21, name: "Kentang", quantity: 1, price: 12000 },
+            ],
+            bundleChoices: [],
+          },
+        ],
+      },
+    });
+    const { store } = renderWithProviders(
+      <>
+        <MenuContainer />
+        <CartInfo />
+      </>,
+      { route: "/menu" }
+    );
+    await screen.findByText("Kopi Susu");
+    fireEvent.click(screen.getAllByText("Promo").at(-1));
+
+    // Cards show the price less the discount.
+    const review = await screen.findByText("Review GMaps");
+    const reviewCard = review.closest("div.flex.min-h-\\[210px\\]");
+    expect(within(reviewCard).getByText(/Rp\s0/)).toBeInTheDocument();
+    expect(within(itemCard("Paket Diskon")).getByText(/Rp\s24\.000/)).toBeInTheDocument();
+
+    fireEvent.click(within(reviewCard).getByRole("button", { name: "+" }));
+    fireEvent.change(screen.getByLabelText("Pilih Coffee"), { target: { value: "11" } });
+    expect(
+      cart(store).map((item) => [item.id, item.pricePerQuantity, item.discountPercent, item.price])
+    ).toEqual([["3-40~1", 18000, 100, 0]]);
   });
 
   it("switches category from the category cards", async () => {
