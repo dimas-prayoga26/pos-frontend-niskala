@@ -1520,14 +1520,12 @@ const MenuManagement = () => {
                     : menuItemsById.get(String(line.menuItemId))?.name || line.name || "-";
                   const bundleMenuPrice = getBundleLinePrice(line, menuItemsById);
                   // The POS hides the package while a line has no available menu.
+                  // A choice needs one available menu among those it offers.
                   const isLineUnavailable = line.categoryId
-                    ? !menuItems.some(
-                        (item) =>
-                          String(item.categoryId ?? item.category?.id ?? "") ===
-                            String(line.categoryId) &&
-                          item.isAvailable !== false &&
-                          !isPackageMenu(item)
-                      )
+                    ? !(line.menuItemIds?.length
+                        ? offeredMenusOf(line)
+                        : categoryMenusOf(line.categoryId)
+                      ).some((item) => item.isAvailable !== false)
                     : menuItemsById.get(String(line.menuItemId))?.isAvailable === false;
 
                   return (

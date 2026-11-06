@@ -1,4 +1,4 @@
-import { fireEvent, screen, within } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import * as api from "../../src/https/index";
 import { MenuContainer } from "../../src/features/pos";
@@ -54,7 +54,8 @@ describe("POS menu", () => {
   it("adds items to the cart with their menu price and category tax", async () => {
     const { store } = renderWithProviders(<MenuContainer />, { route: "/menu" });
     await screen.findByText("Kopi Susu");
-    expect(store.getState().customer.selectedCategoryName).toBe("Coffee");
+    // Dispatched by an effect after the menu renders.
+    await waitFor(() => expect(store.getState().customer.selectedCategoryName).toBe("Coffee"));
 
     const kopi = itemCard("Kopi Susu");
     expect(kopi).toHaveTextContent(/Rp\s18\.000/);
@@ -237,6 +238,45 @@ describe("POS menu", () => {
     expect(
       Array.from(screen.getByLabelText("Pilih Coffee").options).map((option) => option.textContent)
     ).toEqual(["Pilih Coffee", "Americano"]);
+  });
+
+  it("offers a choice's menus even after they moved to another category", async () => {
+    Element.prototype.scrollTo ??= () => {};
+    api.getCategories.mockResolvedValue({
+      data: { data: [...categories, { id: 3, name: "Promo", taxRate: null, isBundle: true }] },
+    });
+    api.getMenuItems.mockResolvedValue({
+      data: {
+        data: [
+          ...menuItems,
+          {
+            id: 43,
+            categoryId: 3,
+            name: "Paket Campur",
+            price: 20000,
+            regularPrice: 20000,
+            isBundle: true,
+            bundleItems: [],
+            // Offered on Coffee, but Kentang now sits in Snack.
+            bundleChoices: [{ categoryId: 1, categoryName: "Coffee", quantity: 1, menuItemIds: [11, 21] }],
+          },
+        ],
+      },
+    });
+    renderWithProviders(
+      <>
+        <MenuContainer />
+        <CartInfo />
+      </>,
+      { route: "/menu" }
+    );
+    await screen.findByText("Kopi Susu");
+    fireEvent.click(screen.getAllByText("Promo").at(-1));
+    fireEvent.click(within(itemCard("Paket Campur")).getByRole("button", { name: "+" }));
+
+    expect(
+      Array.from(screen.getByLabelText("Pilih Coffee").options).map((option) => option.textContent)
+    ).toEqual(["Pilih Coffee", "Kopi Susu", "Kentang"]);
   });
 
   it("sells a promo at its price less its discount percent", async () => {

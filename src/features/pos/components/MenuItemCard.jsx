@@ -56,7 +56,7 @@ const MenuItemCard = ({
         onError={(event) => {
           event.currentTarget.src = noImage;
         }}
-        className="mt-2 aspect-[4/3] w-full rounded-lg object-cover sm:mt-3 sm:aspect-[16/9]"
+        className="mt-2 aspect-square w-full rounded-lg object-cover sm:mt-3"
       />
     </div>
     <div className="mt-3 flex w-full flex-col gap-2 sm:mt-4 sm:flex-row sm:items-center sm:justify-between">
