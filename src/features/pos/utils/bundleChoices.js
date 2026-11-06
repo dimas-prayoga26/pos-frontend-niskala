@@ -22,25 +22,25 @@ export const bundleContentsText = (item) =>
 
 // The selects of a package with choices:
 // [{ categoryId, categoryName, options: [{ id, name }], picks: [menuItemId | null] }]
-// with one pick per portion. Options are the ordinary menus the POS lists in
-// that category that the choice offers (menuItemIds; none: all of them).
+// with one pick per portion. Options are the ordinary menus the POS lists:
+// the choice's own menus (menuItemIds) wherever they sit now, else every
+// menu of its category.
 export const buildBundleSlots = (item, catalog) =>
-  (item.bundleChoices || []).map((choice) => ({
-    categoryId: choice.categoryId,
-    categoryName: choice.categoryName,
-    options: (
-      catalog.find((category) => Number(category.id) === Number(choice.categoryId))?.items || []
-    )
-      .filter(
-        (option) =>
-          !option.bundleItems?.length &&
-          !option.bundleChoices?.length &&
-          (!choice.menuItemIds?.length ||
-            choice.menuItemIds.map(Number).includes(Number(option.id)))
-      )
-      .map((option) => ({ id: option.id, name: option.name })),
-    picks: Array.from({ length: Number(choice.quantity) || 0 }, () => null),
-  }));
+  (item.bundleChoices || []).map((choice) => {
+    const offered = new Set((choice.menuItemIds || []).map(Number));
+    const candidates = offered.size
+      ? catalog.flatMap((category) => category.items).filter((option) => offered.has(Number(option.id)))
+      : catalog.find((category) => Number(category.id) === Number(choice.categoryId))?.items || [];
+
+    return {
+      categoryId: choice.categoryId,
+      categoryName: choice.categoryName,
+      options: candidates
+        .filter((option) => !option.bundleItems?.length && !option.bundleChoices?.length)
+        .map((option) => ({ id: option.id, name: option.name })),
+      picks: Array.from({ length: Number(choice.quantity) || 0 }, () => null),
+    };
+  });
 
 // The picked menus of the selects, counted per menu.
 export const pickedBundleChoices = (slots = []) => {

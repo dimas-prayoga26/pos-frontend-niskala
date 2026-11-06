@@ -2,9 +2,9 @@ import { useState } from "react";
 import { GrRadialSelected } from "react-icons/gr";
 import { MdKeyboardArrowDown } from "react-icons/md";
 
-const CATEGORY_COLORS = ["#b73e3e", "#5b45b0", "#7f167f", "#735f32", "#1d2569", "#285430"];
-
-const getCategoryColor = (index) => CATEGORY_COLORS[index % CATEGORY_COLORS.length];
+// One colour for every category; the selected one is outlined in the accent.
+const CARD_COLOR = "#262626";
+const ACCENT_COLOR = "#a79981";
 
 const CategoryLabel = ({ menu }) => (
   <span className="inline-flex items-center gap-2">
@@ -16,10 +16,6 @@ const CategoryLabel = ({ menu }) => (
 // Category choice: a dropdown on phones, a card grid from the sm breakpoint.
 const CategorySelector = ({ categories, selected, onSelect }) => {
   const [isCategoryOpen, setIsCategoryOpen] = useState(false);
-  const selectedIndex = Math.max(
-    categories.findIndex((menu) => menu.id === selected?.id),
-    0
-  );
 
   const handleCategorySelect = (nextCategory) => {
     onSelect(nextCategory);
@@ -33,8 +29,8 @@ const CategorySelector = ({ categories, selected, onSelect }) => {
           <button
             type="button"
             onClick={() => setIsCategoryOpen((current) => !current)}
-            className="flex min-h-[94px] w-full items-center justify-between rounded-lg px-4 py-4 text-left shadow-[0_10px_26px_rgba(0,0,0,0.2)]"
-            style={{ backgroundColor: getCategoryColor(selectedIndex) }}
+            className="flex min-h-[94px] w-full items-center justify-between rounded-lg border px-4 py-4 text-left shadow-[0_10px_26px_rgba(0,0,0,0.2)]"
+            style={{ backgroundColor: CARD_COLOR, borderColor: ACCENT_COLOR }}
           >
             <span>
               <span className="block text-lg font-semibold text-[#f5f5f5]">
@@ -54,7 +50,7 @@ const CategorySelector = ({ categories, selected, onSelect }) => {
 
           {isCategoryOpen && (
             <div className="absolute left-0 right-0 top-[calc(100%+10px)] z-20 overflow-hidden rounded-lg border border-[#2f2f2f] bg-[#181818] shadow-[0_18px_42px_rgba(0,0,0,0.42)]">
-              {categories.map((menu, index) => (
+              {categories.map((menu) => (
                 <button
                   key={menu.id}
                   type="button"
@@ -69,10 +65,12 @@ const CategorySelector = ({ categories, selected, onSelect }) => {
                       {menu.items.length} Items
                     </span>
                   </span>
-                  <span
-                    className="h-3 w-3 rounded-full"
-                    style={{ backgroundColor: getCategoryColor(index) }}
-                  />
+                  {selected?.id === menu.id && (
+                    <span
+                      className="h-3 w-3 rounded-full"
+                      style={{ backgroundColor: ACCENT_COLOR }}
+                    />
+                  )}
                 </button>
               ))}
             </div>
@@ -80,19 +78,24 @@ const CategorySelector = ({ categories, selected, onSelect }) => {
         </div>
       </div>
 
-      <div className="hidden sm:grid sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-4 px-4 md:px-10 py-4 w-full">
-        {categories.map((menu, index) => (
+      <div className="hidden sm:grid sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3 px-4 md:px-10 py-4 w-full">
+        {categories.map((menu) => (
           <div
             key={menu.id}
-            className="flex flex-col items-start justify-between p-4 rounded-lg min-h-[100px] cursor-pointer"
-            style={{ backgroundColor: getCategoryColor(index) }}
+            className="flex min-w-0 flex-col items-start justify-between gap-3 p-3 rounded-lg border min-h-[88px] cursor-pointer transition-colors hover:bg-[#2e2e2e]"
+            style={{
+              backgroundColor: CARD_COLOR,
+              borderColor: selected?.id === menu.id ? ACCENT_COLOR : "#333333",
+            }}
             onClick={() => onSelect(menu)}
           >
-            <div className="flex items-center justify-between w-full">
-              <h1 className="text-[#f5f5f5] text-lg font-semibold">
+            <div className="flex items-start justify-between gap-2 w-full">
+              <h1 className="min-w-0 text-[#f5f5f5] text-base font-semibold leading-snug">
                 <CategoryLabel menu={menu} />
               </h1>
-              {selected?.id === menu.id && <GrRadialSelected className="text-white" size={20} />}
+              {selected?.id === menu.id && (
+                <GrRadialSelected className="mt-0.5 shrink-0 text-[#a79981]" size={18} />
+              )}
             </div>
             <p className="text-[#ababab] text-sm font-semibold">{menu.items.length} Items</p>
           </div>
