@@ -402,6 +402,24 @@ const MenuManagement = () => {
       })),
     [categories]
   );
+  // The menu form groups the Kategori Promo apart: their menus are packages of
+  // menus already listed in the other categories.
+  const menuFormCategoryOptions = useMemo(() => {
+    const isPromo = (option) =>
+      categories.some(
+        (category) => getCategoryId(category) === option.id && category.isBundle
+      );
+    const ordinary = categorySelectOptions.filter((option) => !isPromo(option));
+    const promos = categorySelectOptions.filter(isPromo);
+
+    return [
+      { id: "", text: "Pilih category" },
+      ...(promos.length && ordinary.length
+        ? [{ text: "Category Menu", children: ordinary }]
+        : ordinary),
+      ...(promos.length ? [{ text: "Kategori Promo (isi dari menu yang sudah ada)", children: promos }] : []),
+    ];
+  }, [categories, categorySelectOptions]);
   const menuCategoryFilterOptions = useMemo(
     () => [{ id: "", text: "Semua kategori" }, ...categorySelectOptions],
     [categorySelectOptions]
@@ -1528,7 +1546,7 @@ const MenuManagement = () => {
               Category
               <div className="mt-2">
                 <CreatableSelect2
-                  options={[{ id: "", text: "Pilih category" }, ...categorySelectOptions]}
+                  options={menuFormCategoryOptions}
                   value={menuForm.categoryId}
                   onSelect={(option) => updateMenuForm("categoryId", option?.id || "")}
                   placeholder="Pilih category"
