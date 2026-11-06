@@ -44,6 +44,11 @@ const MenuItemCard = ({
       <h1 className="text-sm font-semibold leading-tight text-[#f5f5f5] sm:text-lg">
         {item.name}
       </h1>
+      {item.bundleItems?.length > 0 && (
+        <p className="mt-1 text-xs leading-snug text-[#ababab]">
+          {item.bundleItems.map((line) => `${line.quantity}× ${line.name}`).join(" · ")}
+        </p>
+      )}
       <img
         src={getItemImage(item)}
         alt={item.name}

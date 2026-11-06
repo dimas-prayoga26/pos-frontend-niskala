@@ -94,6 +94,41 @@ describe("POS menu", () => {
     expect(cart(store)[0]).toMatchObject({ pricePerQuantity: 19000, originalPrice: 15000 });
   });
 
+  it("shows what is inside a promo package and sells it as one item", async () => {
+    api.getCategories.mockResolvedValue({
+      data: { data: [...categories, { id: 3, name: "Promo", taxRate: null, isBundle: true }] },
+    });
+    api.getMenuItems.mockResolvedValue({
+      data: {
+        data: [
+          ...menuItems,
+          {
+            id: 31,
+            categoryId: 3,
+            name: "Paket Hemat",
+            price: 28000,
+            regularPrice: 28000,
+            isBundle: true,
+            bundleItems: [
+              { menuItemId: 11, name: "Kopi Susu", quantity: 2 },
+              { menuItemId: 21, name: "Kentang", quantity: 1 },
+            ],
+          },
+        ],
+      },
+    });
+    const { store } = renderWithProviders(<MenuContainer />, { route: "/menu" });
+    await screen.findByText("Kopi Susu");
+
+    fireEvent.click(screen.getAllByText("Promo").at(-1));
+    expect(await screen.findByText("2× Kopi Susu · 1× Kentang")).toBeInTheDocument();
+    fireEvent.click(within(itemCard("Paket Hemat")).getByRole("button", { name: "+" }));
+
+    expect(cart(store).map((item) => [item.id, item.quantity, item.price, item.sourceMenuItemId])).toEqual([
+      ["3-31", 1, 28000, 31],
+    ]);
+  });
+
   it("switches category from the category cards", async () => {
     renderWithProviders(<MenuContainer />, { route: "/menu" });
     await screen.findByText("Kopi Susu");

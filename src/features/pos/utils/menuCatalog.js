@@ -29,6 +29,8 @@ export const buildMenuCatalog = (categories, menuItems, isOnlineOrder) =>
         includeOnlinePlatform: Boolean(item.includeOnlinePlatform),
         onlinePrice: item.onlinePrice ?? null,
         imagePath: item.imagePath || null,
+        // A promo package lists its menus on the card.
+        bundleItems: item.bundleItems || [],
         taxRate:
           item.category?.taxRate ??
           item.category?.tax ??

@@ -92,6 +92,7 @@ const menuAvailabilityOptions = [
 
 const emptyCategoryForm = {
   isActive: true,
+  isBundle: false,
   name: "",
   icon: "☕",
   taxRate: "",
@@ -107,6 +108,7 @@ const emptyMenuForm = {
   hppCost: "",
   grossProfit: "",
   ingredients: [],
+  bundleItems: [],
   imageFile: null,
   imagePath: "",
 };
@@ -167,6 +169,13 @@ const isValidMoneyInput = (value) => {
 };
 
 const getCategoryId = (category) => String(category?.id || category?._id || "");
+const getMenuItemId = (item) => String(item?.id || item?._id || "");
+
+// Kategori Promo: a menu of a promo category (isBundle) is a package of other
+// menus (bundleItems), never of another package.
+const isPackageMenu = (item) => Boolean(item?.isBundle) || (item?.bundleItems?.length || 0) > 0;
+const bundleItemsLabel = (bundleItems = []) =>
+  bundleItems.map((line) => `${line.quantity}× ${line.name}`).join(" · ");
 const normalizeStockUnit = (unit) => String(unit || "").trim().toLowerCase();
 
 const getCogsDisplay = (stockItem) => {
@@ -250,8 +259,50 @@ const MenuManagement = () => {
   });
 
   const categories = categoriesRes?.data?.data || [];
-  const menuItems = menuItemsRes?.data?.data || [];
+  const menuItemsData = menuItemsRes?.data?.data;
+  const menuItems = useMemo(() => menuItemsData || [], [menuItemsData]);
   const stockItems = stockItemsRes?.data?.data || [];
+  const menuItemsById = useMemo(
+    () => new Map(menuItems.map((item) => [getMenuItemId(item), item])),
+    [menuItems]
+  );
+  const isBundleForm = Boolean(
+    categories.find((category) => getCategoryId(category) === String(menuForm.categoryId))
+      ?.isBundle
+  );
+  const editingMenuItemId = editingMenuItem ? getMenuItemId(editingMenuItem) : "";
+  const bundleKeys = menuForm.bundleItems.map((line) => line.menuItemId).join("|");
+  // Ordinary menus not yet in the package (and never the package itself).
+  const bundleMenuOptions = useMemo(() => {
+    const chosen = new Set(bundleKeys.split("|"));
+    return [
+      { id: "", text: "Pilih menu" },
+      ...menuItems
+        .filter(
+          (item) =>
+            !isPackageMenu(item) &&
+            getMenuItemId(item) !== editingMenuItemId &&
+            !chosen.has(getMenuItemId(item))
+        )
+        .map((item) => ({ id: getMenuItemId(item), text: item.name })),
+    ];
+  }, [menuItems, bundleKeys, editingMenuItemId]);
+  const bundleTotals = useMemo(
+    () =>
+      menuForm.bundleItems.reduce(
+        (totals, line) => {
+          const item = menuItemsById.get(String(line.menuItemId));
+          const quantity = Number(line.quantity) || 0;
+
+          return {
+            price: totals.price + quantity * Number(item?.regularPrice ?? item?.price ?? 0),
+            hpp: totals.hpp + quantity * Number(item?.hppCost ?? item?.hpp ?? 0),
+          };
+        },
+        { price: 0, hpp: 0 }
+      ),
+    [menuForm.bundleItems, menuItemsById]
+  );
   const positionCategories = useMemo(
     () => categories.filter((category) => category.isActive !== false),
     [categories]
@@ -328,8 +379,10 @@ const MenuManagement = () => {
       setEditingCategory(null);
       setIsCategoryFormOpen(false);
     },
-    onError: () => {
-      enqueueSnackbar("Gagal menyimpan category.", { variant: "error" });
+    onError: (error) => {
+      enqueueSnackbar(error?.response?.data?.message || "Gagal menyimpan category.", {
+        variant: "error",
+      });
     },
   });
 
@@ -413,8 +466,10 @@ const MenuManagement = () => {
       setEditingMenuItem(null);
       setIsMenuFormOpen(false);
     },
-    onError: () => {
-      enqueueSnackbar("Gagal menyimpan menu.", { variant: "error" });
+    onError: (error) => {
+      enqueueSnackbar(error?.response?.data?.message || "Gagal menyimpan menu.", {
+        variant: "error",
+      });
     },
   });
 
@@ -425,8 +480,10 @@ const MenuManagement = () => {
       enqueueSnackbar("Category berhasil dihapus.", { variant: "success" });
       setCategoryPendingDelete(null);
     },
-    onError: () => {
-      enqueueSnackbar("Gagal menghapus category.", { variant: "error" });
+    onError: (error) => {
+      enqueueSnackbar(error?.response?.data?.message || "Gagal menghapus category.", {
+        variant: "error",
+      });
     },
   });
 
@@ -436,8 +493,10 @@ const MenuManagement = () => {
       refreshMenuData();
       enqueueSnackbar("Menu berhasil dihapus.", { variant: "success" });
     },
-    onError: () => {
-      enqueueSnackbar("Gagal menghapus menu.", { variant: "error" });
+    onError: (error) => {
+      enqueueSnackbar(error?.response?.data?.message || "Gagal menghapus menu.", {
+        variant: "error",
+      });
     },
   });
 
@@ -515,7 +574,7 @@ const MenuManagement = () => {
       }, 0),
     [menuForm.ingredients, stockItems]
   );
-  const autoHppCost = roundMoney(autoIngredientCostTotal);
+  const autoHppCost = roundMoney(isBundleForm ? bundleTotals.hpp : autoIngredientCostTotal);
   const autoGrossProfit = roundMoney(
     parseMoneyInput(menuForm.regularPrice) - autoHppCost
   );
@@ -601,6 +660,35 @@ const MenuManagement = () => {
     }));
   };
 
+  const addBundleMenu = (menuItemId) => {
+    if (!menuItemId) return;
+
+    setMenuForm((current) =>
+      current.bundleItems.some((line) => String(line.menuItemId) === String(menuItemId))
+        ? current
+        : {
+            ...current,
+            bundleItems: [...current.bundleItems, { menuItemId: String(menuItemId), quantity: "1" }],
+          }
+    );
+  };
+
+  const updateBundleQuantity = (index, quantity) => {
+    setMenuForm((current) => ({
+      ...current,
+      bundleItems: current.bundleItems.map((line, lineIndex) =>
+        lineIndex === index ? { ...line, quantity } : line
+      ),
+    }));
+  };
+
+  const removeBundleMenu = (index) => {
+    setMenuForm((current) => ({
+      ...current,
+      bundleItems: current.bundleItems.filter((_, lineIndex) => lineIndex !== index),
+    }));
+  };
+
   const handleSubmitCategory = (event) => {
     event.preventDefault();
 
@@ -627,6 +715,7 @@ const MenuManagement = () => {
       icon: categoryForm.icon.trim(),
       taxRate: parsedTaxRate,
       isActive: Boolean(categoryForm.isActive),
+      isBundle: Boolean(categoryForm.isBundle),
     });
   };
 
@@ -649,6 +738,12 @@ const MenuManagement = () => {
         : null;
     const hppCost = autoHppCost;
     const grossProfit = autoGrossProfit;
+    const bundleItems = isBundleForm
+      ? menuForm.bundleItems.map((line) => ({
+          menuItemId: Number(line.menuItemId),
+          quantity: Number(line.quantity),
+        }))
+      : [];
 
     const hasMenuImage =
       Boolean(menuForm.imageFile) || Boolean(menuForm.imagePath.trim());
@@ -665,6 +760,21 @@ const MenuManagement = () => {
           variant: "warning",
         }
       );
+      return;
+    }
+
+    if (
+      bundleItems.some((line) => !Number.isInteger(line.quantity) || line.quantity < 1)
+    ) {
+      enqueueSnackbar("Jumlah menu paket minimal 1.", { variant: "warning" });
+      return;
+    }
+
+    if (
+      isBundleForm &&
+      bundleItems.reduce((total, line) => total + line.quantity, 0) < 2
+    ) {
+      enqueueSnackbar("Paket minimal berisi 2 menu.", { variant: "warning" });
       return;
     }
 
@@ -704,7 +814,8 @@ const MenuManagement = () => {
       onlinePrice,
       hppCost,
       grossProfit,
-      ingredients,
+      ingredients: isBundleForm ? [] : ingredients,
+      bundleItems,
       imageFile: menuForm.imageFile,
       imagePath: menuForm.imagePath.trim(),
       isAvailable: Boolean(menuForm.isAvailable),
@@ -716,6 +827,7 @@ const MenuManagement = () => {
     setIsCategoryFormOpen(true);
     setCategoryForm({
       isActive: category.isActive !== false,
+      isBundle: Boolean(category.isBundle),
       name: category.name,
       icon: category.icon || "☕",
       taxRate:
@@ -751,6 +863,11 @@ const MenuManagement = () => {
         ingredientName: ingredient.ingredientName || ingredient.name || "",
         quantity: String(ingredient.quantity ?? ""),
         note: ingredient.note || "",
+      })),
+      bundleItems: (item.bundleItems || []).map((line) => ({
+        menuItemId: String(line.menuItemId),
+        name: line.name,
+        quantity: String(line.quantity ?? 1),
       })),
       imageFile: null,
       imagePath: item.imagePath || "",
@@ -936,6 +1053,18 @@ const MenuManagement = () => {
                     className="mt-2 w-full rounded-lg bg-[#262626] px-4 py-3 text-sm text-[#f5f5f5] outline-none"
                   />
                 </label>
+                <label className="mt-4 flex w-fit items-center gap-3 text-sm font-semibold text-[#ababab]">
+                  <span>Kategori Promo</span>
+                  <input
+                    type="checkbox"
+                    checked={Boolean(categoryForm.isBundle)}
+                    onChange={(event) =>
+                      updateCategoryForm("isBundle", event.target.checked)
+                    }
+                    className="peer sr-only"
+                  />
+                  <span className="relative h-7 w-12 rounded-full bg-[#333] transition after:absolute after:left-1 after:top-1 after:h-5 after:w-5 after:rounded-full after:bg-[#f5f5f5] after:transition peer-checked:bg-[#a79981] peer-checked:after:translate-x-5" />
+                </label>
                 <label className="mt-4 block text-sm font-semibold text-[#ababab]">
                   Status
                   <div className="mt-2">
@@ -1090,7 +1219,16 @@ const MenuManagement = () => {
                         {(categoryPage - 1) * ITEMS_PER_PAGE + index + 1}
                       </td>
                       <td className="p-4 text-xl">{category.icon || "-"}</td>
-                      <td className="p-4 font-semibold">{category.name}</td>
+                      <td className="p-4 font-semibold">
+                        {category.name}
+                        {/* No badge when the name already says Promo. */}
+                        {category.isBundle &&
+                          String(category.name || "").trim().toLowerCase() !== "promo" && (
+                          <span className="ml-2 rounded-md bg-amber-900/50 px-2 py-0.5 text-xs font-bold text-amber-200">
+                            Promo
+                          </span>
+                        )}
+                      </td>
                       <td className="p-4 text-center">
                         {category.taxRate ?? category.tax ?? 0}%
                       </td>
@@ -1185,7 +1323,9 @@ const MenuManagement = () => {
                   {editingMenuItem ? "Ubah Menu" : "Tambah Menu"}
                 </h3>
                 <p className="mt-1 text-sm text-[#ababab]">
-                  Isi data menu, harga, dan komposisi resep.
+                  {isBundleForm
+                    ? "Isi data paket, harga, dan menu isinya."
+                    : "Isi data menu, harga, dan komposisi resep."}
                 </p>
               </div>
               <button
@@ -1217,6 +1357,84 @@ const MenuManagement = () => {
                 className="mt-2 w-full rounded-lg bg-[#262626] px-4 py-3 text-sm text-[#f5f5f5] outline-none"
               />
             </label>
+            {isBundleForm ? (
+            <div className="mt-4">
+              <span className="text-sm font-semibold text-[#ababab]">Isi Paket</span>
+              <div className="mt-2">
+                <CreatableSelect2
+                  options={bundleMenuOptions}
+                  value=""
+                  onSelect={(option) => addBundleMenu(option?.id || "")}
+                  placeholder="Pilih menu"
+                  label="Tambah menu paket"
+                />
+              </div>
+              <div className="mt-3 space-y-2">
+                {menuForm.bundleItems.map((line, index) => {
+                  const bundleMenu = menuItemsById.get(String(line.menuItemId));
+                  const bundleMenuName = bundleMenu?.name || line.name || "-";
+                  const bundleMenuPrice = Number(
+                    bundleMenu?.regularPrice ?? bundleMenu?.price ?? 0
+                  );
+
+                  return (
+                    <div
+                      key={line.menuItemId}
+                      className="grid grid-cols-[minmax(0,1fr)_72px_minmax(0,0.7fr)_40px] items-center gap-2 rounded-lg border border-[#333] bg-[#202020] p-2"
+                    >
+                      <span className="truncate px-1 text-sm font-semibold text-[#f5f5f5]">
+                        {bundleMenuName}
+                      </span>
+                      <input
+                        value={line.quantity}
+                        onChange={(event) => updateBundleQuantity(index, event.target.value)}
+                        type="number"
+                        min="1"
+                        step="1"
+                        aria-label={`Jumlah ${bundleMenuName}`}
+                        className="min-w-0 rounded-lg bg-[#262626] px-3 py-2 text-sm text-[#f5f5f5] outline-none"
+                      />
+                      <span className="truncate text-right text-sm font-semibold text-[#ababab]">
+                        {formatCurrency(bundleMenuPrice * (Number(line.quantity) || 0))}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => removeBundleMenu(index)}
+                        aria-label={`Hapus ${bundleMenuName}`}
+                        className="h-10 w-10 rounded-lg bg-[#333] text-sm font-bold text-red-300"
+                      >
+                        X
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+              {menuForm.bundleItems.length > 0 && (
+                <div className="mt-3 grid grid-cols-3 gap-2 rounded-lg bg-[#262626] p-3 text-sm">
+                  <div>
+                    <p className="text-xs text-[#777]">Harga normal</p>
+                    <p data-testid="bundle-normal-price" className="font-bold text-[#f5f5f5]">
+                      {formatCurrency(bundleTotals.price)}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-[#777]">HPP paket</p>
+                    <p data-testid="bundle-hpp" className="font-bold text-amber-200">
+                      {formatCurrency(bundleTotals.hpp)}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-[#777]">Hemat</p>
+                    <p data-testid="bundle-saving" className="font-bold text-emerald-200">
+                      {formatCurrency(
+                        Math.max(bundleTotals.price - parseMoneyInput(menuForm.regularPrice), 0)
+                      )}
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+            ) : (
             <div className="mt-4">
               <div className="mb-2 flex items-center justify-between">
                 <span className="text-sm font-semibold text-[#ababab]">
@@ -1330,6 +1548,7 @@ const MenuManagement = () => {
                 Boleh kosong. Dipakai sebagai catatan resep dan pengurangan stok otomatis.
               </p>
             </div>
+            )}
             <div className="mt-4">
               <div className="mb-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <span className="text-sm font-semibold text-[#ababab]">
@@ -1360,7 +1579,7 @@ const MenuManagement = () => {
                 }`}
               >
                 <label className="block text-sm font-semibold text-[#ababab]">
-                  Harga Reguler
+                  {isBundleForm ? "Harga Promo" : "Harga Reguler"}
                   <div className="mt-2 flex overflow-hidden rounded-lg bg-[#262626]">
                     <span className="flex shrink-0 items-center px-4 text-sm font-bold text-[#a79981]">
                       Rp
@@ -1553,7 +1772,14 @@ const MenuManagement = () => {
                       key={item.id || item._id}
                       className="border-b border-gray-600 hover:bg-[#333]"
                     >
-                      <td className="p-4 font-semibold">{item.name}</td>
+                      <td className="p-4 font-semibold">
+                        {item.name}
+                        {item.bundleItems?.length > 0 && (
+                          <p className="mt-1 text-xs font-normal text-[#ababab]">
+                            {bundleItemsLabel(item.bundleItems)}
+                          </p>
+                        )}
+                      </td>
                       <td className="p-4">{item.category?.name || "-"}</td>
                       <td className="p-4 text-center">
                         <span
