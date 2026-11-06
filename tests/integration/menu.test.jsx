@@ -89,6 +89,26 @@ describe("kategori promo", () => {
     expect(api.addCategory.mock.calls[0][0]).toMatchObject({ name: "PAKET", isBundle: true });
   });
 
+  it("lists the Kategori Promo apart in the menu form", async () => {
+    renderWithProviders(<MenuManagement />, { preloadedState: asAdmin });
+
+    fireEvent.click(await screen.findByRole("button", { name: "Menu Items" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Tambah Menu" }));
+    const groupsOf = () =>
+      screen
+        .getAllByLabelText("Category")
+        .flatMap((element) => Array.from(element.querySelectorAll("optgroup")));
+    await waitFor(() =>
+      expect(groupsOf().map((group) => [
+        group.label,
+        Array.from(group.children).map((option) => option.textContent),
+      ])).toEqual([
+        ["Category Menu", ["Kopi"]],
+        ["Kategori Promo (isi dari menu yang sudah ada)", ["PROMO"]],
+      ])
+    );
+  });
+
   it("fills a promo menu with menus instead of bahan", async () => {
     api.updateMenuItem.mockResolvedValue({ data: { success: true } });
     renderWithProviders(<MenuManagement />, { preloadedState: asAdmin });
