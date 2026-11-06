@@ -15,6 +15,8 @@ export const buildMenuCatalog = (categories, menuItems, isOnlineOrder) =>
     name: category.name,
     icon: category.icon || CATEGORY_ICONS[category.name] || "",
     taxRate: category.taxRate ?? category.tax ?? null,
+    // A Kategori Promo stands out in the POS.
+    isBundle: Boolean(category.isBundle),
     items: menuItems
       .filter(
         (item) =>
