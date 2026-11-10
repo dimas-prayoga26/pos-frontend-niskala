@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { formatDayMonthYear } from "../../../../shared/lib/dates";
 import { currency, quantityDisplay, signedCurrency } from "../../utils/format";
-import { notaFooterLines, packedQuantityLabel } from "../../utils/shopping";
+import { deletedLineLabel, notaFooterLines, packedQuantityLabel } from "../../utils/shopping";
 
 const linkClass = "text-xs font-semibold hover:underline disabled:opacity-50";
 
@@ -23,6 +23,8 @@ const PurchaseNotaDialog = ({
   showUnits = true,
 }) => {
   const extras = notaFooterLines(nota);
+  // Lines deleted after posting stay on the struk, struck through and out of the total.
+  const deletedItems = nota.deletedItems || [];
   // Barang Lainnya (showUnits false) are counted per piece.
   const quantityOf = (item) =>
     showUnits
@@ -104,7 +106,21 @@ const PurchaseNotaDialog = ({
                 </div>
               </li>
             ))}
-            {!nota.items.length && (
+            {deletedItems.map((item) => (
+              <li key={`deleted-${item.id}`} className="py-2 text-[#8a8a8a]">
+                <div className="flex items-start justify-between gap-3">
+                  <span className="font-semibold line-through">{item.itemName}</span>
+                  <span className="whitespace-nowrap line-through">{currency(item.total)}</span>
+                </div>
+                <p className="text-xs">
+                  <span className="line-through">
+                    {quantityOf(item)} × {currency(item.unitPrice)}
+                  </span>
+                  <span className="ml-2 text-red-300">{deletedLineLabel(item)}</span>
+                </p>
+              </li>
+            ))}
+            {!nota.items.length && !deletedItems.length && (
               <li className="py-2 text-center text-[#ababab]">Semua barang nota ini sudah dihapus.</li>
             )}
           </ul>

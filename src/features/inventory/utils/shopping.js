@@ -1,3 +1,4 @@
+import { formatDayMonthYear } from "../../../shared/lib/dates";
 import { currency, quantityDisplay } from "./format";
 import { areConvertible, measuredBaseUnit } from "./units";
 
@@ -198,6 +199,16 @@ export const getLogDetail = (log) =>
     : log.action === "delete"
       ? `${quantityDisplay(log.oldData?.quantity, log.oldData?.unit)} dihapus`
       : `${quantityDisplay(log.oldData?.quantity, log.oldData?.unit)} -> ${quantityDisplay(log.newData?.quantity, log.newData?.unit)}, ${currency(log.oldData?.unitPrice)} -> ${currency(log.newData?.unitPrice)}`;
+
+// "Dihapus admin · 3 November 2026 10:43": who deleted a line of a posted nota
+// and when (deletedAt as stored, "YYYY-MM-DD HH:mm:ss" in Jakarta time).
+export const deletedLineLabel = (item) =>
+  [
+    `Dihapus ${item.deletedBy || "Admin"}`,
+    item.deletedAt && `${formatDayMonthYear(item.deletedAt)} ${String(item.deletedAt).slice(11, 16)}`.trim(),
+  ]
+    .filter(Boolean)
+    .join(" · ");
 
 const percentLabel = (value) => Number(value).toLocaleString("id-ID", { maximumFractionDigits: 2 });
 

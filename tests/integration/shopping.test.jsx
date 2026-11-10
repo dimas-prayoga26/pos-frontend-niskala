@@ -720,6 +720,27 @@ describe("shopping history", () => {
     expect(screen.queryByRole("dialog", { name: "Detail Struk #7 Pasar Uji" })).not.toBeInTheDocument();
   });
 
+  it("keeps a line deleted from a posted nota on its struk, struck through and out of the total", async () => {
+    const espresso = { id: 13, itemName: "ESPRESSO", quantity: 2000, unit: "gr", unitPrice: 172.7, total: 345400, deletedBy: "admin", deletedAt: "2026-11-03 10:43:16" };
+    api.getPurchaseNotas.mockResolvedValue({
+      data: { data: { notas: [postedNota(11, { supplierName: "Shopee", subtotal: 0, shippingCost: 0, discountAmount: 0, discountValue: 0, taxPercent: 0, taxAmount: 0, total: 0, items: [], deletedItems: [espresso] })], total: 1, page: 1 } },
+    });
+    renderShopping();
+    const nota = await screen.findByRole("rowgroup", { name: "Nota #11 Shopee" });
+    expect(nota).toHaveTextContent("ESPRESSODihapus admin · 3 November 2026 10:43");
+    expect(nota).not.toHaveTextContent("Semua barang nota ini sudah dihapus.");
+    expect(within(nota).getByText("ESPRESSO")).toHaveClass("line-through");
+
+    fireEvent.click(within(nota).getByText("ESPRESSO"));
+    const dialog = screen.getByRole("dialog", { name: "Detail Struk #11 Shopee" });
+    const lines = within(within(dialog).getByRole("list", { name: "Daftar barang" })).getAllByRole("listitem");
+    // No Riwayat / Ubah / Hapus: the line is gone from stock and saldo.
+    expect(lines.map((line) => line.textContent)).toEqual([
+      "ESPRESSORp 345.4002.000 gr × Rp 173Dihapus admin · 3 November 2026 10:43",
+    ]);
+    expect(dialog).toHaveTextContent("TOTALRp 0");
+  });
+
   it("shows a line bought by the dus with its isi and lets admins change the isi", async () => {
     const aquaLine = { id: 95, stockItemId: 6, itemName: "Aqua 600ml", quantity: 2, unit: "dus", packSize: 24, packUnit: "botol", unitPrice: 50000, total: 100000, costTotal: 100000, stockQuantity: 48, stockUnit: "botol" };
     api.getPurchaseNotas.mockResolvedValue({

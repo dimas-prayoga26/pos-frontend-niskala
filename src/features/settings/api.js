@@ -5,9 +5,11 @@ export {
   addPaymentSource,
   addPaymentSourceMutation,
   deleteOrderPlatform,
+  getCategories,
   getOrderPlatforms,
   getPaymentSourceMutations,
   getPaymentSources,
+  updateCategoryBestSellerGroups,
   updateOrderPlatform,
   updatePaymentSource,
 } from "../../https";

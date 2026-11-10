@@ -17,6 +17,9 @@ export const updateCategory = ({ categoryId, ...categoryData }) =>
   axiosWrapper.put(`/api/category/${categoryId}`, categoryData);
 export const updateCategoryPositions = (categoryIds) =>
   axiosWrapper.put("/api/category/positions", { categoryIds });
+// Pengaturan → Best Seller: { Makanan: [ids], Minuman: [ids], Snack: [ids] }.
+export const updateCategoryBestSellerGroups = (groups) =>
+  axiosWrapper.put("/api/category/best-seller-groups", { groups });
 export const deleteCategory = (categoryId) =>
   axiosWrapper.delete(`/api/category/${categoryId}`);
 

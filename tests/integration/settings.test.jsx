@@ -1,5 +1,6 @@
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import $ from "jquery";
 import * as api from "../../src/https/index";
 import { SettingsManagement } from "../../src/features/settings";
 import { getJakartaDateKey } from "../../src/shared/lib/dates";
@@ -9,10 +10,12 @@ vi.mock("../../src/https/index", async (importOriginal) => ({
   ...(await importOriginal()),
   addPaymentSource: vi.fn(),
   addPaymentSourceMutation: vi.fn(),
+  getCategories: vi.fn(),
   getOrderPlatforms: vi.fn(),
   getPaymentSourceMutations: vi.fn(),
   getPaymentSources: vi.fn(),
   getShoppingSuppliers: vi.fn(),
+  updateCategoryBestSellerGroups: vi.fn(),
   updatePaymentSource: vi.fn(),
 }));
 
@@ -125,5 +128,91 @@ describe("settings: sumber pembayaran", () => {
     await waitFor(() =>
       expect(api.updatePaymentSource.mock.calls[0][0]).toEqual({ id: 3, name: "Niskala", isActive: false })
     );
+  });
+});
+
+describe("settings: best seller", () => {
+  beforeEach(() => {
+    api.getOrderPlatforms.mockResolvedValue({ data: { data: [] } });
+    api.getCategories.mockResolvedValue({
+      data: {
+        data: [
+          { id: 1, name: "Black Coffee", isActive: true, bestSellerGroup: "Minuman" },
+          { id: 2, name: "Rice Bowl", isActive: true, bestSellerGroup: "Makanan" },
+          { id: 3, name: "Roti", isActive: false, bestSellerGroup: "Snack" },
+          { id: 4, name: "Catering", isActive: true, bestSellerGroup: null },
+        ],
+      },
+    });
+    api.updateCategoryBestSellerGroups.mockResolvedValue({ data: { success: true } });
+  });
+
+  // The categories listed in each column.
+  const columnsShown = () =>
+    Object.fromEntries(
+      ["Makanan", "Minuman", "Snack", "Dikecualikan"].map((column) => [
+        column,
+        within(screen.getByRole("list", { name: `Kategori ${column}` }))
+          .queryAllByRole("button")
+          .map((button) => button.getAttribute("aria-label")),
+      ])
+    );
+  const names = (column) =>
+    within(screen.getByRole("list", { name: `Kategori ${column}` })).queryAllByRole("listitem").map((item) => item.textContent);
+  const addTo = (column, id, text) =>
+    $(screen.getByLabelText(`Tambah kategori ke ${column}`))
+      .val(String(id))
+      .trigger($.Event("select2:select", { params: { data: { id: String(id), text } } }));
+  const openBestSeller = async () => {
+    renderWithProviders(<SettingsManagement />);
+    fireEvent.click(screen.getByRole("button", { name: "Best Seller" }));
+    await screen.findByRole("region", { name: "Kolom Makanan" });
+  };
+
+  it("shows a column per Best Seller tab and Dikecualikan, each with its categories", async () => {
+    await openBestSeller();
+    expect(api.getCategories).toHaveBeenCalledWith({ includeInactive: true });
+    expect(["Makanan", "Minuman", "Snack", "Dikecualikan"].map(names)).toEqual([
+      ["Rice Bowl×"],
+      ["Black Coffee×"],
+      ["RotiNonaktif×"],
+      ["Catering"],
+    ]);
+    expect(columnsShown()["Dikecualikan"]).toEqual([]);
+    // A column's picker offers the categories of the other columns, by column.
+    const picker = screen.getByLabelText("Tambah kategori ke Makanan");
+    await waitFor(() =>
+      expect(Array.from(picker.querySelectorAll("optgroup"), (group) => [group.label, Array.from(group.children, (option) => option.text)])).toEqual([
+        ["Minuman", ["Black Coffee"]],
+        ["Snack", ["Roti"]],
+        ["Dikecualikan", ["Catering"]],
+      ])
+    );
+    expect(screen.getByRole("button", { name: "Simpan" })).toBeDisabled();
+  });
+
+  it("moves categories between columns and saves them all at once", async () => {
+    await openBestSeller();
+    addTo("Makanan", 3, "Roti");
+    await waitFor(() => expect(names("Makanan")).toEqual(["Rice Bowl×", "RotiNonaktif×"]));
+    expect(names("Snack")).toEqual(["Belum ada kategori"]);
+    fireEvent.click(screen.getByRole("button", { name: "Keluarkan Black Coffee dari Minuman" }));
+    expect(names("Dikecualikan")).toEqual(["Black Coffee", "Catering"]);
+    addTo("Snack", 4, "Catering");
+    await waitFor(() => expect(names("Snack")).toEqual(["Catering×"]));
+
+    fireEvent.click(screen.getByRole("button", { name: "Simpan" }));
+    await waitFor(() =>
+      expect(api.updateCategoryBestSellerGroups.mock.calls[0][0]).toEqual({ Makanan: [2, 3], Minuman: [], Snack: [4] })
+    );
+  });
+
+  it("drops unsaved changes with Batal", async () => {
+    await openBestSeller();
+    fireEvent.click(screen.getByRole("button", { name: "Keluarkan Roti dari Snack" }));
+    expect(names("Snack")).toEqual(["Belum ada kategori"]);
+    fireEvent.click(screen.getByRole("button", { name: "Batal" }));
+    expect(names("Snack")).toEqual(["RotiNonaktif×"]);
+    expect(screen.getByRole("button", { name: "Simpan" })).toBeDisabled();
   });
 });

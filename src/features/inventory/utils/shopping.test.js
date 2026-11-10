@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { costDisplay, currency, formatRupiahInput, quantityDisplay } from "./format";
-import { buildPurchasePayload, getLogDetail, isPurchaseFormComplete, lineTotal, parseShoppingQuantity, purchaseUnitForStockUnit, unitPriceFromTotal } from "./shopping";
+import { buildPurchasePayload, deletedLineLabel, getLogDetail, isPurchaseFormComplete, lineTotal, parseShoppingQuantity, purchaseUnitForStockUnit, unitPriceFromTotal } from "./shopping";
 import { convertQuantity } from "./units";
 
 describe("shopping utils", () => {
@@ -67,5 +67,12 @@ describe("shopping utils", () => {
 
   it("describes activity log entries", () => {
     expect(getLogDetail({ action: "delete", oldData: { quantity: 2, unit: "gr" } })).toBe("2 gr dihapus");
+  });
+
+  it("names who deleted a nota line and when", () => {
+    expect(deletedLineLabel({ deletedBy: "admin", deletedAt: "2026-11-03 10:43:16" })).toBe(
+      "Dihapus admin · 3 November 2026 10:43"
+    );
+    expect(deletedLineLabel({})).toBe("Dihapus Admin");
   });
 });

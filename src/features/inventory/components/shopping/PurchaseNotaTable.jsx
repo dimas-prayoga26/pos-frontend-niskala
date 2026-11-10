@@ -1,6 +1,6 @@
 import { formatDayMonthYear } from "../../../../shared/lib/dates";
 import { currency, quantityDisplay, signedCurrency } from "../../utils/format";
-import { notaFooterLines, packedQuantityLabel } from "../../utils/shopping";
+import { deletedLineLabel, notaFooterLines, packedQuantityLabel } from "../../utils/shopping";
 
 // The "Per Nota" history, laid out like the nota itself: the toko as a heading
 // (tanggal, nomor, pembuat, catatan, bukti), each barang on its own row
@@ -36,7 +36,9 @@ const PurchaseNotaTable = ({
         </thead>
         {notas.map((nota) => {
           const extras = notaFooterLines(nota);
-          const rowCount = Math.max(nota.items.length, 1) + extras.length;
+          // Lines deleted after posting stay listed, struck through and out of the total.
+          const deletedItems = nota.deletedItems || [];
+          const rowCount = Math.max(nota.items.length + deletedItems.length, 1) + extras.length;
           // One merged cell for the whole nota, centered in both directions and
           // framed like a spreadsheet merge. Its own background (the card's)
           // keeps the hover of the first barang row, which owns the cell, from
@@ -105,7 +107,24 @@ const PurchaseNotaTable = ({
                   <td className="whitespace-nowrap p-3 text-right">{currency(item.total)}</td>
                 </tr>
               ))}
-              {!nota.items.length && (
+              {deletedItems.map((item, index) => (
+                <tr
+                  key={`deleted-${item.id}`}
+                  className="border-t border-[#333] text-[#8a8a8a] transition-colors group-hover:bg-[#262626]"
+                >
+                  <td className="p-3 pl-6">
+                    <span className="line-through">{item.itemName}</span>
+                    <span className="ml-2 text-xs text-red-300">{deletedLineLabel(item)}</span>
+                  </td>
+                  {!nota.items.length && index === 0 && sourceCell}
+                  <td className="whitespace-nowrap p-3 text-right line-through">
+                    {showUnits ? packedQuantityLabel(item.quantity, item.unit, item.packSize, item.packUnit) : qty(item.quantity, item.unit)}
+                  </td>
+                  <td className="whitespace-nowrap p-3 text-right line-through">{currency(item.unitPrice)}</td>
+                  <td className="whitespace-nowrap p-3 text-right line-through">{currency(item.total)}</td>
+                </tr>
+              ))}
+              {!nota.items.length && !deletedItems.length && (
                 <tr className="border-t border-[#333] transition-colors group-hover:bg-[#262626]">
                   <td className="p-3 pl-6 text-[#ababab]">Semua barang nota ini sudah dihapus.</td>
                   {sourceCell}

@@ -1,11 +1,11 @@
-import React, { useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { getMenuItems, getOrders } from "../api";
 import { formatCurrency } from "../../../shared/lib/format";
 import noImage from "../../../assets/no-image.svg";
 import { backendBaseUrl } from "../../../shared/api/backendUrl";
+import { BEST_SELLER_GROUPS, rankBestSellers } from "../utils/bestSeller";
 
-const drinkCategories = ["Coffee", "Non-Coffee", "Beverages"];
 const normalizeName = (value) => String(value || "").trim().toLowerCase();
 
 const resolveMenuImage = (imagePath) => {
@@ -18,7 +18,6 @@ const resolveMenuImage = (imagePath) => {
 const PopularDishes = () => {
   const [selectedBestSellerType, setSelectedBestSellerType] =
     useState("Makanan");
-  const bestSellerTypes = ["Makanan", "Minuman"];
 
   const { data: ordersRes } = useQuery({
     queryKey: ["orders"],
@@ -32,51 +31,19 @@ const PopularDishes = () => {
     placeholderData: keepPreviousData,
   });
 
-  const orders = ordersRes?.data?.data || [];
-  const menuItems = menuItemsRes?.data?.data || [];
+  const orders = useMemo(() => ordersRes?.data?.data || [], [ordersRes]);
+  const menuItems = useMemo(() => menuItemsRes?.data?.data || [], [menuItemsRes]);
   const menuItemByName = useMemo(() => {
     return new Map(menuItems.map((item) => [normalizeName(item.name), item]));
   }, [menuItems]);
 
-  const bestSellingMenus = useMemo(() => {
-    const salesByName = new Map();
-
-    orders.forEach((order) => {
-      (order.items || []).forEach((item) => {
-        const name = item.name;
-        const normalizedName = normalizeName(name);
-        const menuItem = menuItemByName.get(normalizedName);
-        const categoryName = menuItem?.category?.name || "";
-
-        if (!normalizedName || categoryName === "Catering") return;
-
-        const type = drinkCategories.includes(categoryName)
-          ? "Minuman"
-          : "Makanan";
-        const current = salesByName.get(normalizedName) || {
-          id: menuItem?.id || item.id || normalizedName,
-          image: menuItem?.imagePath,
-          name,
-          numberOfOrders: 0,
-          type,
-        };
-
-        current.numberOfOrders += Number(item.quantity) || 0;
-        current.image = current.image || menuItem?.imagePath;
-        current.type = type;
-        salesByName.set(normalizedName, current);
-      });
-    });
-
-    return [...salesByName.values()].sort(
-      (first, second) => second.numberOfOrders - first.numberOfOrders
-    );
-  }, [menuItemByName, orders]);
+  // Each category's tab is set in Pengaturan → Best Seller.
+  const bestSellingMenus = useMemo(() => rankBestSellers(orders, menuItems), [menuItems, orders]);
 
   const filteredBestSellingMenus = useMemo(
     () =>
       bestSellingMenus
-        .filter((dish) => dish.type === selectedBestSellerType)
+        .filter((dish) => dish.group === selectedBestSellerType)
         .slice(0, 5),
     [bestSellingMenus, selectedBestSellerType]
   );
@@ -136,11 +103,12 @@ const PopularDishes = () => {
         </div>
 
         <div className="px-4 pb-4 md:px-6">
-          <div className="grid grid-cols-2 rounded-lg bg-[#1f1f1f] p-1">
-            {bestSellerTypes.map((type) => (
+          <div className="grid grid-cols-3 rounded-lg bg-[#1f1f1f] p-1">
+            {BEST_SELLER_GROUPS.map((type) => (
               <button
                 key={type}
                 type="button"
+                aria-pressed={selectedBestSellerType === type}
                 onClick={() => setSelectedBestSellerType(type)}
                 className={`rounded-md px-4 py-2 text-sm font-bold transition ${
                   selectedBestSellerType === type
