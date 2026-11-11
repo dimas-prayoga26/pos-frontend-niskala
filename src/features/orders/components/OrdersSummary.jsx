@@ -16,7 +16,15 @@ const SummaryCard = ({ title, icon, iconClassName, value }) => (
   </div>
 );
 
-const OrdersSummary = ({ rangeLabel, revenue, orderCount }) => (
+// "20 / 57": orders / items sold.
+export const OrderItemCount = ({ orderCount, itemCount }) => (
+  <span title={`${orderCount} order, ${itemCount} item terjual`}>
+    {orderCount}
+    <span className="text-[#ababab]"> / {itemCount}</span>
+  </span>
+);
+
+const OrdersSummary = ({ rangeLabel, revenue, orderCount, itemCount = 0 }) => (
   <div className="grid grid-cols-1 gap-3 px-4 pb-2 md:grid-cols-2 md:px-10 xl:px-16">
     <SummaryCard
       title={`Total Penjualan ${rangeLabel}`}
@@ -28,7 +36,7 @@ const OrdersSummary = ({ rangeLabel, revenue, orderCount }) => (
       title={`Total Orderan ${rangeLabel}`}
       icon={<MdOutlineReceiptLong />}
       iconClassName="bg-[#f6b100]"
-      value={orderCount}
+      value={<OrderItemCount orderCount={orderCount} itemCount={itemCount} />}
     />
   </div>
 );

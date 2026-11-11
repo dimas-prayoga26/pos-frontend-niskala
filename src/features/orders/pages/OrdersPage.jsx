@@ -9,6 +9,7 @@ import OrderCard from "../components/OrderCard";
 import OrderDateRangeFilter from "../components/OrderDateRangeFilter";
 import OrdersSummary from "../components/OrdersSummary";
 import useOrderActions from "../hooks/useOrderActions";
+import { getOrdersItemCount } from "../utils/orderMetrics";
 import {
   filterOrdersByDateRange,
   getSummaryDateRangeLabel,
@@ -49,6 +50,7 @@ const OrdersPage = () => {
     () => sumReceivedAmount(filteredOrders),
     [filteredOrders]
   );
+  const filteredItemCount = useMemo(() => getOrdersItemCount(filteredOrders), [filteredOrders]);
   const groupedOrders = useMemo(() => groupOrdersByDay(filteredOrders), [filteredOrders]);
 
   return (
@@ -67,6 +69,7 @@ const OrdersPage = () => {
         rangeLabel={getSummaryDateRangeLabel(dateRange)}
         revenue={filteredRevenue}
         orderCount={filteredOrders.length}
+        itemCount={filteredItemCount}
       />
 
       <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-3 px-4 md:px-10 xl:px-16 py-4">

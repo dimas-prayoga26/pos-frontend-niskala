@@ -5,5 +5,6 @@ export {
   getOrderItemHpp,
   getOrderReceivedAmount,
   getOrdersHppTotal,
+  getOrdersItemCount,
 } from "./utils/orderMetrics";
 export { default as OrdersPage } from "./pages/OrdersPage";

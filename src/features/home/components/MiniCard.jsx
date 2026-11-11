@@ -9,6 +9,7 @@ const MiniCard = ({
   footerText,
   percentageChange,
   isCurrency = false,
+  suffix = null,
 }) => {
   const hasPercentageChange = typeof percentageChange === "number";
   const percentageColor =
@@ -27,7 +28,7 @@ const MiniCard = ({
         </div>
         <div>
             <h1 className='text-[#f5f5f5] text-3xl md:text-4xl font-bold mt-5'>{
-              isCurrency ? formatCurrency(number) : number}</h1>
+              isCurrency ? formatCurrency(number) : number}{suffix}</h1>
             <h1 className='text-[#f5f5f5] text-lg mt-2'>
               {hasPercentageChange ? (
                 <>

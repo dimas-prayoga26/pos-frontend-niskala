@@ -9,7 +9,7 @@ import PopularDishes from "../components/PopularDishes";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { getOrders } from "../api";
 import { getJakartaDateKey } from "../../../shared/lib/dates";
-import { getOrderReceivedAmount } from "../../orders";
+import { getOrderReceivedAmount, getOrdersItemCount } from "../../orders";
 
 const Home = () => {
   const { data: ordersRes } = useQuery({
@@ -49,6 +49,7 @@ const Home = () => {
     todayRevenue,
     yesterdayRevenue
   );
+  const todayItemCount = getOrdersItemCount(todayOrders);
   const orderPercentageChange = getPercentageChange(
     todayOrders.length,
     yesterdayOrders.length
@@ -75,6 +76,15 @@ const Home = () => {
             title="Order Hari Ini"
             icon={<MdOutlineReceiptLong />}
             number={todayOrders.length}
+            // "20 / 57": orders / items sold today.
+            suffix={
+              <span
+                className="text-[#ababab]"
+                title={`${todayOrders.length} order, ${todayItemCount} item terjual`}
+              >
+                {" "}/ {todayItemCount}
+              </span>
+            }
             percentageChange={orderPercentageChange}
           />
         </div>

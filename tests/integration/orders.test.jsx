@@ -27,11 +27,12 @@ const makeOrder = (id, name, orderDate, totalWithTax, extra = {}) => ({
   ...extra,
 });
 
+const item = (name, quantity) => ({ name, quantity, price: 1000, pricePerQuantity: 1000 });
 const orders = [
-  makeOrder(1, "Pelanggan Lama", "2026-01-05 09:00:00", 40000),
-  makeOrder(2, "Pagi Ini", `${today} 08:00:00`, 25000),
+  makeOrder(1, "Pelanggan Lama", "2026-01-05 09:00:00", 40000, { items: [item("Kopi", 9)] }),
+  makeOrder(2, "Pagi Ini", `${today} 08:00:00`, 25000, { items: [item("Kopi", 2), item("Roti", 1)] }),
   // A bahan olahan waits for the Daily Prep (Modul 2).
-  makeOrder(3, "Siang Ini", `${today} 12:30:00`, 30000, { hppStatus: "pending" }),
+  makeOrder(3, "Siang Ini", `${today} 12:30:00`, 30000, { hppStatus: "pending", items: [item("Nasi", 3)] }),
   makeOrder(4, "Catering DP", `${today} 10:00:00`, 500000, {
     cateringDetails: { paymentPlan: "DP", isPaid: false, dp: 200000 },
   }),
@@ -53,8 +54,9 @@ describe("orders page", () => {
     const revenueCard = screen.getByText(/^Total Penjualan/).closest("div").parentElement;
     // DP catering counts only the down payment: 30.000 + 200.000 + 25.000.
     expect(revenueCard).toHaveTextContent(/Rp\s255\.000$/);
+    // Orders / items sold: 2 + 1 + 3 (today only).
     const countCard = screen.getByText(/^Total Orderan/).closest("div").parentElement;
-    expect(countCard).toHaveTextContent(/3$/);
+    expect(countCard).toHaveTextContent(/3 \/ 6$/);
     // Only the nota whose HPP is still pending is flagged.
     expect(screen.getAllByText("HPP Pending")).toHaveLength(1);
     expect(screen.getByText("Siang Ini").parentElement).toHaveTextContent("HPP Pending");
