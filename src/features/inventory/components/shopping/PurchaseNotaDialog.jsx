@@ -139,7 +139,7 @@ const PurchaseNotaDialog = ({
               </div>
             ))}
             <div className="flex justify-between gap-3 border-t border-[#444] pt-2 text-base font-bold">
-              <dt>TOTAL</dt>
+              <dt>TOTAL</dt>  
               <dd className="text-[#f6d365]">{currency(nota.total)}</dd>
             </div>
           </dl>

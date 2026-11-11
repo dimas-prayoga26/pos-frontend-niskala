@@ -22,6 +22,9 @@ const Dashboard = () => {
   // Bahan baku a Catat Masak is short of ({ stockItemId, unit }): Belanja
   // Bahan opens Tambah Belanja with them. Any tab click drops them.
   const [restockItems, setRestockItems] = useState(null);
+  // A recipe bahan the menu form did not find ({ kind, name }): Stok Bahan
+  // opens its Tambah form. Any tab click drops it.
+  const [createStockItem, setCreateStockItem] = useState(null);
   const [lastSeenOrderId, setLastSeenOrderId] = useState(() => {
     const storedValue = localStorage.getItem(orderBadgeStorageKey);
     return storedValue === null ? null : Number(storedValue) || 0;
@@ -109,6 +112,7 @@ const Dashboard = () => {
   const handleTabClick = (tabKey) => {
     setActiveTab(tabKey);
     setRestockItems(null);
+    setCreateStockItem(null);
 
     if (tabKey === "orders") {
       localStorage.setItem(orderBadgeStorageKey, String(latestOrderId));
@@ -156,6 +160,7 @@ const Dashboard = () => {
       {activeTab === "orders" && <RecentOrders />}
       {activeTab === "stock" && (
         <StockManagement
+          createItem={createStockItem}
           onRestock={(items) => {
             setActiveTab("shopping");
             setRestockItems(items);
@@ -163,7 +168,14 @@ const Dashboard = () => {
         />
       )}
       {activeTab === "shopping" && <ShoppingPage restockItems={restockItems} />}
-      {activeTab === "menu" && isAdmin && <MenuManagement />}
+      {activeTab === "menu" && isAdmin && (
+        <MenuManagement
+          onCreateIngredient={(kind, name) => {
+            setActiveTab("stock");
+            setCreateStockItem({ kind, name });
+          }}
+        />
+      )}
       {activeTab === "recap" && <RecapManagement />}
       {activeTab === "setting" && isAdmin && <SettingsManagement />}
     </div>

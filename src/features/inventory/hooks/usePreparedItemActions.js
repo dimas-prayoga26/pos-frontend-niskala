@@ -28,13 +28,13 @@ const usePreparedItemActions = ({ onSaved, onDeleted, onProduced }) => {
   const saveMutation = useMutation({
     mutationFn: ({ id, ...payload }) =>
       id ? updateSemiItem({ semiItemId: id, ...payload }) : addSemiItem(payload),
-    onSuccess: (_response, { id }) => {
+    onSuccess: (response, { id }) => {
       refresh();
       enqueueSnackbar(
         id ? "Bahan olahan diperbarui." : "Bahan olahan ditambahkan.",
         { variant: "success" }
       );
-      onSaved();
+      onSaved?.(response?.data?.data);
     },
     onError: showError("Gagal menyimpan bahan olahan."),
   });
@@ -43,7 +43,7 @@ const usePreparedItemActions = ({ onSaved, onDeleted, onProduced }) => {
     onSuccess: () => {
       refresh();
       enqueueSnackbar("Bahan berhasil dihapus.", { variant: "success" });
-      onDeleted();
+      onDeleted?.();
     },
     onError: showError("Gagal menghapus bahan."),
   });
@@ -52,7 +52,7 @@ const usePreparedItemActions = ({ onSaved, onDeleted, onProduced }) => {
     onSuccess: () => {
       refresh();
       enqueueSnackbar("Catatan masak disimpan.", { variant: "success" });
-      onProduced();
+      onProduced?.();
     },
     onError: showError("Gagal menyimpan catatan masak."),
   });

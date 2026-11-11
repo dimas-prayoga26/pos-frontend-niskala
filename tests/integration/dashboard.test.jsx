@@ -1,4 +1,5 @@
-import { fireEvent, screen, within } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
+import $ from "jquery";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import * as api from "../../src/https/index";
 import Dashboard from "../../src/features/dashboard/pages/DashboardPage";
@@ -7,6 +8,8 @@ import { renderWithProviders } from "../renderWithProviders";
 
 vi.mock("../../src/https/index", async (importOriginal) => ({
   ...(await importOriginal()),
+  getCategories: vi.fn(),
+  getMenuItems: vi.fn(),
   getOrders: vi.fn(),
   getPaymentSources: vi.fn(),
   getPurchaseDrafts: vi.fn(),
@@ -136,6 +139,54 @@ describe("dashboard menus: Stok Bahan holds what is on hand, Belanja the purchas
     fireEvent.click(screen.getByRole("button", { name: /^Stok Bahan/ }));
     fireEvent.click(screen.getByRole("button", { name: /^Belanja/ }));
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("goes from a recipe bahan the menu form does not find to its Tambah form at Stok Bahan, and stays there on Batal", async () => {
+    api.getCategories.mockResolvedValue({ data: { data: [{ id: 1, name: "Kopi", isActive: true }] } });
+    api.getMenuItems.mockResolvedValue({ data: { data: [] } });
+    api.getStockItems.mockResolvedValue({
+      data: { data: [{ id: 1, name: "Susu Segar", unit: "ml", stock: 10, isRecipeIngredient: true, status: "AMAN" }] },
+    });
+    api.getSemiItems.mockResolvedValue({ data: { data: [{ id: 5, name: "Nasi", unit: "porsi", stock: 0 }] } });
+    renderWithProviders(<Dashboard />, { preloadedState: user("Admin") });
+    const openRecipeSearch = async (kind, term) => {
+      fireEvent.click(screen.getByRole("button", { name: "Menu" }));
+      fireEvent.click(await screen.findByRole("button", { name: "Menu Items" }));
+      fireEvent.click(await screen.findByRole("button", { name: "Tambah Menu" }));
+      fireEvent.click(within(screen.getByText("Komposisi Bahan").parentElement).getByRole("button", { name: "Tambah" }));
+      fireEvent.click(within(screen.getByRole("group", { name: "Jenis bahan" })).getByRole("button", { name: kind }));
+      const picker = screen.getByLabelText("Stok bahan");
+      await waitFor(() => expect(picker.options.length).toBeGreaterThan(1));
+      act(() => {
+        $(picker).select2("open");
+        $(document.querySelector(".select2-search__field")).val(term).trigger("input");
+      });
+      fireEvent.click(await screen.findByRole("button", { name: `Buat ${kind}` }));
+    };
+
+    // Bahan baku: Stok Bahan → Bahan Baku with Tambah Bahan; the menu form is left.
+    await openRecipeSearch("Bahan Baku", "Kemiri");
+    const form = await screen.findByRole("form", { name: "Form tambah bahan" });
+    expect(within(form).getByPlaceholderText("Contoh: Cabe Rawit")).toHaveValue("Kemiri");
+    expect(screen.queryByText("Komposisi Bahan")).not.toBeInTheDocument();
+    fireEvent.click(within(form).getByRole("button", { name: "Batal" }));
+    expect(screen.queryByRole("form", { name: "Form tambah bahan" })).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Bahan Baku" })).toBeInTheDocument();
+    expect(screen.queryByText("Komposisi Bahan")).not.toBeInTheDocument();
+
+    // Bahan olahan: Stok Bahan → Bahan Olahan with Tambah Bahan Olahan.
+    await openRecipeSearch("Bahan Olahan", "Sambal");
+    const semiForm = await screen.findByRole("form", { name: "Form bahan olahan" });
+    expect(within(semiForm).getByRole("textbox", { name: "Nama" })).toHaveValue("Sambal");
+    fireEvent.click(within(semiForm).getByRole("button", { name: "Batal" }));
+    expect(screen.queryByRole("form", { name: "Form bahan olahan" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Komposisi Bahan")).not.toBeInTheDocument();
+
+    // Opening Stok Bahan from its menu starts without a form.
+    fireEvent.click(screen.getByRole("button", { name: "Menu" }));
+    fireEvent.click(screen.getByRole("button", { name: /^Stok Bahan/ }));
+    expect(screen.queryByRole("form", { name: "Form tambah bahan" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("form", { name: "Form bahan olahan" })).not.toBeInTheDocument();
   });
 
   it("shows Belanja to kasir, who write draft nota", async () => {

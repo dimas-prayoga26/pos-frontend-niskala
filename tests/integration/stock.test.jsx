@@ -1,4 +1,5 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import $ from "jquery";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import * as api from "../../src/https/index";
 import { StockManagement } from "../../src/features/inventory";
@@ -10,6 +11,7 @@ import { renderWithProviders } from "../renderWithProviders";
 vi.mock("../../src/https/index", async (importOriginal) => ({
   ...(await importOriginal()),
   addSemiItem: vi.fn(),
+  addStockItem: vi.fn(),
   deleteSemiItem: vi.fn(),
   deleteSemiProduction: vi.fn(),
   deleteSemiWaste: vi.fn(),
@@ -95,6 +97,12 @@ const asAdmin = { user: { _id: 1, name: "Admin", email: "a", phone: "1", role: "
 const asCashier = { user: { ...asAdmin.user, role: "Cashier" } };
 const rowOf = (name) => screen.getByText(name).closest("tr");
 const findRow = async (name) => (await screen.findByText(name)).closest("tr");
+// Select2 pickers: the hidden <select> holds the options; picking one is a select2:select event.
+const optionNames = (select) => Array.from(select.options).map((option) => option.textContent);
+const pick = (select, id, text) =>
+  act(() => {
+    $(select).val(id).trigger($.Event("select2:select", { params: { data: { id, text } } }));
+  });
 
 describe("stock management", () => {
   beforeEach(() => {
@@ -263,9 +271,12 @@ describe("stock management", () => {
     fireEvent.click(screen.getByRole("button", { name: "Bahan Olahan" }));
     fireEvent.click(screen.getByRole("button", { name: "Tambah Bahan Olahan" }));
     const dialog = screen.getByRole("form", { name: "Form bahan olahan" });
-    const ingredient = within(dialog).getByRole("combobox", { name: "Bahan 1" });
-    expect(within(ingredient).getByRole("option", { name: "Susu Segar" })).toBeInTheDocument();
-    expect(within(ingredient).queryByRole("option", { name: "Air Galon" })).not.toBeInTheDocument();
+    const ingredient = within(dialog).getByLabelText("Bahan 1");
+    await waitFor(() => expect(optionNames(ingredient)).toContain("Susu Segar"));
+    expect(optionNames(ingredient)).not.toContain("Air Galon");
+    // A searchable picker that shows at most 5 matches.
+    const sorter = $(ingredient).data("select2").options.get("sorter");
+    expect(sorter(Array.from({ length: 8 }, (_, id) => ({ id })))).toHaveLength(5);
   });
 
   it("lists bahan olahan in their own tab, not under Bahan Baku", async () => {
@@ -309,6 +320,117 @@ describe("stock management", () => {
     expect(rowOf("Nasi")).toHaveTextContent("0 porsiHARUS MASAK");
   });
 
+  it("adds a bahan baku without stock from Tambah Bahan (admins only)", async () => {
+    api.addStockItem.mockResolvedValue({ status: 201, data: { success: true } });
+    const { unmount } = renderWithProviders(<StockManagement />, { preloadedState: asCashier });
+    await findRow("Susu Segar");
+    expect(screen.queryByRole("button", { name: "Tambah Bahan" })).not.toBeInTheDocument();
+    unmount();
+
+    renderWithProviders(<StockManagement />, { preloadedState: asAdmin });
+    await findRow("Susu Segar");
+    fireEvent.click(screen.getByRole("button", { name: "Tambah Bahan" }));
+    const save = screen.getByRole("button", { name: "Simpan" });
+
+    fireEvent.click(save);
+    expect(await screen.findByText("Nama bahan wajib diisi.")).toBeInTheDocument();
+    fireEvent.change(screen.getByPlaceholderText("Contoh: Cabe Rawit"), { target: { value: "  Cabe   Rawit " } });
+    fireEvent.click(save);
+    expect(await screen.findByText("Kategori wajib dipilih.")).toBeInTheDocument();
+
+    // Kategori from the bahan already listed; satuan starts at gr.
+    const category = screen.getByLabelText("Kategori");
+    await waitFor(() => expect(optionNames(category)).toContain("Umum"));
+    pick(category, "Umum", "Umum");
+    expect(optionNames(screen.getByLabelText("Satuan"))).toEqual(["", "gr", "pcs", "ml"]);
+    fireEvent.change(screen.getByPlaceholderText("0 gr"), { target: { value: "0,5" } });
+    fireEvent.click(screen.getByRole("button", { name: "Tidak" }));
+    fireEvent.click(save);
+
+    await waitFor(() =>
+      expect(api.addStockItem.mock.calls[0][0]).toEqual({
+        name: "Cabe Rawit",
+        category: "Umum",
+        unit: "gr",
+        stock: 0,
+        minimumStock: 0.5,
+        isRecipeIngredient: false,
+      })
+    );
+    expect(await screen.findByText("Bahan berhasil ditambahkan.")).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByPlaceholderText("Contoh: Cabe Rawit")).not.toBeInTheDocument());
+  });
+
+  it("makes a bahan baku the bahan olahan search does not find, then comes back with it picked", async () => {
+    const cabe = stockItem(99, { name: "Cabe Rawit", category: "Umum", unit: "gr", stock: 0, isRecipeIngredient: true });
+    api.addStockItem.mockImplementation(async () => {
+      api.getStockItems.mockResolvedValue({ data: { data: [...items, cabe] } });
+      return { status: 201, data: { success: true, data: cabe } };
+    });
+    api.addSemiItem.mockResolvedValue({ data: { success: true } });
+    renderWithProviders(<StockManagement />, { preloadedState: asAdmin });
+    await findRow("Susu Segar");
+    fireEvent.click(screen.getByRole("button", { name: "Bahan Olahan" }));
+    fireEvent.click(screen.getByRole("button", { name: "Tambah Bahan Olahan" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Nama" }), { target: { value: "Sambal" } });
+    const search = async (term) => {
+      const ingredient = screen.getByLabelText("Bahan 1");
+      await waitFor(() => expect(optionNames(ingredient)).toContain("Susu Segar"));
+      $(ingredient).select2("open");
+      const field = document.querySelector(".select2-search__field");
+      $(field).val(term).trigger("input");
+    };
+
+    // Not a Bahan Resep: no button, the bahan exists.
+    await search("Air Galon");
+    expect(await screen.findByText("Air Galon bukan Bahan Resep. Aktifkan di tab Bahan Baku.")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Buat Bahan Baku" })).not.toBeInTheDocument();
+
+    await search("Cabe Rawit");
+    expect(await screen.findByText('Bahan baku "Cabe Rawit" tidak ada.')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Buat Bahan Baku" }));
+
+    // Bahan Baku tab, Tambah Bahan with the name; always a Bahan Resep.
+    expect(screen.queryByRole("form", { name: "Form bahan olahan" })).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Tambah Bahan" })).toBeInTheDocument();
+    expect(screen.getByPlaceholderText("Contoh: Cabe Rawit")).toHaveValue("Cabe Rawit");
+    expect(screen.queryByRole("group", { name: "Bahan Resep" })).not.toBeInTheDocument();
+    const category = screen.getByLabelText("Kategori");
+    await waitFor(() => expect(optionNames(category)).toContain("Umum"));
+    pick(category, "Umum", "Umum");
+    fireEvent.click(screen.getByRole("button", { name: "Simpan" }));
+    await waitFor(() =>
+      expect(api.addStockItem.mock.calls[0][0]).toMatchObject({ name: "Cabe Rawit", unit: "gr", isRecipeIngredient: true })
+    );
+
+    // Back to the bahan olahan form as it was, the new bahan picked.
+    const dialog = await screen.findByRole("form", { name: "Form bahan olahan" });
+    expect(within(dialog).getByRole("textbox", { name: "Nama" })).toHaveValue("Sambal");
+    await waitFor(() => expect(within(dialog).getByLabelText("Bahan 1")).toHaveValue("99"));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Simpan" }));
+    await waitFor(() =>
+      expect(api.addSemiItem.mock.calls[0][0]).toMatchObject({ name: "Sambal", components: [{ stockItemId: 99 }] })
+    );
+  });
+
+  it("goes back to the bahan olahan form when Tambah Bahan is cancelled", async () => {
+    renderWithProviders(<StockManagement />, { preloadedState: asAdmin });
+    await findRow("Susu Segar");
+    fireEvent.click(screen.getByRole("button", { name: "Bahan Olahan" }));
+    fireEvent.click(screen.getByRole("button", { name: "Tambah Bahan Olahan" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Nama" }), { target: { value: "Sambal" } });
+    const ingredient = screen.getByLabelText("Bahan 1");
+    await waitFor(() => expect(optionNames(ingredient)).toContain("Susu Segar"));
+    $(ingredient).select2("open");
+    $(document.querySelector(".select2-search__field")).val("Kemiri").trigger("input");
+    fireEvent.click(await screen.findByRole("button", { name: "Buat Bahan Baku" }));
+
+    fireEvent.click(screen.getByRole("button", { name: "Batal" }));
+    const dialog = await screen.findByRole("form", { name: "Form bahan olahan" });
+    expect(within(dialog).getByRole("textbox", { name: "Nama" })).toHaveValue("Sambal");
+    expect(api.addStockItem).not.toHaveBeenCalled();
+  });
+
   it("adds a bahan olahan from bahan baku only", async () => {
     api.addSemiItem.mockResolvedValue({ data: { success: true } });
     renderWithProviders(<StockManagement />, { preloadedState: asAdmin });
@@ -317,8 +439,9 @@ describe("stock management", () => {
     fireEvent.click(screen.getByRole("button", { name: "Bahan Olahan" }));
     fireEvent.click(screen.getByRole("button", { name: "Tambah Bahan Olahan" }));
     const dialog = screen.getByRole("form", { name: "Form bahan olahan" });
-    const ingredient = within(dialog).getByRole("combobox", { name: "Bahan 1" });
-    expect(within(ingredient).queryByRole("option", { name: "Nasi" })).not.toBeInTheDocument();
+    const ingredient = within(dialog).getByLabelText("Bahan 1");
+    await waitFor(() => expect(optionNames(ingredient)).toContain("Susu Segar"));
+    expect(optionNames(ingredient)).not.toContain("Nasi");
 
     fireEvent.change(within(dialog).getByRole("textbox", { name: "Nama" }), { target: { value: "Sambal" } });
     fireEvent.click(within(dialog).getByRole("button", { name: "Simpan" }));
@@ -326,7 +449,7 @@ describe("stock management", () => {
     expect(api.addSemiItem).not.toHaveBeenCalled();
 
     // Only the bahan baku: jumlah, harga and porsi are filled at Catat Masak.
-    fireEvent.change(ingredient, { target: { value: "1" } });
+    pick(ingredient, "1", "Susu Segar");
     expect(within(dialog).queryByRole("textbox", { name: /Jumlah/ })).not.toBeInTheDocument();
     expect(within(dialog).queryByPlaceholderText("Contoh: 150")).not.toBeInTheDocument();
     expect(dialog).not.toHaveTextContent("Harga Bahan");
@@ -335,9 +458,9 @@ describe("stock management", () => {
     expect(dialog).not.toHaveTextContent("Stok sekarang");
     // A bahan already in the list is not offered again; an empty line is ignored.
     fireEvent.click(within(dialog).getByRole("button", { name: "+ Tambah Bahan Baku" }));
-    const secondIngredient = within(dialog).getByRole("combobox", { name: "Bahan 2" });
-    expect(within(secondIngredient).queryByRole("option", { name: "Susu Segar" })).not.toBeInTheDocument();
-    expect(within(secondIngredient).getByRole("option", { name: "Bahan 03" })).toBeInTheDocument();
+    const secondIngredient = within(dialog).getByLabelText("Bahan 2");
+    await waitFor(() => expect(optionNames(secondIngredient)).toContain("Bahan 03"));
+    expect(optionNames(secondIngredient)).not.toContain("Susu Segar");
 
     // Sambal keeps for days: no daily write-off.
     expect(within(dialog).getByRole("radio", { name: /Dibuang tiap hari/ })).toBeChecked();

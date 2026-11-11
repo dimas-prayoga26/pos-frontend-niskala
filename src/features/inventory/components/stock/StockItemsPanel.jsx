@@ -42,7 +42,8 @@ const RecipeUseCell = ({ item, onToggle, isPending }) => {
 // the tab is reopened or the search changes. "Ubah" only shows when
 // onEditCogs is given. Admins switch "Bahan Resep" (offered in the recipe
 // editors) per bahan. Staff throw bahan away with Buang (not those with
-// Bebas Stok); Riwayat Kerugian opens the write-offs.
+// Bebas Stok); Riwayat Kerugian opens the write-offs. Tambah Bahan (onAdd,
+// admins) adds a bahan without stock.
 const StockItemsPanel = ({
   stockItems,
   searchQuery,
@@ -54,6 +55,7 @@ const StockItemsPanel = ({
   recipeUsePendingId,
   onWaste,
   onShowWastes,
+  onAdd,
 }) => {
   const [currentPage, setCurrentPage] = useState(1);
   const [recipeUse, setRecipeUse] = useState("all");
@@ -80,10 +82,6 @@ const StockItemsPanel = ({
       <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h3 className="text-lg font-bold text-[#f5f5f5]">Bahan Baku</h3>
-          <p className="mt-1 text-sm text-[#ababab]">
-            Daftar bahan, kategori, jumlah stok, dan status restock. Bahan Resep = muncul di pilihan resep
-            menu dan bahan olahan.
-          </p>
         </div>
         <div className="flex shrink-0 flex-wrap gap-2">
           <input
@@ -100,6 +98,15 @@ const StockItemsPanel = ({
           >
             Riwayat Kerugian
           </button>
+          {onAdd && (
+            <button
+              type="button"
+              onClick={onAdd}
+              className="shrink-0 rounded-lg bg-[#a79981] px-4 py-2 text-sm font-bold text-[#101010]"
+            >
+              Tambah Bahan
+            </button>
+          )}
         </div>
       </div>
 

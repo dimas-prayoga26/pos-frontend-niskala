@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import $ from "jquery";
 import * as api from "../../src/https/index";
@@ -17,6 +17,12 @@ vi.mock("../../src/https/index", async (importOriginal) => ({
 
 const asAdmin = { user: { _id: 1, name: "Admin", email: "a", phone: "1", role: "Admin", isAuth: true } };
 const optionNames = (select) => Array.from(select.options).map((option) => option.textContent);
+// Types into the open search of a select2 picker.
+const searchIn = (select, term) =>
+  act(() => {
+    $(select).select2("open");
+    $(document.querySelector(".select2-search__field")).val(term).trigger("input");
+  });
 
 describe("menu recipe editor", () => {
   beforeEach(() => {
@@ -96,6 +102,34 @@ describe("menu recipe editor", () => {
     expect(api.updateMenuItem.mock.calls[0][0].ingredients).toEqual([
       { stockItemId: null, semiItemId: 5, quantity: 1.5, note: "" },
     ]);
+  });
+
+  it("sends a bahan the recipe search does not find to Stok Bahan to be made", async () => {
+    const onCreateIngredient = vi.fn();
+    renderWithProviders(<MenuManagement onCreateIngredient={onCreateIngredient} />, { preloadedState: asAdmin });
+    await waitFor(() => expect(api.getStockItems).toHaveBeenCalled());
+    fireEvent.click(await screen.findByRole("button", { name: "Menu Items" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Tambah Menu" }));
+    const recipeSection = screen.getByText("Komposisi Bahan").parentElement;
+    fireEvent.click(within(recipeSection).getByRole("button", { name: "Tambah" }));
+    const picker = () => screen.getByLabelText("Stok bahan");
+    await waitFor(() => expect(optionNames(picker())).toContain("Susu Segar"));
+
+    // Not a Bahan Resep: it exists, so no Buat.
+    searchIn(picker(), "Aqua Galon");
+    expect(await screen.findByText("Aqua Galon bukan Bahan Resep. Aktifkan di Stok Bahan → Bahan Baku.")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Buat Bahan Baku" })).not.toBeInTheDocument();
+
+    searchIn(picker(), "Kemiri");
+    expect(await screen.findByText('Bahan Baku "Kemiri" tidak ada.')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Buat Bahan Baku" }));
+    expect(onCreateIngredient).toHaveBeenLastCalledWith("raw", "Kemiri");
+
+    fireEvent.click(within(screen.getByRole("group", { name: "Jenis bahan" })).getByRole("button", { name: "Bahan Olahan" }));
+    await waitFor(() => expect(optionNames(picker())).toContain("Nasi"));
+    searchIn(picker(), "Sambal");
+    fireEvent.click(await screen.findByRole("button", { name: "Buat Bahan Olahan" }));
+    expect(onCreateIngredient).toHaveBeenLastCalledWith("semi", "Sambal");
   });
 });
 

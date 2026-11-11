@@ -10,25 +10,54 @@ if (!$.fn.select2) installSelect2(window, $);
 // Options may be grouped: { text, children: [options] } is an <optgroup>.
 const flatten = options => options.flatMap(option => option.children || [option]);
 
-export default function CreatableSelect2({ options, value, onSelect, onCreate, placeholder, disabled, label }) {
+// The "nothing found" note: notFound(term) gives { message, action?, onAction? };
+// the action button closes the dropdown and calls onAction.
+const notFoundNote = (element, notFound) => {
+  const term = String(element.data("select2")?.$dropdown?.find(".select2-search__field").val() || "").trim();
+  const { message, action, onAction } = notFound(term);
+  const $note = $('<div class="select2-not-found"></div>').append($("<span></span>").text(message));
+  if (action && onAction) {
+    $note.append(
+      $('<button type="button" class="select2-not-found__action"></button>')
+        .text(action)
+        .on("click", event => {
+          event.preventDefault();
+          event.stopPropagation();
+          element.select2("close");
+          onAction(term);
+        })
+    );
+  }
+  return $note;
+};
+
+// maxResults: show only the first n matches of the search (long lists).
+// notFound: see notFoundNote; only without onCreate.
+export default function CreatableSelect2({ options, value, onSelect, onCreate, placeholder, disabled, label, maxResults, notFound }) {
   const select = useRef(null);
-  const latest = useRef({ options, onSelect, onCreate });
-  latest.current = { options, onSelect, onCreate };
+  const latest = useRef({ options, onSelect, onCreate, notFound });
+  latest.current = { options, onSelect, onCreate, notFound };
   const [saving, setSaving] = useState(false);
   const canCreate = typeof onCreate === "function";
   useEffect(() => {
     const element = $(select.current);
     let mounted = true;
+    const noResults = () => {
+      if (canCreate) return "Ketik nama untuk menambah data";
+      const { notFound: currentNotFound } = latest.current;
+      return currentNotFound ? notFoundNote(element, currentNotFound) : "Pilihan tidak ditemukan";
+    };
     element.select2({
       width: "100%", placeholder, tags: canCreate, allowClear: canCreate,
       dropdownParent: element.parent(),
-      language: { noResults: () => canCreate ? "Ketik nama untuk menambah data" : "Pilihan tidak ditemukan", searching: () => "Mencari..." },
+      language: { noResults, searching: () => "Mencari..." },
       createTag: ({ term }) => {
         const name = term.trim().replace(/\s+/g, " ");
         if (!name || name.length > 150 || flatten(latest.current.options).some(option => option.text.toLowerCase() === name.toLowerCase())) return null;
         return { id: `new:${name}`, text: name, newTag: true };
       },
       templateResult: data => data.newTag ? `Buat "${data.text}"` : data.text,
+      ...(maxResults > 0 && { sorter: results => results.slice(0, maxResults) }),
     });
     element.on("select2:select.shopping", async event => {
       const option = event.params.data;
@@ -56,7 +85,7 @@ export default function CreatableSelect2({ options, value, onSelect, onCreate, p
     });
     element.on("select2:clear.shopping", () => latest.current.onSelect(null));
     return () => { mounted = false; element.off(".shopping"); element.select2("destroy"); };
-  }, [placeholder, canCreate]);
+  }, [placeholder, canCreate, maxResults]);
   useEffect(() => {
     const element = $(select.current);
     const emptyOption = flatten(options).find(option => String(option.id) === "");

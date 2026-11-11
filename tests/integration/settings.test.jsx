@@ -10,6 +10,7 @@ vi.mock("../../src/https/index", async (importOriginal) => ({
   ...(await importOriginal()),
   addPaymentSource: vi.fn(),
   addPaymentSourceMutation: vi.fn(),
+  deleteSupplier: vi.fn(),
   getCategories: vi.fn(),
   getOrderPlatforms: vi.fn(),
   getPaymentSourceMutations: vi.fn(),
@@ -128,6 +129,45 @@ describe("settings: sumber pembayaran", () => {
     await waitFor(() =>
       expect(api.updatePaymentSource.mock.calls[0][0]).toEqual({ id: 3, name: "Niskala", isActive: false })
     );
+  });
+});
+
+describe("settings: suplier", () => {
+  beforeEach(() => {
+    api.getOrderPlatforms.mockResolvedValue({ data: { data: [] } });
+    api.getShoppingSuppliers.mockResolvedValue({
+      data: { data: [{ id: 1, name: "Shopee" }, { id: 2, name: "vendor" }] },
+    });
+  });
+
+  it("deletes a suplier after asking, and shows why one used by a nota stays", async () => {
+    api.deleteSupplier
+      .mockResolvedValueOnce({ data: { message: "Suplier vendor dihapus." } })
+      .mockRejectedValueOnce({
+        response: { data: { message: "Shopee dipakai di 22 nota belanja, jadi tidak bisa dihapus. Ganti namanya lewat Ubah." } },
+      });
+    renderWithProviders(<SettingsManagement />);
+    fireEvent.click(screen.getByRole("button", { name: "Suplier" }));
+
+    fireEvent.click(await screen.findByRole("button", { name: "Hapus suplier vendor" }));
+    let dialog = screen.getByRole("dialog", { name: "Hapus suplier" });
+    expect(dialog).toHaveTextContent("Suplier vendor akan dihapus.");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Batal" }));
+    expect(screen.queryByRole("dialog", { name: "Hapus suplier" })).not.toBeInTheDocument();
+    expect(api.deleteSupplier).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Hapus suplier vendor" }));
+    fireEvent.click(within(screen.getByRole("dialog", { name: "Hapus suplier" })).getByRole("button", { name: "Hapus" }));
+    await waitFor(() => expect(api.deleteSupplier).toHaveBeenCalledWith(2));
+    expect(await screen.findByText("Suplier vendor dihapus.")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Hapus suplier Shopee" }));
+    dialog = screen.getByRole("dialog", { name: "Hapus suplier" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Hapus" }));
+    expect(
+      await screen.findByText("Shopee dipakai di 22 nota belanja, jadi tidak bisa dihapus. Ganti namanya lewat Ubah.")
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("dialog", { name: "Hapus suplier" })).not.toBeInTheDocument();
   });
 });
 

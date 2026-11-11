@@ -83,6 +83,8 @@ export const getShoppingSuppliers = () => axiosWrapper.get("/api/shopping/suppli
 export const getMerks = () => axiosWrapper.get("/api/shopping/merks");
 export const addSupplier = (data) => axiosWrapper.post("/api/shopping/suppliers", data);
 export const updateSupplier = ({ id, ...data }) => axiosWrapper.put(`/api/shopping/suppliers/${id}`, data);
+// Refused (409) while a nota uses the suplier.
+export const deleteSupplier = (id) => axiosWrapper.delete(`/api/shopping/suppliers/${id}`);
 export const getPurchases = (params) => axiosWrapper.get("/api/shopping/purchases", { params });
 // Summary cards of the Belanja page (?from=&to=).
 export const getShoppingSummary = (params) => axiosWrapper.get("/api/shopping/summary", { params });

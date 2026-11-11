@@ -2,6 +2,7 @@
 // with uncommitted changes); move them here when that file is migrated.
 export {
   addSemiItem,
+  addStockItem,
   addSupplier,
   addSupplyItem,
   deletePurchaseAttachment,
@@ -12,6 +13,7 @@ export {
   deleteSemiWaste,
   deleteStockItem,
   deleteStockWaste,
+  deleteSupplier,
   deleteSupplyPurchaseAttachment,
   deleteSupplyPurchaseDraft,
   deleteSupplyPurchaseItem,

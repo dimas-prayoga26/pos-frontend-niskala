@@ -270,7 +270,9 @@ const roundMoney = (value) =>
 const formatMoneyDisplay = (value) =>
   Number(value || 0).toLocaleString("id-ID", { maximumFractionDigits: 2 });
 
-const MenuManagement = () => {
+// onCreateIngredient(kind, name): a recipe bahan the search did not find,
+// made at Stok Bahan ("raw" Tambah Bahan, "semi" Tambah Bahan Olahan).
+const MenuManagement = ({ onCreateIngredient }) => {
   const queryClient = useQueryClient();
   const [activeSection, setActiveSection] = useState("categories");
   const [categoryForm, setCategoryForm] = useState(emptyCategoryForm);
@@ -770,6 +772,28 @@ const MenuManagement = () => {
           : ingredient
       ),
     }));
+  };
+
+  // What the recipe search did not find: a bahan baku that is not a Bahan
+  // Resep, or a bahan that does not exist yet (Buat → Stok Bahan, see
+  // onCreateIngredient; the menu form is left).
+  const ingredientNotFound = (kind) => (term) => {
+    const key = term.toLowerCase();
+    const existing =
+      key &&
+      stockItems.find(
+        (stockItem) =>
+          kindOfKey(stockItem.key) === kind && String(stockItem.name).trim().toLowerCase() === key
+      );
+    if (existing && existing.isRecipeIngredient === false) {
+      return { message: `${existing.name} bukan Bahan Resep. Aktifkan di Stok Bahan → Bahan Baku.` };
+    }
+    const label = kind === "semi" ? "Bahan Olahan" : "Bahan Baku";
+    return {
+      message: key ? `${label} "${term}" tidak ada.` : `Belum ada ${label.toLowerCase()}.`,
+      action: onCreateIngredient && `Buat ${label}`,
+      onAction: onCreateIngredient && (() => onCreateIngredient(kind, term)),
+    };
   };
 
   const addMenuIngredientField = () => {
@@ -1741,6 +1765,8 @@ const MenuManagement = () => {
                           }
                           placeholder={isSemi ? "Pilih bahan olahan" : "Pilih bahan baku"}
                           label="Stok bahan"
+                          maxResults={5}
+                          notFound={ingredientNotFound(isSemi ? "semi" : "raw")}
                         />
                         <input
                           value={getCogsDisplay(selectedIngredientStockItem)}
@@ -2259,8 +2285,7 @@ const MenuManagement = () => {
             </div>
           </div>
         </div>
-      )}
-    </div>
+      )}    </div>
   );
 };
 

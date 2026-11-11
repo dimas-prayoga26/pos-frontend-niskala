@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { enqueueSnackbar } from "notistack";
+import CreatableSelect2 from "../../../../shared/ui/CreatableSelect2";
 import { toPreparedPayload } from "../../utils/preparedItems";
 import { isRecipeIngredient } from "../../utils/stockItems";
 
@@ -32,12 +33,61 @@ const toForm = (item) => ({
 
 const SectionTitle = ({ children }) => <h4 className="mb-2 text-sm font-semibold">{children}</h4>;
 
+// Bahan baku search: the first 5 matches.
+const MAX_BAHAN_RESULTS = 5;
+const rawItemId = (rawItem) => String(rawItem.id || rawItem._id);
+
 // Adds or edits a bahan olahan: its name, the bahan baku it is cooked
 // from and what happens to the leftover each day. How much of each bahan and
-// how many portions come out are filled at Catat Masak.
-const PreparedItemDialog = ({ item, rawItems, onSave, onCancel, isSaving }) => {
-  const [form, setForm] = useState(() => toForm(item));
+// how many portions come out are filled at Catat Masak. A bahan baku the
+// search does not find can be made first: onCreateRawItem(name, form, row)
+// leaves with the form, which comes back as initialForm. initialName fills
+// the name of a new one.
+const PreparedItemDialog = ({
+  item,
+  initialForm,
+  initialName = "",
+  rawItems,
+  onSave,
+  onCancel,
+  onCreateRawItem,
+  isSaving,
+}) => {
+  const [form, setForm] = useState(() => initialForm || { ...toForm(item), ...(!item && { name: initialName }) });
   const recipeOptions = rawItems.filter(isRecipeIngredient);
+  // Per row: the bahan resep not picked in another row (a bahan is picked
+  // once), plus the row's own bahan.
+  const componentIds = form.components.map((component) => component.stockItemId).join("|");
+  const optionsByRow = useMemo(() => {
+    const ids = componentIds.split("|");
+    return ids.map((ownId, index) => {
+      const takenIds = new Set(ids.filter((_, otherIndex) => otherIndex !== index));
+      return [
+        { id: "", text: "Pilih bahan baku" },
+        ...rawItems
+          .filter((rawItem) => {
+            const id = rawItemId(rawItem);
+            return id === ownId || (isRecipeIngredient(rawItem) && !takenIds.has(id));
+          })
+          .map((rawItem) => ({ id: rawItemId(rawItem), text: rawItem.name })),
+      ];
+    });
+  }, [rawItems, componentIds]);
+  // What the search of a row did not find: a bahan picked in another row or
+  // not a Bahan Resep, or a bahan baku that does not exist yet.
+  const notFoundFor = (index) => (term) => {
+    const key = term.toLowerCase();
+    const existing = key && rawItems.find((rawItem) => String(rawItem.name).trim().toLowerCase() === key);
+    if (existing && !isRecipeIngredient(existing)) {
+      return { message: `${existing.name} bukan Bahan Resep. Aktifkan di tab Bahan Baku.` };
+    }
+    if (existing) return { message: `${existing.name} sudah dipilih.` };
+    return {
+      message: key ? `Bahan baku "${term}" tidak ada.` : "Belum ada bahan baku.",
+      action: onCreateRawItem && "Buat Bahan Baku",
+      onAction: onCreateRawItem && (() => onCreateRawItem(term, form, index)),
+    };
+  };
   const setComponent = (index, stockItemId) =>
     setForm((current) => ({
       ...current,
@@ -94,33 +144,18 @@ const PreparedItemDialog = ({ item, rawItems, onSave, onCancel, isSaving }) => {
 
           <div className="space-y-2">
             {form.components.map((component, index) => {
-              // A bahan is picked once.
-              const takenIds = new Set(
-                form.components
-                  .filter((_, otherIndex) => otherIndex !== index)
-                  .map((other) => other.stockItemId)
-              );
-
               return (
                 <div key={index} className="grid grid-cols-[minmax(0,1fr)_32px] items-center gap-2">
-                  <select
+                  <CreatableSelect2
+                    options={optionsByRow[index]}
                     value={component.stockItemId}
-                    onChange={(event) => setComponent(index, event.target.value)}
-                    aria-label={`Bahan ${index + 1}`}
-                    className={inputClass}
-                  >
-                    <option value="">Pilih bahan baku</option>
-                    {rawItems
-                      .filter((rawItem) => {
-                        const id = String(rawItem.id || rawItem._id);
-                        return id === component.stockItemId || (isRecipeIngredient(rawItem) && !takenIds.has(id));
-                      })
-                      .map((rawItem) => (
-                        <option key={rawItem.id || rawItem._id} value={String(rawItem.id || rawItem._id)}>
-                          {rawItem.name}
-                        </option>
-                      ))}
-                  </select>
+                    onSelect={(option) => setComponent(index, option?.id ? String(option.id) : "")}
+                    placeholder="Pilih bahan baku"
+                    label={`Bahan ${index + 1}`}
+                    maxResults={MAX_BAHAN_RESULTS}
+                    notFound={notFoundFor(index)}
+                    disabled={isSaving}
+                  />
                   <button
                     type="button"
                     onClick={() =>

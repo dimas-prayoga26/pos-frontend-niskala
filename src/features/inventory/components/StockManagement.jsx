@@ -6,6 +6,7 @@ import { getSemiItems, getStockItems } from "../api";
 import usePreparedItemActions from "../hooks/usePreparedItemActions";
 import useStockItemActions from "../hooks/useStockItemActions";
 import useWasteActions from "../hooks/useWasteActions";
+import AddStockItemDialog from "./stock/AddStockItemDialog";
 import DeleteStockItemDialog from "./stock/DeleteStockItemDialog";
 import PreparedHistoryDialog from "./stock/PreparedHistoryDialog";
 import PreparedItemDialog from "./stock/PreparedItemDialog";
@@ -28,33 +29,80 @@ const STOCK_TABS = [
 // bahan olahan (stock_semi_items) cooked from bahan baku. Buying them is
 // the separate "Belanja" menu, which also shows the barang Lainnya
 // (stock_supply_items: peralatan, perlengkapan, promosi, lain-lain). A new
-// bahan baku comes from Tambah Belanja; there is no Tambah Stok. Both tabs
+// bahan baku comes from Tambah Belanja, or without stock from Tambah Bahan
+// (admins), which also brings back a hidden bahan of the same name. Both tabs
 // have Buang per item (Modul 3, with a bukti foto) and a Riwayat Kerugian
 // button that shows that tab's own write-offs in place of the list.
 // onRestock(items) takes the bahan baku a Catat Masak is short of to Belanja
-// Bahan.
-const StockManagement = ({ onRestock }) => {
+// Bahan. createItem ({ kind: "raw" | "semi", name }, from the menu form's
+// recipe search) opens with Tambah Bahan or Tambah Bahan Olahan for it.
+const StockManagement = ({ onRestock, createItem }) => {
   const userRole = useSelector((state) => state.user.role);
   const isAdmin = userRole?.toLowerCase() === "admin";
-  const [activeStockTab, setActiveStockTab] = useState("stock");
+  const [activeStockTab, setActiveStockTab] = useState(createItem?.kind === "semi" ? "semi" : "stock");
   // The list, or its Riwayat Kerugian ("wastes").
   const [historyView, setHistoryView] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
+  // Tambah Bahan: null = closed, else { name, recipeOnly, returnTo }.
+  // returnTo is the bahan olahan form it was opened from ({ semiItem, form,
+  // rowIndex }); a bahan for a recipe is always a Bahan Resep.
+  const [addingItem, setAddingItem] = useState(
+    createItem?.kind === "raw" ? { name: createItem.name, recipeOnly: true, returnTo: null } : null
+  );
   const [pendingDeleteItem, setPendingDeleteItem] = useState(null);
   const [pendingDeleteSemiItem, setPendingDeleteSemiItem] = useState(null);
   const [editingCogsItem, setEditingCogsItem] = useState(null);
   // null = closed, {} = new semi item, otherwise the item being edited.
-  const [editingSemiItem, setEditingSemiItem] = useState(null);
+  const [editingSemiItem, setEditingSemiItem] = useState(createItem?.kind === "semi" ? {} : null);
+  // Its form when it comes back from Tambah Bahan, or the name of a new one.
+  const [semiDraft, setSemiDraft] = useState(null);
+  const [newSemiName, setNewSemiName] = useState(createItem?.kind === "semi" ? createItem.name : "");
   const [producingItem, setProducingItem] = useState(null);
   const [historyItem, setHistoryItem] = useState(null);
   // { kind: "raw" | "semi", item } being thrown away.
   const [wasting, setWasting] = useState(null);
+  const showTab = (tab) => {
+    setActiveStockTab(tab);
+    setHistoryView(null);
+  };
+  const closeSemiDialog = () => {
+    setEditingSemiItem(null);
+    setSemiDraft(null);
+    setNewSemiName("");
+  };
+  // A bahan baku the bahan olahan search did not find: Bahan Baku → Tambah
+  // Bahan with that name, then back to the form with the new bahan picked.
+  const createRawForSemi = (name, form, rowIndex) => {
+    setAddingItem({ name, recipeOnly: true, returnTo: { semiItem: editingSemiItem, form, rowIndex } });
+    closeSemiDialog();
+    showTab("stock");
+  };
+  const closeAddItem = (created) => {
+    const returnTo = addingItem?.returnTo;
+    setAddingItem(null);
+    if (!returnTo) return;
+
+    const { semiItem, form, rowIndex } = returnTo;
+    setSemiDraft(
+      created
+        ? {
+            ...form,
+            components: form.components.map((component, index) =>
+              index === rowIndex ? { stockItemId: String(created.id || created._id) } : component
+            ),
+          }
+        : form
+    );
+    setEditingSemiItem(semiItem);
+    showTab("semi");
+  };
   const stockActions = useStockItemActions({
+    onCreated: closeAddItem,
     onDeleted: () => setPendingDeleteItem(null),
     onCogsSaved: () => setEditingCogsItem(null),
   });
   const semiActions = usePreparedItemActions({
-    onSaved: () => setEditingSemiItem(null),
+    onSaved: closeSemiDialog,
     onDeleted: () => setPendingDeleteSemiItem(null),
     onProduced: () => setProducingItem(null),
   });
@@ -78,7 +126,8 @@ const StockManagement = ({ onRestock }) => {
   const stockItems = stockItemsRes?.data?.data || [];
   const semiItems = semiItemsRes?.data?.data || [];
   const isDialogOpen = Boolean(
-    pendingDeleteItem ||
+    addingItem ||
+      pendingDeleteItem ||
       pendingDeleteSemiItem ||
       editingCogsItem ||
       editingSemiItem ||
@@ -105,7 +154,7 @@ const StockManagement = ({ onRestock }) => {
         <div>
           <h2 className="text-[#f5f5f5] text-xl font-semibold">Stok Management</h2>
           <p className="mt-1 text-sm text-[#ababab]">
-            Isi gudang: bahan baku dan bahan olahan. Belanjanya, termasuk barang Lainnya, lewat menu Belanja.
+            Isi gudang: bahan baku dan bahan olahan.
           </p>
         </div>
         <div className="flex w-full shrink-0 gap-2 rounded-lg bg-[#1f1f1f] p-1 sm:w-fit">
@@ -113,10 +162,7 @@ const StockManagement = ({ onRestock }) => {
             <button
               key={tab.key}
               type="button"
-              onClick={() => {
-                setActiveStockTab(tab.key);
-                setHistoryView(null);
-              }}
+              onClick={() => showTab(tab.key)}
               className={`flex flex-1 items-center justify-center rounded-md px-4 py-2 text-sm font-bold transition sm:flex-none ${
                 activeStockTab === tab.key
                   ? "bg-[#a79981] text-[#101010]"
@@ -163,6 +209,18 @@ const StockManagement = ({ onRestock }) => {
           recipeUsePendingId={stockActions.recipeUsePendingId}
           onWaste={(item) => setWasting({ kind: "raw", item })}
           onShowWastes={() => setHistoryView("wastes")}
+          onAdd={isAdmin ? () => setAddingItem({ name: "", recipeOnly: false, returnTo: null }) : undefined}
+        />
+      )}
+
+      {isAdmin && addingItem && (
+        <AddStockItemDialog
+          stockItems={stockItems}
+          initialName={addingItem.name}
+          recipeOnly={addingItem.recipeOnly}
+          onSave={stockActions.createItem}
+          onCancel={() => closeAddItem(null)}
+          isSaving={stockActions.isCreating}
         />
       )}
 
@@ -178,9 +236,12 @@ const StockManagement = ({ onRestock }) => {
       {isAdmin && editingSemiItem && (
         <PreparedItemDialog
           item={editingSemiItem.id ? editingSemiItem : null}
+          initialForm={semiDraft}
+          initialName={newSemiName}
           rawItems={stockItems}
           onSave={semiActions.save}
-          onCancel={() => setEditingSemiItem(null)}
+          onCancel={closeSemiDialog}
+          onCreateRawItem={createRawForSemi}
           isSaving={semiActions.isSaving}
         />
       )}
