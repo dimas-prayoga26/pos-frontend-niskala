@@ -21,26 +21,41 @@ export const bundleContentsText = (item) =>
   ].join(" · ");
 
 // The selects of a package with choices:
-// [{ categoryId, categoryName, options: [{ id, name }], picks: [menuItemId | null] }]
+// [{ categoryId, categoryName, options: [{ id, name, group }], picks: [menuItemId | null] }]
 // with one pick per portion. Options are the ordinary menus the POS lists:
 // the choice's own menus (menuItemIds) wherever they sit now, else every
-// menu of its category.
+// menu of its category; group is the category they sit in.
 export const buildBundleSlots = (item, catalog) =>
   (item.bundleChoices || []).map((choice) => {
     const offered = new Set((choice.menuItemIds || []).map(Number));
-    const candidates = offered.size
-      ? catalog.flatMap((category) => category.items).filter((option) => offered.has(Number(option.id)))
-      : catalog.find((category) => Number(category.id) === Number(choice.categoryId))?.items || [];
+    const sources = offered.size
+      ? catalog
+      : catalog.filter((category) => Number(category.id) === Number(choice.categoryId));
+    const candidates = sources.flatMap((category) =>
+      category.items
+        .filter((option) => !offered.size || offered.has(Number(option.id)))
+        .map((option) => ({ option, group: category.name }))
+    );
 
     return {
       categoryId: choice.categoryId,
       categoryName: choice.categoryName,
       options: candidates
-        .filter((option) => !option.bundleItems?.length && !option.bundleChoices?.length)
-        .map((option) => ({ id: option.id, name: option.name })),
+        .filter(({ option }) => !option.bundleItems?.length && !option.bundleChoices?.length)
+        .map(({ option, group }) => ({ id: option.id, name: option.name, group })),
       picks: Array.from({ length: Number(choice.quantity) || 0 }, () => null),
     };
   });
+
+// The options of a choice's select per category, in their order:
+// [{ group, options }]; one group when they all sit in one category.
+export const groupBundleOptions = (options = []) =>
+  options.reduce((groups, option) => {
+    const last = groups[groups.length - 1];
+    if (last && last.group === option.group) last.options.push(option);
+    else groups.push({ group: option.group, options: [option] });
+    return groups;
+  }, []);
 
 // The picked menus of the selects, counted per menu.
 export const pickedBundleChoices = (slots = []) => {

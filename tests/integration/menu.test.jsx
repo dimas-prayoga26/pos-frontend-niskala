@@ -310,6 +310,66 @@ describe("kategori promo", () => {
     });
   });
 
+  it("offers menus of every category in a choice and keeps one whose category was deleted", async () => {
+    api.updateMenuItem.mockResolvedValue({ data: { success: true } });
+    api.getCategories.mockResolvedValue({
+      data: {
+        data: [
+          { id: 1, name: "Kopi", isActive: true },
+          { id: 2, name: "PROMO", isActive: true, isBundle: true },
+          { id: 3, name: "Black Coffee", isActive: true },
+          { id: 4, name: "White Coffee", isActive: true },
+        ],
+      },
+    });
+    api.getMenuItems.mockResolvedValue({
+      data: {
+        data: [
+          menu(7, "Kopi Susu", 18000, 6000),
+          menu(11, "Americano", 15000, 3000, { categoryId: 3 }),
+          menu(12, "Cafe Latte", 20000, 5000, { categoryId: 4 }),
+          menu(30, "Siang Kenyang", 35000, 0, {
+            categoryId: 2,
+            isBundle: true,
+            bundleChoices: [
+              { id: 15, categoryId: null, label: "Coffee", categoryName: "Coffee", quantity: 1, menuItemIds: [11] },
+            ],
+          }),
+        ],
+      },
+    });
+    renderWithProviders(<MenuManagement />, { preloadedState: asAdmin });
+
+    fireEvent.click(await screen.findByRole("button", { name: "Menu Items" }));
+    fireEvent.click(
+      within((await screen.findByText("Siang Kenyang")).closest("tr")).getByRole("button", { name: "Ubah" })
+    );
+
+    // The category Coffee is gone; the choice keeps its name and menus.
+    expect(await screen.findByText("Pilihan Coffee")).toBeInTheDocument();
+    expect(screen.getByLabelText("Nama Pilihan Coffee")).toHaveValue("Coffee");
+    // Its menus can come from any ordinary category, grouped per category.
+    const choicePicker = screen.getByLabelText("Tambah menu ke Pilihan Coffee");
+    expect(optionNames(choicePicker)).toEqual(["Pilih menu", "Kopi Susu", "Cafe Latte"]);
+    expect(Array.from(choicePicker.querySelectorAll("optgroup")).map((group) => group.label)).toEqual([
+      "Kopi",
+      "White Coffee",
+    ]);
+    $(choicePicker).val("12").trigger($.Event("select2:select", { params: { data: { id: "12", text: "Cafe Latte" } } }));
+    expect(await screen.findByRole("button", { name: "Hapus Cafe Latte dari Pilihan Coffee" })).toBeInTheDocument();
+
+    // Left blank it keeps its name; a new one renames it.
+    fireEvent.change(screen.getByLabelText("Nama Pilihan Coffee"), { target: { value: " " } });
+    expect(screen.getByText("Pilihan Coffee")).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Nama Pilihan Coffee"), { target: { value: "Kopi Siang" } });
+    expect(screen.getByText("Pilihan Kopi Siang")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Simpan" }));
+    await waitFor(() => expect(api.updateMenuItem).toHaveBeenCalled());
+    expect(api.updateMenuItem.mock.calls[0][0].bundleChoices).toEqual([
+      { categoryId: null, label: "Kopi Siang", quantity: 1, menuItemIds: [11, 12] },
+    ]);
+  });
+
   it("keeps a promo's price and a discount percent off it", async () => {
     api.updateMenuItem.mockResolvedValue({ data: { success: true } });
     renderWithProviders(<MenuManagement />, { preloadedState: asAdmin });

@@ -277,6 +277,16 @@ describe("POS menu", () => {
     expect(
       Array.from(screen.getByLabelText("Pilih Coffee").options).map((option) => option.textContent)
     ).toEqual(["Pilih Coffee", "Kopi Susu", "Kentang"]);
+    // Menus of several categories are listed per category.
+    expect(
+      Array.from(screen.getByLabelText("Pilih Coffee").querySelectorAll("optgroup")).map((group) => [
+        group.label,
+        Array.from(group.children).map((option) => option.textContent),
+      ])
+    ).toEqual([
+      ["Coffee", ["Kopi Susu"]],
+      ["Snack", ["Kentang"]],
+    ]);
   });
 
   it("sells a promo at its price less its discount percent", async () => {

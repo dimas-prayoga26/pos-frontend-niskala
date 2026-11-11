@@ -2,6 +2,7 @@ import React, { useEffect, useRef } from "react";
 import { FaMinus, FaPlus } from "react-icons/fa6";
 import { useDispatch, useSelector } from "react-redux";
 import { addItems, decreaseItem, pickBundleChoice } from "../cartSlice";
+import { groupBundleOptions } from "../utils/bundleChoices";
 import { formatCurrency } from "../../../shared/lib/format";
 
 const CartInfo = () => {
@@ -88,11 +89,23 @@ const CartInfo = () => {
                               }`}
                             >
                               <option value="">Pilih {slot.categoryName}</option>
-                              {slot.options.map((option) => (
-                                <option key={option.id} value={option.id}>
-                                  {option.name}
-                                </option>
-                              ))}
+                              {(() => {
+                                const groups = groupBundleOptions(slot.options);
+                                const optionsOf = (options) =>
+                                  options.map((option) => (
+                                    <option key={option.id} value={option.id}>
+                                      {option.name}
+                                    </option>
+                                  ));
+                                // Per category when the choice spans several.
+                                return groups.length > 1
+                                  ? groups.map(({ group, options }) => (
+                                      <optgroup key={group || "-"} label={group || "-"}>
+                                        {optionsOf(options)}
+                                      </optgroup>
+                                    ))
+                                  : optionsOf(slot.options);
+                              })()}
                             </select>
                           ))
                         )}
