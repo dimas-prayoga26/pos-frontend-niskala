@@ -80,7 +80,7 @@ Agar path import mereka tetap berfungsi, path lama berisi re-export satu baris:
 
 Definisi endpoint masih berada di `https/index.js`; setiap `features/*/api.js` me-re-export endpoint yang dipakai fiturnya.
 
-`utils/printReceipt.js` (dipakai `Bill`/`Invoice`) dan `utils/rawbtPrint.js` (dirujuk oleh import yang di-comment di `Invoice.jsx`) dibiarkan di tempatnya.
+`utils/printReceipt.js` (dipakai `Bill`/`Invoice`), `utils/thermerReceipt.js` (struk Thermer berupa teks font printer, dipakai `Invoice`) dan `utils/rawbtPrint.js` (RawBT, sedang tidak dipakai) dibiarkan di tempatnya.
 
 Setelah perubahan tersebut di-commit:
 1. Pindahkan file-file itu ke fiturnya: Metrics/Recap/MenuManagement ke dashboard atau fitur baru, Invoice ke orders, Bill/CustomerInfo/customerSlice ke pos.

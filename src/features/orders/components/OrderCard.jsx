@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import {
   MdDeleteOutline,
   MdInfoOutline,
@@ -7,6 +7,7 @@ import {
 } from "react-icons/md";
 import { enqueueSnackbar } from "notistack";
 import { printOrderReceipt } from "../../../components/invoice/Invoice";
+import { useReceiptPaperDialog } from "../../../components/invoice/ReceiptPaperDialog";
 import { formatCurrency } from "../../../shared/lib/format";
 import { formatDateAndTime, formatJakartaReceiptDate } from "../../../shared/lib/dates";
 import { getDisplayOrderCode, getOrderItemCount } from "../utils/orderMetrics";
@@ -38,6 +39,7 @@ const OrderCard = ({
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isActionMenuOpen, setIsActionMenuOpen] = useState(false);
   const [isPrintingReceipt, setIsPrintingReceipt] = useState(false);
+  const { choosePaperWidth, paperDialog } = useReceiptPaperDialog();
   const [paymentAmount, setPaymentAmount] = useState("");
   const orderCode = getDisplayOrderCode(order);
   const cateringDetails = order.cateringDetails;
@@ -85,10 +87,13 @@ const OrderCard = ({
   const handlePrintReceipt = async () => {
     if (isPrintingReceipt) return;
 
+    const paperWidth = await choosePaperWidth();
+    if (!paperWidth) return;
+
     setIsPrintingReceipt(true);
 
     try {
-      const didOpenPrint = await printOrderReceipt(order);
+      const didOpenPrint = await printOrderReceipt(order, { paperWidth });
 
       if (!didOpenPrint) {
         enqueueSnackbar("Popup diblokir. Izinkan popup untuk print receipt.", {
@@ -197,6 +202,8 @@ const OrderCard = ({
           </div>
         </div>
       </div>
+
+      {paperDialog}
 
       {showDetails && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">

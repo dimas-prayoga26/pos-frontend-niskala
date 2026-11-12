@@ -370,28 +370,35 @@ describe("kategori promo", () => {
     ]);
   });
 
-  it("shows each menu's profit as a percent of its price", async () => {
+  it("shows each menu's persentase: its price over the HPP plus 30%", async () => {
     api.getMenuItems.mockResolvedValue({
       data: {
         data: [
           menu(7, "Americano", 15000, 2556, { grossProfit: 12444 }),
           menu(8, "Rugi", 10000, 12000, { grossProfit: -2000 }),
           menu(9, "Gratis", 0, 0, { grossProfit: 0 }),
+          menu(10, "Tanpa Resep", 12000, 0, { grossProfit: 12000 }),
+          menu(20, "Paket", 28000, 0, { categoryId: 2, isBundle: true, grossProfit: 16600 }),
         ],
       },
     });
     renderWithProviders(<MenuManagement />, { preloadedState: asAdmin });
 
     fireEvent.click(await screen.findByRole("button", { name: "Menu Items" }));
-    expect(await screen.findByRole("columnheader", { name: "Persentase Keuntungan" })).toBeInTheDocument();
-    const percentOf = (name) => {
+    expect(await screen.findByRole("columnheader", { name: "Persentase" })).toBeInTheDocument();
+    expect(screen.queryByRole("columnheader", { name: "Persentase Keuntungan" })).not.toBeInTheDocument();
+    const factorOf = (name) => {
       const cells = within(screen.getByText(name).closest("tr")).getAllByRole("cell");
       return cells[7].textContent;
     };
-    // (15.000 - 2.556) / 15.000
-    expect(percentOf("Americano")).toBe("83%");
-    expect(percentOf("Rugi")).toBe("-20%");
-    expect(percentOf("Gratis")).toBe("-");
+    // 15.000 / (2.556 x 1,3), as the COGS sheet writes it.
+    expect(factorOf("Americano")).toBe("451%");
+    // Below 100%: the price does not cover the HPP plus 30%.
+    expect(factorOf("Rugi")).toBe("64%");
+    // No price, no HPP, or a package (HPP counted per sale): nothing to show.
+    expect(factorOf("Gratis")).toBe("-");
+    expect(factorOf("Tanpa Resep")).toBe("-");
+    expect(factorOf("Paket")).toBe("-");
   });
 
   it("keeps a promo's price and a discount percent off it", async () => {

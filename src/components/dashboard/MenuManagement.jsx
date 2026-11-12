@@ -194,15 +194,19 @@ const bundleLineKey = (line) => {
   if (!line.isChoice) return String(line.menuItemId);
   return line.categoryId ? `category:${line.categoryId}` : `choice:${line.choiceId}`;
 };
-// Persentase Keuntungan: untung kotor (harga reguler - HPP) over the harga
-// reguler, e.g. Americano Rp 12.444 of Rp 15.000 = 83%; null without a price.
-const profitPercentOf = (item) => {
+// Persentase, as in the owner's COGS sheet: the harga reguler over the HPP
+// plus 30% (operational costs), e.g. Americano Rp 15.000 / (2.556 x 1,3) =
+// 451%. Below 100% the price does not cover that cost. null without a price
+// or an HPP (a package's HPP is counted per sale).
+const HPP_OVERHEAD = 0.3;
+const pricingFactorOf = (item) => {
   const price = Number(item?.regularPrice ?? item?.price ?? 0);
-  if (!(price > 0)) return null;
-  return (Number(item.grossProfit ?? item.profit ?? 0) / price) * 100;
+  const hpp = isPackageMenu(item) ? 0 : Number(item?.hppCost ?? item?.hpp ?? 0);
+  if (!(price > 0) || !(hpp > 0)) return null;
+  return price / (hpp * (1 + HPP_OVERHEAD));
 };
-const formatPercent = (percent) =>
-  `${new Intl.NumberFormat("id-ID", { maximumFractionDigits: 1 }).format(percent)}%`;
+const formatFactor = (factor) =>
+  `${new Intl.NumberFormat("id-ID", { maximumFractionDigits: 0 }).format(factor * 100)}%`;
 // Normal price of one portion of a line; a choice has none (the cashier
 // picks the menus).
 const getBundleLinePrice = (line, menuItemsById) => {
@@ -2143,7 +2147,7 @@ const MenuManagement = ({ onCreateIngredient }) => {
                     <th className="p-3">Harga Online</th>
                     <th className="p-3">HPP</th>
                     <th className="p-3">Untung Kotor</th>
-                    <th className="p-3" title="Untung kotor ÷ harga reguler">Persentase Keuntungan</th>
+                    <th className="p-3" title="Harga reguler ÷ (HPP + 30%)">Persentase</th>
                     <th className="p-3 text-center">Status</th>
                     <th className="p-3 text-center">Aksi</th>
                   </tr>
@@ -2196,11 +2200,11 @@ const MenuManagement = ({ onCreateIngredient }) => {
                       </td>
                       <td className="p-4 text-sm font-semibold">
                         {(() => {
-                          const percent = profitPercentOf(item);
-                          if (percent === null) return <span className="text-[#ababab]">-</span>;
+                          const factor = pricingFactorOf(item);
+                          if (factor === null) return <span className="text-[#ababab]">-</span>;
                           return (
-                            <span className={percent < 0 ? "text-red-300" : "text-emerald-200"}>
-                              {formatPercent(percent)}
+                            <span className={factor < 1 ? "text-red-300" : "text-emerald-200"} title={`${formatFactor(factor)} dari HPP + 30%`}>
+                              {formatFactor(factor)}
                             </span>
                           );
                         })()}

@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import * as api from "../../src/https/index";
 import { OrdersPage } from "../../src/features/orders";
@@ -85,6 +85,53 @@ describe("orders page", () => {
     expect(screen.getByRole("button", { name: "Lihat Detail" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Hapus Pesanan" })).not.toBeInTheDocument();
     expect(api.deleteOrder).not.toHaveBeenCalled();
+  });
+
+  it("asks for the paper size on Print and prints the order for it", async () => {
+    window.localStorage.clear();
+    const printed = {
+      closed: false,
+      document: { open: vi.fn(), write: vi.fn(), close: vi.fn(), images: [] },
+      focus: vi.fn(),
+      print: vi.fn(),
+      close: vi.fn(),
+    };
+    const open = vi.spyOn(window, "open").mockReturnValue(printed);
+
+    try {
+      renderWithProviders(<OrdersPage />, { route: "/orders" });
+      await waitFor(() => expect(cardIds()).toHaveLength(3));
+      fireEvent.click(screen.getAllByRole("button", { name: "Order actions" })[0]);
+      fireEvent.click(screen.getByRole("button", { name: "Lihat Detail" }));
+
+      const details = screen.getByRole("heading", { name: "Order Details" }).closest("div.max-w-lg");
+
+      // Batal prints nothing.
+      fireEvent.click(within(details).getByRole("button", { name: "Print" }));
+      fireEvent.click(within(screen.getByRole("dialog", { name: "Ukuran Kertas Struk" })).getByRole("button", { name: "Batal" }));
+      expect(screen.queryByRole("dialog", { name: "Ukuran Kertas Struk" })).not.toBeInTheDocument();
+      expect(open).not.toHaveBeenCalled();
+
+      fireEvent.click(within(details).getByRole("button", { name: "Print" }));
+      const paperDialog = screen.getByRole("dialog", { name: "Ukuran Kertas Struk" });
+      fireEvent.click(within(paperDialog).getByRole("button", { name: "80 mm" }));
+
+      await waitFor(() => expect(printed.document.write).toHaveBeenCalled());
+      expect(screen.queryByRole("dialog", { name: "Ukuran Kertas Struk" })).not.toBeInTheDocument();
+      const html = printed.document.write.mock.calls[0][0];
+      expect(html).toContain("@page { size: 80mm auto; margin: 0; }");
+      expect(html).toContain("/receipt-header-80.png");
+      expect(html).toContain("-".repeat(48));
+
+      // The next Print highlights the size used last.
+      await waitFor(() => expect(within(details).getByRole("button", { name: "Print" })).toBeEnabled(), { timeout: 4000 });
+      fireEvent.click(within(details).getByRole("button", { name: "Print" }));
+      expect(within(screen.getByRole("dialog", { name: "Ukuran Kertas Struk" })).getByRole("button", { name: "80 mm" }))
+        .toHaveFocus();
+    } finally {
+      open.mockRestore();
+      window.localStorage.clear();
+    }
   });
 
   it("shows the empty state when nothing matches", async () => {

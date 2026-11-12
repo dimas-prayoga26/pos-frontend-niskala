@@ -57,11 +57,13 @@ const usePreparedItemActions = ({ onSaved, onDeleted, onProduced }) => {
     },
     onError: showError("Gagal menyimpan catatan masak."),
   });
-  // Catat Masak's default: no stock moves, so only the bahan olahan refresh.
+  // Catat Masak's default: no stock moves; the bahan olahan's COGS and its
+  // menus' HPP may change.
   const standardMutation = useMutation({
     mutationFn: saveSemiStandard,
     onSuccess: (response) => {
       queryClient.invalidateQueries({ queryKey: ["semi-items"] });
+      queryClient.invalidateQueries({ queryKey: ["menu-items"] });
       enqueueSnackbar(response?.data?.message || "Takaran standar disimpan.", { variant: "success" });
     },
     onError: showError("Gagal menyimpan takaran standar."),

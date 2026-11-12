@@ -8,20 +8,11 @@ import { removeAllItems } from "../../redux/slices/cartSlice";
 import { removeCustomer, setCustomer } from "../../redux/slices/customerSlice";
 import Invoice, { printOrderReceipt } from "../invoice/Invoice";
 import NonCashPaymentModal from "./NonCashPaymentModal";
-import {
-  bundleChoicesText,
-  hasMissingBundlePicks,
-} from "../../features/pos/utils/bundleChoices";
+import { useReceiptPaperDialog } from "../invoice/ReceiptPaperDialog";
+import { hasMissingBundlePicks } from "../../features/pos/utils/bundleChoices";
 import { MdWarningAmber } from "react-icons/md";
-import {
-  formatCurrency,
-  formatJakartaReceiptDate,
-  formatJakartaReceiptDateTime,
-  formatReceiptCurrency,
-  normalizeNominalInput,
-} from "../../utils";
-import { isAndroidDevice, printReceiptDocument } from "../../utils/printReceipt";
-import receiptMark from "../../../../assets/Vector.svg";
+import { formatCurrency, normalizeNominalInput } from "../../utils";
+import { isAndroidDevice } from "../../utils/printReceipt";
 
 const getItemTaxRate = (item) => {
   const taxRate = Number(item.taxRate);
@@ -52,17 +43,6 @@ const getInsufficientStockItems = (error) =>
   error?.response?.status === 409
     ? error.response?.data?.details?.insufficientStock || []
     : [];
-
-const getReceiptVariantText = (variant) => {
-  const parts = String(variant ?? "")
-    .split("/")
-    .map((part) => part.trim())
-    .filter(Boolean);
-
-  return parts.find((part) =>
-    /^(cold|hot|ice|iced|dingin|panas)$/i.test(part)
-  ) || "";
-};
 
 const Bill = () => {
   const dispatch = useDispatch();
@@ -100,6 +80,7 @@ const Bill = () => {
 
   const [paymentMethod, setPaymentMethod] = useState();
   const isPrintingReceiptRef = useRef(false);
+  const { choosePaperWidth, paperDialog } = useReceiptPaperDialog();
   const isSubmittingOrderRef = useRef(false);
   const [showNonCashPayment, setShowNonCashPayment] = useState(false);
   const [showInvoice, setShowInvoice] = useState(false);
@@ -301,15 +282,10 @@ const Bill = () => {
     orderMutation.mutate(orderData);
   };
 
+  // The same receipt template on every device: Thermer on Android, Chrome's
+  // print dialog on a laptop or PC.
   const handlePrintReceipt = async () => {
     if (isPrintingReceiptRef.current) return;
-    const escapeHtml = (value) =>
-      String(value ?? "")
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;")
-        .replace(/'/g, "&#039;");
 
     if (cartData.length === 0) {
       enqueueSnackbar("Please add at least one menu item before printing!", {
@@ -318,309 +294,25 @@ const Bill = () => {
       return;
     }
 
-    if (isAndroidDevice()) {
-      isPrintingReceiptRef.current = true;
-      try {
-        await printOrderReceipt({
-          ...buildOrderData(),
-          orderCode: "DRAFT",
-          createdAt: new Date().toISOString(),
-          paymentMethod: paymentMethod || "-",
-        }, { isDraft: true });
-      } finally {
-        window.setTimeout(() => { isPrintingReceiptRef.current = false; }, 3200);
+    const paperWidth = await choosePaperWidth();
+    if (!paperWidth) return;
+
+    isPrintingReceiptRef.current = true;
+    try {
+      const didPrint = await printOrderReceipt({
+        ...buildOrderData(),
+        orderCode: "DRAFT",
+        createdAt: new Date().toISOString(),
+        paymentMethod: paymentMethod || "-",
+      }, { isDraft: true, paperWidth });
+
+      if (didPrint === false && !isAndroidDevice()) {
+        enqueueSnackbar("Popup blocked. Please allow popups to print receipt.", {
+          variant: "warning",
+        });
       }
-      return;
-    }
-
-    const receiptRows = cartData
-      .map((item) => {
-        const addOnsText = item.addOns?.length
-          ? `<div class="line-note">Add-ons: ${item.addOns
-              .map((addOn) => escapeHtml(addOn.name))
-              .join(", ")}</div>`
-          : "";
-        const variantText = item.variant
-          ? getReceiptVariantText(item.variant)
-          : "";
-        const variantLine = variantText
-          ? `<div class="line-note">Pilihan: ${escapeHtml(variantText)}</div>`
-          : "";
-        const bundleChoicesLine = item.bundleChoices?.length
-          ? `<div class="line-note">Isi: ${escapeHtml(bundleChoicesText(item.bundleChoices))}</div>`
-          : "";
-        const discountLine =
-          Number(item.discountPercent) > 0
-            ? `<div class="line-note">Diskon ${Number(item.discountPercent)}%</div>`
-            : "";
-
-        return `
-          <div class="item">
-            <div class="item-main">
-              <span>${escapeHtml(item.name)}</span>
-            </div>
-            <div class="item-detail">
-              <span class="line-note">Qty: ${item.quantity}</span>
-              <strong>${formatReceiptCurrency(item.price)}</strong>
-            </div>
-              ${bundleChoicesLine}
-              ${discountLine}
-              ${addOnsText}
-              ${variantLine}
-          </div>
-        `;
-      })
-      .join("");
-
-    const didOpenPrintWindow = printReceiptDocument({
-      documentHtml: `
-        <html>
-          <head>
-            <title>Order Receipt</title>
-            <style>
-              * { box-sizing: border-box; }
-              @page {
-                size: 58mm auto;
-                margin: 0;
-              }
-              body {
-                margin: 0;
-                padding: 0;
-                color: #000;
-                background: #fff;
-                font-family: "Arial Narrow", Arial, Helvetica, sans-serif;
-                font-size: 7px;
-                font-weight: 900;
-                line-height: 1.28;
-                letter-spacing: 0;
-                text-rendering: geometricPrecision;
-                -webkit-text-stroke: 0.06px #000;
-                -webkit-print-color-adjust: exact;
-                print-color-adjust: exact;
-              }
-              .receipt {
-                width: 44mm;
-                margin: 0 auto;
-                padding: 5px 2mm 8px 0;
-                transform: translateX(3.7mm);
-              }
-              .center {
-                text-align: center;
-              }
-              .brand {
-                text-align: center;
-                margin-bottom: 5px;
-                transform: translateX(1.3mm);
-              }
-              .logo-mark {
-                display: block;
-                width: 24px;
-                height: auto;
-                margin: 0 auto 3px;
-                filter: grayscale(1) contrast(400%) brightness(0);
-                opacity: 1;
-              }
-              .brand-name {
-                color: #000;
-                font-family: Georgia, "Times New Roman", serif;
-                font-size: 12px;
-                font-weight: 900;
-                line-height: 1;
-                text-transform: uppercase;
-                transform: translateX(1.1mm);
-                -webkit-text-stroke: 0.06px #000;
-              }
-              .brand-subtitle {
-                color: #000;
-                font-size: 5px;
-                font-weight: 900;
-                line-height: 1.1;
-                text-transform: uppercase;
-              }
-              .receipt-title {
-                margin: 0;
-                color: #000;
-                font-size: 7px;
-                font-weight: 900;
-                text-align: center;
-                text-transform: uppercase;
-                transform: translateX(1.3mm);
-              }
-              .muted,
-              .line-note {
-                color: #000;
-                font-size: 6px;
-                font-weight: 900;
-              }
-              .meta {
-                border-top: 1px dashed #000;
-                border-bottom: 1px dashed #000;
-                margin: 7px 0;
-                padding: 6px 0;
-              }
-              .meta-row,
-              .item-main,
-              .item-detail {
-                display: flex;
-                justify-content: flex-start;
-                gap: 2px;
-              }
-              .meta-row span {
-                display: inline-flex;
-                flex: 0 0 16mm;
-                justify-content: space-between;
-                padding-right: 2mm;
-              }
-              .meta-row span::after {
-                content: " :";
-              }
-              strong {
-                color: #000;
-                font-weight: 900;
-                -webkit-text-stroke: 0.08px #000;
-              }
-              .item {
-                border-bottom: 1px dotted #000;
-                padding: 4px 0;
-              }
-              .item-main span {
-                flex: 1 1 auto;
-                max-width: 100%;
-                overflow-wrap: anywhere;
-              }
-              .item-detail strong,
-              .total-block strong {
-                display: block;
-                color: #000;
-                font-weight: 900;
-                white-space: nowrap;
-                overflow: visible;
-                -webkit-text-stroke: 0.08px #000;
-              }
-              .item-detail {
-                justify-content: space-between;
-                margin-top: 2px;
-              }
-              .item-detail strong {
-                flex: 0 0 auto;
-                margin-left: 2mm;
-                margin-right: 3mm;
-                text-align: right;
-                font-size: 7px;
-              }
-              .meta-row strong {
-                flex: 1 1 auto;
-                max-width: 29mm;
-                text-align: left;
-                overflow-wrap: anywhere;
-              }
-              .totals {
-                border-bottom: 1px dashed #000;
-                padding: 6px 6mm;
-              }
-              .total-block {
-                display: flex;
-                justify-content: space-between;
-                gap: 2mm;
-                width: 100%;
-                margin-left: 0;
-                margin-top: 5px;
-                text-align: left;
-              }
-              .total-block strong {
-                flex: 1 1 auto;
-                text-align: right;
-                white-space: nowrap;
-              }
-              .grand {
-                border-top: 1px dashed #000;
-                font-size: 9px;
-                font-weight: 900;
-                margin-top: 6px;
-                padding-top: 6px;
-              }
-              .footer {
-                margin-top: 9px;
-                text-align: center;
-                font-size: 5px;
-                transform: translateX(3.2mm);
-              }
-              @media print {
-                body { padding: 0; }
-                .receipt { width: 44mm; }
-              }
-            </style>
-          </head>
-          <body>
-            <div class="receipt">
-              <div class="brand">
-                <img class="logo-mark" src="${receiptMark}" alt="Niskala Coffee mark" />
-                <div class="brand-name">NISKALA</div>
-                <div class="brand-subtitle">COFFEE</div>
-              </div>
-              <p class="receipt-title">Order Receipt</p>
-              <div class="meta">
-                <div class="meta-row"><span>Customer</span><strong>${escapeHtml(getCustomerName())}</strong></div>
-                ${
-                  orderType === "Offline" && customerData.customerPhone?.trim()
-                    ? `<div class="meta-row"><span>Telepon</span><strong>${escapeHtml(customerData.customerPhone.trim())}</strong></div>`
-                    : ""
-                }
-                <div class="meta-row"><span>Date</span><strong>${formatJakartaReceiptDateTime()}</strong></div>
-                <div class="meta-row"><span>Payment</span><strong>${escapeHtml(paymentMethod || "-")}</strong></div>
-                ${
-                  orderType === "Online"
-                    ? `<div class="meta-row"><span>Platform</span><strong>${escapeHtml(customerData.orderPlatform || "-")}</strong></div>`
-                    : ""
-                }
-                ${
-                  isCateringOrder
-                    ? `<div class="meta-row"><span>Instansi</span><strong>${escapeHtml(customerData.catering?.institution || "-")}</strong></div>
-                       <div class="meta-row"><span>WhatsApp</span><strong>${escapeHtml(customerData.catering?.whatsapp || "-")}</strong></div>
-                       <div class="meta-row"><span>Tgl Acara</span><strong>${escapeHtml(formatJakartaReceiptDate(customerData.catering?.eventDate))}</strong></div>
-                       <div class="meta-row"><span>Jam Kirim</span><strong>${escapeHtml(customerData.catering?.deliveryTime || "-")}</strong></div>`
-                    : ""
-                }
-              </div>
-              <div>${receiptRows}</div>
-              <div class="totals">
-                <div class="total-block"><span>Subtotal</span><strong>${formatReceiptCurrency(total + totalDiscount)}</strong></div>
-                ${
-                  totalDiscount > 0
-                    ? `<div class="total-block"><span>Diskon</span><strong>-${formatReceiptCurrency(totalDiscount)}</strong></div>`
-                    : ""
-                }
-                ${
-                  onlineOrderCharge > 0
-                    ? `<div class="total-block"><span>Online</span><strong>${formatReceiptCurrency(onlineOrderCharge)}</strong></div>`
-                    : ""
-                }
-                <div class="total-block"><span>${taxLabel}</span><strong>${formatReceiptCurrency(itemTax)}</strong></div>
-                ${
-                  platformFee > 0
-                    ? `<div class="total-block"><span>${getPlatformFeeLabel()}</span><strong>-${formatReceiptCurrency(platformFee)}</strong></div>`
-                    : ""
-                }
-                <div class="total-block grand"><span>Total</span><strong>${formatReceiptCurrency(totalPriceWithTax)}</strong></div>
-              </div>
-              ${
-                customerData.note
-                  ? `<div class="footer">Catatan: ${escapeHtml(customerData.note)}</div>`
-                  : isCateringOrder && customerData.catering?.note
-                  ? `<div class="footer">Catatan: ${escapeHtml(customerData.catering.note)}</div>`
-                  : `<div class="footer">Thank you for your order</div>`
-              }
-            </div>
-          </body>
-        </html>
-      `,
-    });
-
-    if (!didOpenPrintWindow) {
-      enqueueSnackbar("Popup blocked. Please allow popups to print receipt.", {
-        variant: "warning",
-      });
-      return;
+    } finally {
+      window.setTimeout(() => { isPrintingReceiptRef.current = false; }, 3200);
     }
   };
 
@@ -760,6 +452,8 @@ const Bill = () => {
           Non Tunai
         </button>
       </div>
+
+      {paperDialog}
 
       <div className="flex flex-col sm:flex-row items-center gap-3 px-5 mt-4 pb-4">
         <button
