@@ -4,6 +4,7 @@ import { currency, quantityDisplay } from "../../utils/format";
 import {
   getProductionPortions,
   getProductionUsage,
+  getStartingPortions,
   getStartingQuantities,
   getUsageCost,
 } from "../../utils/preparedItems";
@@ -19,19 +20,23 @@ const Suffix = ({ children }) => (
 );
 
 // "Catat Masak", the kitchen's Daily Prep, in the order it happens: how much
-// of each bahan baku was cooked (starting from the latest cooking's), then
-// how many portions came out, on which business day (today, or an earlier
+// of each bahan baku was cooked and how many portions came out (both start
+// from the takaran standar, so a standard cooking is just Simpan), on which
+// business day (today, or an earlier
 // day not yet closed). Its cost per portion goes to that day's notas sold
 // short of stock (HPP pending, Modul 2), settled once the stock covers them. Simpan asks once more,
-// since saving takes the bahan baku out of stock; editing a field cancels
-// that confirmation. A bahan baku short of stock can be bought at once
-// (onRestock: Tambah Belanja with those bahan).
-const PreparedProductionDialog = ({ item, stockItems, onSave, onCancel, onRestock, isSaving }) => {
+// since saving takes the bahan baku out of stock (below 0 when short);
+// editing a field cancels that confirmation. A bahan baku short of stock can
+// be bought at once (onRestock: Tambah Belanja with those bahan). Simpan
+// Takaran Standar, right under the portions, keeps the quantities and
+// portions typed as the next cooking's start (and the HPP standar) without
+// cooking (onSaveStandard).
+const PreparedProductionDialog = ({ item, stockItems, onSave, onSaveStandard, onCancel, onRestock, isSaving }) => {
   const today = getJakartaDateKey();
   const [form, setForm] = useState(() => ({
     producedDate: today,
     quantities: getStartingQuantities(item),
-    portionQuantity: "",
+    portionQuantity: getStartingPortions(item),
     note: "",
   }));
   const [isConfirming, setIsConfirming] = useState(false);
@@ -48,17 +53,31 @@ const PreparedProductionDialog = ({ item, stockItems, onSave, onCancel, onRestoc
   const setQuantity = (stockItemId) => (event) =>
     update({ quantities: { ...form.quantities, [String(stockItemId)]: event.target.value } });
 
-  const handleSubmit = (event) => {
-    event.preventDefault();
-
+  // The bahan and portions both buttons need.
+  const isFilled = () => {
     if (!usedItems.length) {
       enqueueSnackbar("Isi jumlah bahan baku yang dipakai.", { variant: "error" });
-      return;
+      return false;
     }
     if (!(portions > 0)) {
       enqueueSnackbar("Isi jumlah porsi jadi.", { variant: "error" });
-      return;
+      return false;
     }
+    return true;
+  };
+  const usedPayload = () =>
+    usedItems.map((used) => ({ stockItemId: used.stockItemId, quantity: used.quantity }));
+
+  const handleSaveStandard = () => {
+    if (!isFilled()) return;
+    setIsConfirming(false);
+    onSaveStandard({ items: usedPayload(), portionQuantity: portions });
+  };
+
+  const handleSubmit = (event) => {
+    event.preventDefault();
+
+    if (!isFilled()) return;
 
     if (!form.producedDate || form.producedDate > today) {
       enqueueSnackbar("Tanggal masak tidak boleh setelah hari ini.", { variant: "error" });
@@ -70,7 +89,7 @@ const PreparedProductionDialog = ({ item, stockItems, onSave, onCancel, onRestoc
     }
 
     onSave({
-      items: usedItems.map((used) => ({ stockItemId: used.stockItemId, quantity: used.quantity })),
+      items: usedPayload(),
       portionQuantity: portions,
       note: form.note,
       producedDate: form.producedDate,
@@ -155,6 +174,18 @@ const PreparedProductionDialog = ({ item, stockItems, onSave, onCancel, onRestoc
             placeholder="Contoh: 80"
           />
         </label>
+        {onSaveStandard && (
+          <div className="-mt-1 mb-3 flex justify-end">
+            <button
+              type="button"
+              onClick={handleSaveStandard}
+              disabled={isSaving}
+              className="rounded-lg border border-[#a79981]/60 px-3 py-1.5 text-xs font-semibold text-[#d6c7ae] hover:bg-[#a79981]/10 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Simpan Takaran Standar
+            </button>
+          </div>
+        )}
 
         <label className="mb-3 block">
           <span className="mb-1 block text-sm font-semibold">Catatan</span>
@@ -191,6 +222,11 @@ const PreparedProductionDialog = ({ item, stockItems, onSave, onCancel, onRestoc
               {usedItems.map((used) => `${used.name} ${quantityDisplay(used.quantity, used.unit)}`).join(", ")}. Stok{" "}
               {item.name} bertambah {quantityDisplay(portions, item.unit)}.
             </p>
+            {shortItems.length > 0 && (
+              <p className="mt-1 text-red-300">
+                Stok {shortItems.map((used) => used.name).join(", ")} jadi minus sampai dibelanjakan.
+              </p>
+            )}
             <div className="mt-3 flex justify-end gap-3">
               <button
                 type="button"
@@ -201,7 +237,7 @@ const PreparedProductionDialog = ({ item, stockItems, onSave, onCancel, onRestoc
               </button>
               <button
                 type="submit"
-                disabled={isSaving || shortItems.length > 0}
+                disabled={isSaving}
                 className="rounded-lg bg-[#a79981] px-4 py-2 text-sm font-bold text-[#101010] disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {isSaving ? "Menyimpan..." : "Ya, Simpan"}
@@ -219,7 +255,7 @@ const PreparedProductionDialog = ({ item, stockItems, onSave, onCancel, onRestoc
             </button>
             <button
               type="submit"
-              disabled={isSaving || shortItems.length > 0}
+              disabled={isSaving}
               className="rounded-lg bg-[#a79981] px-4 py-2 text-sm font-bold text-[#101010] disabled:cursor-not-allowed disabled:opacity-60"
             >
               Simpan

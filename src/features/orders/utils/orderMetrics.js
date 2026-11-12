@@ -23,18 +23,14 @@ export const getDisplayOrderCode = (order) => {
   return `${parts.year.slice(-2)}${parts.month}-${sequence}`;
 };
 
-// Items sold by the orders: the quantities of their lines (a promo package
-// counts as one per portion).
+// Items bought in an order: the quantities of its lines (a promo package
+// counts as one per portion), e.g. 2 for "Matcha Latte x2".
+export const getOrderItemCount = (order) =>
+  (order?.items || []).reduce((sum, item) => sum + Math.max(Number(item?.quantity) || 0, 0), 0);
+
+// Items sold by the orders.
 export const getOrdersItemCount = (orders = []) =>
-  orders.reduce(
-    (total, order) =>
-      total +
-      (order?.items || []).reduce(
-        (sum, item) => sum + Math.max(Number(item?.quantity) || 0, 0),
-        0
-      ),
-    0
-  );
+  orders.reduce((total, order) => total + getOrderItemCount(order), 0);
 
 export const getOrderReceivedAmount = (order) => {
   const totalWithTax = Number(order?.bills?.totalWithTax) || 0;

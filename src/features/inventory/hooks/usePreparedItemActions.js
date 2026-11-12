@@ -5,6 +5,7 @@ import {
   deleteSemiItem,
   deleteSemiProduction,
   recordSemiProduction,
+  saveSemiStandard,
   updateSemiItem,
 } from "../api";
 
@@ -56,6 +57,15 @@ const usePreparedItemActions = ({ onSaved, onDeleted, onProduced }) => {
     },
     onError: showError("Gagal menyimpan catatan masak."),
   });
+  // Catat Masak's default: no stock moves, so only the bahan olahan refresh.
+  const standardMutation = useMutation({
+    mutationFn: saveSemiStandard,
+    onSuccess: (response) => {
+      queryClient.invalidateQueries({ queryKey: ["semi-items"] });
+      enqueueSnackbar(response?.data?.message || "Takaran standar disimpan.", { variant: "success" });
+    },
+    onError: showError("Gagal menyimpan takaran standar."),
+  });
   const undoMutation = useMutation({
     mutationFn: deleteSemiProduction,
     onSuccess: () => {
@@ -72,6 +82,9 @@ const usePreparedItemActions = ({ onSaved, onDeleted, onProduced }) => {
     produce: (item, payload) =>
       produceMutation.mutate({ semiItemId: item.id || item._id, ...payload }),
     isProducing: produceMutation.isPending,
+    saveStandard: (item, payload) =>
+      standardMutation.mutate({ semiItemId: item.id || item._id, ...payload }),
+    isSavingStandard: standardMutation.isPending,
     undoProduction: (productionId) => undoMutation.mutate(productionId),
     isUndoing: undoMutation.isPending,
   };

@@ -27,6 +27,7 @@ vi.mock("../../src/https/index", async (importOriginal) => ({
   recordSemiProduction: vi.fn(),
   recordSemiWaste: vi.fn(),
   recordStockWaste: vi.fn(),
+  saveSemiStandard: vi.fn(),
   updateStockCogs: vi.fn(),
   updateStockRecipeUse: vi.fn(),
 }));
@@ -511,7 +512,7 @@ describe("stock management", () => {
     // portions are counted: no Takaran 1 Porsi.
     const bahan = within(dialog).getByRole("textbox", { name: "Jumlah Bahan 03" });
     expect(bahan).toHaveValue("1");
-    expect(dialog).not.toHaveTextContent("Takaran");
+    expect(dialog).not.toHaveTextContent("Takaran 1 Porsi");
     expect(dialog).not.toHaveTextContent("Berapa Kali Masak");
 
     fireEvent.change(bahan, { target: { value: "" } });
@@ -521,7 +522,11 @@ describe("stock management", () => {
 
     fireEvent.change(bahan, { target: { value: "20" } });
     expect(dialog).toHaveTextContent("Stok sekarang: 10 pcs (stok kurang)");
-    expect(within(dialog).getByRole("button", { name: "Simpan" })).toBeDisabled();
+    // Short of stock still saves: the bahan goes below 0 until it is bought.
+    fireEvent.click(within(dialog).getByRole("button", { name: "Simpan" }));
+    expect(dialog).toHaveTextContent("Stok Bahan 03 jadi minus sampai dibelanjakan.");
+    expect(within(dialog).getByRole("button", { name: "Ya, Simpan" })).toBeEnabled();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Kembali" }));
 
     // Portions are counted, never weighed.
     expect(within(dialog).queryByRole("button", { name: "Timbang Hasil" })).not.toBeInTheDocument();
@@ -561,6 +566,47 @@ describe("stock management", () => {
       })
     );
     expect(await screen.findByText("Catatan masak disimpan.")).toBeInTheDocument();
+  });
+
+  it("keeps Catat Masak's default without cooking and starts from it", async () => {
+    api.saveSemiStandard.mockResolvedValue({ data: { success: true, message: "Takaran standar Nasi disimpan." } });
+    api.getSemiItems.mockResolvedValue({
+      data: { data: [{ ...nasi, defaultPortions: 80, standardUnitCost: 13 }] },
+    });
+    renderWithProviders(<StockManagement />, { preloadedState: asCashier });
+
+    await findRow("Susu Segar");
+    fireEvent.click(screen.getByRole("button", { name: "Bahan Olahan" }));
+    // The list shows the HPP standar.
+    expect(await within(rowOf("Nasi")).findByText("Standar Rp 13 / porsi")).toBeInTheDocument();
+    fireEvent.click(within(rowOf("Nasi")).getByRole("button", { name: "Catat Masak" }));
+
+    // Both start from the default: a standard cooking is just Simpan.
+    const dialog = screen.getByRole("form", { name: "Form catat masak" });
+    const bahan = within(dialog).getByRole("textbox", { name: "Jumlah Bahan 03" });
+    const portions = within(dialog).getByRole("textbox", { name: "Jumlah Porsi Jadi (porsi)" });
+    expect([bahan.value, portions.value]).toEqual(["1", "80"]);
+
+    // New default: 2 pcs for 160 portions, saved without cooking.
+    fireEvent.change(bahan, { target: { value: "2" } });
+    fireEvent.change(portions, { target: { value: "160" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Simpan Takaran Standar" }));
+    await waitFor(() =>
+      expect(api.saveSemiStandard.mock.calls[0][0]).toEqual({
+        semiItemId: 20,
+        items: [{ stockItemId: 3, quantity: 2 }],
+        portionQuantity: 160,
+      })
+    );
+    expect(await screen.findByText("Takaran standar Nasi disimpan.")).toBeInTheDocument();
+    expect(api.recordSemiProduction).not.toHaveBeenCalled();
+    // The dialog stays open to cook right away.
+    expect(screen.getByRole("form", { name: "Form catat masak" })).toBeInTheDocument();
+
+    fireEvent.change(portions, { target: { value: "" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Simpan Takaran Standar" }));
+    expect(await screen.findByText("Isi jumlah porsi jadi.")).toBeInTheDocument();
+    expect(api.saveSemiStandard).toHaveBeenCalledTimes(1);
   });
 
   it("shows the cooking history and lets admins undo only the latest", async () => {

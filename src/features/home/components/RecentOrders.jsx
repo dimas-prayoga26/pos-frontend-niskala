@@ -5,7 +5,7 @@ import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { enqueueSnackbar } from "notistack";
 import { getOrders } from "../api";
 import { formatJakartaDateTime, getJakartaDateKey } from "../../../shared/lib/dates";
-import { getDisplayOrderCode } from "../../orders";
+import { getDisplayOrderCode, getOrderItemCount } from "../../orders";
 
 const RecentOrders = () => {
   const [searchQuery, setSearchQuery] = useState("");
@@ -41,7 +41,7 @@ const RecentOrders = () => {
         order.customerDetails?.name,
         orderCode,
         formattedOrderDate,
-        `${order.items?.length || 0} Items`,
+        `${getOrderItemCount(order)} Items`,
         order.orderStatus,
         order.orderType,
         order.orderPlatform,

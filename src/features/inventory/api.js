@@ -36,6 +36,7 @@ export {
   recordSemiWaste,
   recordStockWaste,
   savePurchase,
+  saveSemiStandard,
   saveSupplyPurchase,
   updatePurchaseDraft,
   updatePurchaseItem,

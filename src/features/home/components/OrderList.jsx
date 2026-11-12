@@ -1,7 +1,7 @@
 import React from "react";
 import { getAvatarName } from "../../../shared/lib/format";
 import { formatJakartaDateTime } from "../../../shared/lib/dates";
-import { getDisplayOrderCode } from "../../orders";
+import { getDisplayOrderCode, getOrderItemCount } from "../../orders";
 
 const OrderList = ({ order }) => {
   const orderCode = getDisplayOrderCode(order);
@@ -18,7 +18,7 @@ const OrderList = ({ order }) => {
         <h1 className="truncate text-lg font-semibold tracking-wide text-[#f5f5f5]">
           {order.customerDetails.name}
         </h1>
-        <p className="text-sm text-[#ababab]">{order.items.length} Items</p>
+        <p className="text-sm text-[#ababab]">{getOrderItemCount(order)} Items</p>
       </div>
 
       <p className="col-span-2 w-fit rounded-lg border border-[#a79981] px-2 py-1 text-sm font-semibold text-[#a79981] sm:col-span-1">

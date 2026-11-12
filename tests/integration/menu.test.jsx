@@ -370,6 +370,30 @@ describe("kategori promo", () => {
     ]);
   });
 
+  it("shows each menu's profit as a percent of its price", async () => {
+    api.getMenuItems.mockResolvedValue({
+      data: {
+        data: [
+          menu(7, "Americano", 15000, 2556, { grossProfit: 12444 }),
+          menu(8, "Rugi", 10000, 12000, { grossProfit: -2000 }),
+          menu(9, "Gratis", 0, 0, { grossProfit: 0 }),
+        ],
+      },
+    });
+    renderWithProviders(<MenuManagement />, { preloadedState: asAdmin });
+
+    fireEvent.click(await screen.findByRole("button", { name: "Menu Items" }));
+    expect(await screen.findByRole("columnheader", { name: "Persentase Keuntungan" })).toBeInTheDocument();
+    const percentOf = (name) => {
+      const cells = within(screen.getByText(name).closest("tr")).getAllByRole("cell");
+      return cells[7].textContent;
+    };
+    // (15.000 - 2.556) / 15.000
+    expect(percentOf("Americano")).toBe("83%");
+    expect(percentOf("Rugi")).toBe("-20%");
+    expect(percentOf("Gratis")).toBe("-");
+  });
+
   it("keeps a promo's price and a discount percent off it", async () => {
     api.updateMenuItem.mockResolvedValue({ data: { success: true } });
     renderWithProviders(<MenuManagement />, { preloadedState: asAdmin });

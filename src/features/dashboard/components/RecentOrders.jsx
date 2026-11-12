@@ -4,7 +4,7 @@ import { enqueueSnackbar } from "notistack";
 import { getOrders } from "../api";
 import { formatCurrency } from "../../../shared/lib/format";
 import { formatDateAndTime, getJakartaDateKey } from "../../../shared/lib/dates";
-import { getDisplayOrderCode } from "../../orders";
+import { getDisplayOrderCode, getOrderItemCount } from "../../orders";
 
 const RecentOrders = () => {
   const [searchQuery, setSearchQuery] = useState("");
@@ -52,7 +52,7 @@ const RecentOrders = () => {
       ? ordersByDate
       : ordersByDate.filter((order) => {
           const orderCode = getDisplayOrderCode(order);
-          const itemCount = order.items?.length || 0;
+          const itemCount = getOrderItemCount(order);
           const searchableText = [
             orderCode,
             order.customerDetails?.name,
@@ -145,7 +145,7 @@ const RecentOrders = () => {
                 </td>
                 <td className="p-4">{order.customerDetails?.name || "-"}</td>
                 <td className="p-4">{formatDateAndTime(order.orderDate)}</td>
-                <td className="p-4">{order.items?.length || 0} Items</td>
+                <td className="p-4">{getOrderItemCount(order)} Items</td>
                 <td className="p-4">{getOrderTypeLabel(order)}</td>
                 <td className="p-4">{formatCurrency(order.bills?.totalWithTax || 0)}</td>
                 <td className="p-4">

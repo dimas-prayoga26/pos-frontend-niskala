@@ -194,6 +194,15 @@ const bundleLineKey = (line) => {
   if (!line.isChoice) return String(line.menuItemId);
   return line.categoryId ? `category:${line.categoryId}` : `choice:${line.choiceId}`;
 };
+// Persentase Keuntungan: untung kotor (harga reguler - HPP) over the harga
+// reguler, e.g. Americano Rp 12.444 of Rp 15.000 = 83%; null without a price.
+const profitPercentOf = (item) => {
+  const price = Number(item?.regularPrice ?? item?.price ?? 0);
+  if (!(price > 0)) return null;
+  return (Number(item.grossProfit ?? item.profit ?? 0) / price) * 100;
+};
+const formatPercent = (percent) =>
+  `${new Intl.NumberFormat("id-ID", { maximumFractionDigits: 1 }).format(percent)}%`;
 // Normal price of one portion of a line; a choice has none (the cashier
 // picks the menus).
 const getBundleLinePrice = (line, menuItemsById) => {
@@ -2134,6 +2143,7 @@ const MenuManagement = ({ onCreateIngredient }) => {
                     <th className="p-3">Harga Online</th>
                     <th className="p-3">HPP</th>
                     <th className="p-3">Untung Kotor</th>
+                    <th className="p-3" title="Untung kotor ÷ harga reguler">Persentase Keuntungan</th>
                     <th className="p-3 text-center">Status</th>
                     <th className="p-3 text-center">Aksi</th>
                   </tr>
@@ -2184,6 +2194,17 @@ const MenuManagement = ({ onCreateIngredient }) => {
                       <td className="p-4 text-sm font-semibold text-emerald-200">
                         {formatCurrency(item.grossProfit || item.profit || 0)}
                       </td>
+                      <td className="p-4 text-sm font-semibold">
+                        {(() => {
+                          const percent = profitPercentOf(item);
+                          if (percent === null) return <span className="text-[#ababab]">-</span>;
+                          return (
+                            <span className={percent < 0 ? "text-red-300" : "text-emerald-200"}>
+                              {formatPercent(percent)}
+                            </span>
+                          );
+                        })()}
+                      </td>
                       <td className="p-4 text-center">
                         <span
                           className={`inline-flex rounded-md px-3 py-1 text-xs font-bold ${
@@ -2219,7 +2240,7 @@ const MenuManagement = ({ onCreateIngredient }) => {
                   ))}
                   {filteredMenuItems.length === 0 && (
                     <tr>
-                      <td className="p-4 text-center text-[#ababab]" colSpan={7}>
+                      <td className="p-4 text-center text-[#ababab]" colSpan={10}>
                         No menu items found
                       </td>
                     </tr>

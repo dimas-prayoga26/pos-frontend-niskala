@@ -251,9 +251,10 @@ const StockManagement = ({ onRestock, createItem }) => {
           item={producingItem}
           stockItems={stockItems}
           onSave={(payload) => semiActions.produce(producingItem, payload)}
+          onSaveStandard={(payload) => semiActions.saveStandard(producingItem, payload)}
           onCancel={() => setProducingItem(null)}
           onRestock={onRestock}
-          isSaving={semiActions.isProducing}
+          isSaving={semiActions.isProducing || semiActions.isSavingStandard}
         />
       )}
 

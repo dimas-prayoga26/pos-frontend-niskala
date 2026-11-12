@@ -39,10 +39,10 @@ const rawItemId = (rawItem) => String(rawItem.id || rawItem._id);
 
 // Adds or edits a bahan olahan: its name, the bahan baku it is cooked
 // from and what happens to the leftover each day. How much of each bahan and
-// how many portions come out are filled at Catat Masak. A bahan baku the
-// search does not find can be made first: onCreateRawItem(name, form, row)
-// leaves with the form, which comes back as initialForm. initialName fills
-// the name of a new one.
+// how many portions come out are set at Catat Masak (its default, or a
+// cooking). A bahan baku the search does not find can be made first:
+// onCreateRawItem(name, form, row) leaves with the form, which comes back as
+// initialForm. initialName fills the name of a new one.
 const PreparedItemDialog = ({
   item,
   initialForm,

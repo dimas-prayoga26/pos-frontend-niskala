@@ -6,6 +6,7 @@ import {
   getStartingQuantities,
   getUsageCost,
   getWasteCost,
+  getStartingPortions,
   toPreparedPayload,
 } from "./preparedItems";
 
@@ -27,6 +28,12 @@ describe("prepared item utils", () => {
     expect(
       getStartingQuantities({ components: [...sambal.components, { stockItemId: 4, quantity: 0.5 }, { stockItemId: 5, quantity: 0 }] })
     ).toEqual({ 2: "500", 3: "20", 4: "0,5", 5: "" });
+  });
+
+  it("starts the portions from the default", () => {
+    expect(getStartingPortions({ defaultPortions: 80 })).toBe("80");
+    expect(getStartingPortions({ defaultPortions: 12.5 })).toBe("12,5");
+    expect(getStartingPortions({ defaultPortions: null })).toBe("");
   });
 
   it("takes the portions counted after cooking", () => {

@@ -2,6 +2,7 @@
 export {
   getDisplayOrderCode,
   getOrderHppTotal,
+  getOrderItemCount,
   getOrderItemHpp,
   getOrderReceivedAmount,
   getOrdersHppTotal,

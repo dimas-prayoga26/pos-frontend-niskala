@@ -133,6 +133,14 @@ const PreparedItemsPanel = ({
                       Rata-rata stok, ada sisa masak sebelumnya
                     </span>
                   )}
+                  {Number(item.standardUnitCost) > 0 && (
+                    <span
+                      className="mt-1 block whitespace-nowrap text-xs text-[#ababab]"
+                      title="Takaran standar dengan harga bahan sekarang"
+                    >
+                      Standar {costDisplay(item.standardUnitCost, item.unit)}
+                    </span>
+                  )}
                 </td>
                 <td className="p-4">
                   <div className="mx-auto flex w-max flex-col gap-2 text-sm">

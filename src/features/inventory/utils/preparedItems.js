@@ -17,7 +17,7 @@ export const describeBahan = (components = []) => components.map((component) => 
 // Portions from one cooking, counted by the kitchen.
 export const getProductionPortions = (portionQuantity) => roundPortions(positive(portionQuantity));
 
-// Catat Masak starts from the latest cooking's quantities (the composition's).
+// Catat Masak starts from the composition's takaran standar.
 export const getStartingQuantities = (item) =>
   Object.fromEntries(
     (item?.components || []).map((component) => [
@@ -65,8 +65,12 @@ export const getWasteCost = (item, quantity) => {
     : roundCurrency(portions * Number(item?.averageCost || 0));
 };
 
+// Catat Masak starts with the takaran standar's portions.
+export const getStartingPortions = (item) =>
+  Number(item?.defaultPortions) > 0 ? String(item.defaultPortions).replace(".", ",") : "";
+
 // Request body for saving a prepared item from the dialog form: its bahan
-// baku only. Their quantities and the portion size come from Catat Masak;
+// baku only. Their default quantities and portions are set at Catat Masak;
 // the unit stays porsi.
 export const toPreparedPayload = (form) => ({
   name: form.name.trim(),

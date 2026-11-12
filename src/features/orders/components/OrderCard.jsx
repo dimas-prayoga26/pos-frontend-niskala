@@ -9,7 +9,7 @@ import { enqueueSnackbar } from "notistack";
 import { printOrderReceipt } from "../../../components/invoice/Invoice";
 import { formatCurrency } from "../../../shared/lib/format";
 import { formatDateAndTime, formatJakartaReceiptDate } from "../../../shared/lib/dates";
-import { getDisplayOrderCode } from "../utils/orderMetrics";
+import { getDisplayOrderCode, getOrderItemCount } from "../utils/orderMetrics";
 import { bundleChoicesText } from "../../pos/utils/bundleChoices";
 
 // Deleting orders is hidden for now: a deleted order disappears from the live
@@ -174,7 +174,7 @@ const OrderCard = ({
         </div>
         <div className="mt-4 flex flex-col gap-2 text-[#ababab] sm:flex-row sm:items-center sm:justify-between">
           <p>{formatDateAndTime(order.orderDate)}</p>
-          <p>{order.items.length} Items</p>
+          <p>{getOrderItemCount(order)} Items</p>
         </div>
         <hr className="w-full mt-4 border-t-1 border-gray-500" />
         <div className="flex items-center justify-between mt-4">
@@ -205,7 +205,7 @@ const OrderCard = ({
               <div>
                 <h2 className="text-xl font-bold">Order Details</h2>
                 <p className="mt-1 text-sm text-[#ababab]">
-                  {order.customerDetails.name} / {order.items.length} Items
+                  {order.customerDetails.name} / {getOrderItemCount(order)} Items
                 </p>
               </div>
               <div className="flex shrink-0 items-center gap-2">
