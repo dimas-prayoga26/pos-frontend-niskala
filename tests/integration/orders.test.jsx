@@ -56,7 +56,7 @@ describe("orders page", () => {
     expect(revenueCard).toHaveTextContent(/Rp\s255\.000$/);
     // Orders / items sold: 2 + 1 + 3 (today only).
     const countCard = screen.getByText(/^Total Orderan/).closest("div").parentElement;
-    expect(countCard).toHaveTextContent(/3 \/ 6$/);
+    expect(countCard).toHaveTextContent(/3 \/ \(6 item\)$/);
     // Only the nota whose HPP is still pending is flagged.
     expect(screen.getAllByText("HPP Pending")).toHaveLength(1);
     expect(screen.getByText("Siang Ini").parentElement).toHaveTextContent("HPP Pending");

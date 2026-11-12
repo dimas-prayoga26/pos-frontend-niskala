@@ -76,13 +76,13 @@ const Home = () => {
             title="Order Hari Ini"
             icon={<MdOutlineReceiptLong />}
             number={todayOrders.length}
-            // "20 / 57": orders / items sold today.
+            // "20 / (57 item)": orders, then the items they sold today (smaller).
             suffix={
               <span
-                className="text-[#ababab]"
+                className="text-xl font-semibold text-[#ababab] md:text-2xl"
                 title={`${todayOrders.length} order, ${todayItemCount} item terjual`}
               >
-                {" "}/ {todayItemCount}
+                {" "}/ ({todayItemCount} item)
               </span>
             }
             percentageChange={orderPercentageChange}

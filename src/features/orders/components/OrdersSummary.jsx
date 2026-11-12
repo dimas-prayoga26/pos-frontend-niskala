@@ -16,11 +16,11 @@ const SummaryCard = ({ title, icon, iconClassName, value }) => (
   </div>
 );
 
-// "20 / 57": orders / items sold.
+// "20 / (57 item)": orders, then the items they sold (smaller).
 export const OrderItemCount = ({ orderCount, itemCount }) => (
   <span title={`${orderCount} order, ${itemCount} item terjual`}>
     {orderCount}
-    <span className="text-[#ababab]"> / {itemCount}</span>
+    <span className="text-xl font-semibold text-[#ababab] md:text-2xl"> / ({itemCount} item)</span>
   </span>
 );
 

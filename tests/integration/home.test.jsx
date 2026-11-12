@@ -43,6 +43,6 @@ describe("home", () => {
     renderWithProviders(<HomePage />, { route: "/" });
 
     const card = screen.getByText("Order Hari Ini").closest("div").parentElement;
-    await waitFor(() => expect(card).toHaveTextContent("2 / 5"));
+    await waitFor(() => expect(card).toHaveTextContent("2 / (5 item)"));
   });
 });
