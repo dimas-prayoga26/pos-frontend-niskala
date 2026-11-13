@@ -1,7 +1,9 @@
 import { useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { useSelector } from "react-redux";
 import { io } from "socket.io-client";
 import { backendBaseUrl } from "../../shared/api/backendUrl";
+import { axiosWrapper } from "../../shared/api/client";
 
 const socketUrl = backendBaseUrl;
 const realtimeTransports = (
@@ -26,66 +28,114 @@ const getRealtimeSocket = () => {
   return realtimeSocket;
 };
 
-// Maps backend Socket.IO events to React Query invalidations so every tablet
-// refetches the affected data. Query keys here must match the features' keys.
+// How to listen, from the backend (GET /api/realtime/config): Pusher Channels
+// when it has Pusher keys, else its own Socket.IO.
+let realtimeConfigPromise;
+const getRealtimeConfig = () => {
+  realtimeConfigPromise ??= axiosWrapper
+    .get("/api/realtime/config")
+    .then((response) => response.data?.data || { provider: "socket.io" })
+    .catch(() => {
+      realtimeConfigPromise = null;
+      return { provider: "socket.io" };
+    });
+
+  return realtimeConfigPromise;
+};
+
+// Pusher's private channel: the backend signs the subscription of a logged-in
+// user (the accessToken cookie goes with the request).
+const connectPusher = async ({ key, cluster, channel: channelName }, handlers) => {
+  const { default: Pusher } = await import("pusher-js");
+  const pusher = new Pusher(key, {
+    cluster,
+    forceTLS: true,
+    channelAuthorization: {
+      customHandler: ({ socketId, channelName: requested }, callback) => {
+        axiosWrapper
+          .post("/api/realtime/pusher/auth", { socket_id: socketId, channel_name: requested })
+          .then((response) => callback(null, response.data))
+          .catch((error) => callback(error, null));
+      },
+    },
+  });
+  const channel = pusher.subscribe(channelName);
+  Object.entries(handlers).forEach(([event, handler]) => channel.bind(event, handler));
+
+  return () => {
+    pusher.unsubscribe(channelName);
+    pusher.disconnect();
+  };
+};
+
+const connectSocket = (handlers) => {
+  const socket = getRealtimeSocket();
+  if (!socket) return () => {};
+
+  Object.entries(handlers).forEach(([event, handler]) => socket.on(event, handler));
+  return () => Object.entries(handlers).forEach(([event, handler]) => socket.off(event, handler));
+};
+
+// Backend events -> React Query invalidations, so every tablet refetches the
+// affected data. Query keys here must match the features' keys.
+const buildHandlers = (queryClient) => {
+  const invalidate = (...keys) => () =>
+    keys.forEach((key) => queryClient.invalidateQueries({ queryKey: [key] }));
+
+  return {
+    "orders:changed": invalidate("orders"),
+    "menu:changed": invalidate("categories", "menu-items", "orders"),
+    "stock:changed": invalidate("stock-items", "semi-items", "stock-wastes", "supply-items", "purchase-summary"),
+    // Purchases also move the saldo of their payment source.
+    "shopping:changed": invalidate(
+      "purchases",
+      "supply-purchases",
+      "purchase-drafts",
+      "purchase-summary",
+      "shopping-suppliers",
+      "shopping-merks",
+      "payment-sources",
+      "payment-source-mutations"
+    ),
+    "platforms:changed": invalidate("order-platforms"),
+    "recaps:changed": invalidate("recaps", "recap-meta"),
+  };
+};
+
 const useRealtimeData = () => {
   const queryClient = useQueryClient();
+  // Pusher's channel is private: listen once someone is logged in.
+  const isAuth = useSelector((state) => Boolean(state.user?.isAuth));
 
   useEffect(() => {
-    const socket = getRealtimeSocket();
-    if (!socket) return undefined;
+    const handlers = buildHandlers(queryClient);
+    let cleanup = () => {};
+    let cancelled = false;
 
-    const refreshOrders = () => {
-      queryClient.invalidateQueries({ queryKey: ["orders"] });
-    };
+    getRealtimeConfig()
+      .then(async (config) => {
+        if (cancelled) return;
 
-    const refreshMenuData = () => {
-      queryClient.invalidateQueries({ queryKey: ["categories"] });
-      queryClient.invalidateQueries({ queryKey: ["menu-items"] });
-      queryClient.invalidateQueries({ queryKey: ["orders"] });
-    };
-    const refreshStockData = () => {
-      queryClient.invalidateQueries({ queryKey: ["stock-items"] });
-      queryClient.invalidateQueries({ queryKey: ["semi-items"] });
-      queryClient.invalidateQueries({ queryKey: ["stock-wastes"] });
-      queryClient.invalidateQueries({ queryKey: ["supply-items"] });
-      queryClient.invalidateQueries({ queryKey: ["purchase-summary"] });
-    };
-    // Purchases also move the saldo of their payment source.
-    const refreshShoppingData = () => {
-      queryClient.invalidateQueries({ queryKey: ["purchases"] });
-      queryClient.invalidateQueries({ queryKey: ["supply-purchases"] });
-      queryClient.invalidateQueries({ queryKey: ["purchase-drafts"] });
-      queryClient.invalidateQueries({ queryKey: ["purchase-summary"] });
-      queryClient.invalidateQueries({ queryKey: ["shopping-suppliers"] });
-      queryClient.invalidateQueries({ queryKey: ["shopping-merks"] });
-      queryClient.invalidateQueries({ queryKey: ["payment-sources"] });
-      queryClient.invalidateQueries({ queryKey: ["payment-source-mutations"] });
-    };
-    const refreshPlatformData = () => {
-      queryClient.invalidateQueries({ queryKey: ["order-platforms"] });
-    };
-    const refreshRecapData = () => {
-      queryClient.invalidateQueries({ queryKey: ["recaps"] });
-      queryClient.invalidateQueries({ queryKey: ["recap-meta"] });
-    };
+        if (config.provider !== "pusher") {
+          cleanup = connectSocket(handlers);
+          return;
+        }
+        if (!isAuth) return;
 
-    socket.on("orders:changed", refreshOrders);
-    socket.on("menu:changed", refreshMenuData);
-    socket.on("stock:changed", refreshStockData);
-    socket.on("shopping:changed", refreshShoppingData);
-    socket.on("platforms:changed", refreshPlatformData);
-    socket.on("recaps:changed", refreshRecapData);
+        const disconnect = await connectPusher(config, handlers);
+        if (cancelled) disconnect();
+        else cleanup = disconnect;
+      })
+      .catch((error) => {
+        // The data still refreshes on its own every few seconds.
+        console.warn("Realtime tidak tersambung:", error?.message || error);
+      });
 
     return () => {
-      socket.off("orders:changed", refreshOrders);
-      socket.off("menu:changed", refreshMenuData);
-      socket.off("stock:changed", refreshStockData);
-      socket.off("shopping:changed", refreshShoppingData);
-      socket.off("platforms:changed", refreshPlatformData);
-      socket.off("recaps:changed", refreshRecapData);
+      cancelled = true;
+      cleanup();
     };
-  }, [queryClient]);
+  }, [queryClient, isAuth]);
 };
 
 export default useRealtimeData;

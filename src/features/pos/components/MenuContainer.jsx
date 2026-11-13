@@ -108,6 +108,29 @@ const MenuContainer = () => {
             );
           }
 
+          // Portions with a swapped bahan olahan (Nasi Daun Jeruk) are lines of
+          // their own: the card counts them too, and - takes plain portions first.
+          const swapLines = cartData.filter((line) => String(line.id).startsWith(`${cartItemId}~swap-`));
+          if (swapLines.length) {
+            return (
+              <MenuItemCard
+                key={item.id}
+                item={item}
+                price={cardPrice}
+                quantity={getItemQuantity(cartItemId) + swapLines.reduce((total, line) => total + line.quantity, 0)}
+                quantityReadOnly
+                onIncrement={() => dispatch(addItems({ ...toCartItem(item), quantity: 1 }))}
+                onDecrement={() =>
+                  dispatch(
+                    decreaseItem(
+                      getItemQuantity(cartItemId) > 0 ? cartItemId : swapLines[swapLines.length - 1].id
+                    )
+                  )
+                }
+              />
+            );
+          }
+
           return (
             <MenuItemCard
               key={item.id}

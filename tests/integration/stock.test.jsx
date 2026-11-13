@@ -28,6 +28,7 @@ vi.mock("../../src/https/index", async (importOriginal) => ({
   recordSemiWaste: vi.fn(),
   recordStockWaste: vi.fn(),
   saveSemiStandard: vi.fn(),
+  saveSemiSubstitutes: vi.fn(),
   updateStockCogs: vi.fn(),
   updateStockRecipeUse: vi.fn(),
 }));
@@ -310,6 +311,53 @@ describe("stock management", () => {
     fireEvent.click(within(screen.getByText("Hapus bahan?").parentElement).getByRole("button", { name: "Hapus" }));
     await waitFor(() => expect(api.deleteSemiItem.mock.calls[0][0]).toBe(20));
     expect(api.deleteStockItem).not.toHaveBeenCalled();
+  });
+
+  it("sets the pengganti of a bahan olahan (Nasi Daun Jeruk for Nasi) with its extra price", async () => {
+    const nasiDaunJeruk = { ...nasi, id: 21, name: "Nasi Daun Jeruk", substitutes: [] };
+    api.getSemiItems.mockResolvedValue({ data: { data: [nasi, nasiDaunJeruk] } });
+    api.saveSemiSubstitutes.mockResolvedValue({ data: { success: true, message: "Pengganti disimpan." } });
+    const { unmount } = renderWithProviders(<StockManagement />, { preloadedState: asCashier });
+    await findRow("Susu Segar");
+    fireEvent.click(screen.getByRole("button", { name: "Bahan Olahan" }));
+    expect(within(await findRow("Nasi")).queryByRole("button", { name: "Pengganti" })).not.toBeInTheDocument();
+    unmount();
+
+    renderWithProviders(<StockManagement />, { preloadedState: asAdmin });
+    await findRow("Susu Segar");
+    fireEvent.click(screen.getByRole("button", { name: "Bahan Olahan" }));
+    fireEvent.click(within(await findRow("Nasi")).getByRole("button", { name: "Pengganti" }));
+
+    const dialog = screen.getByRole("form", { name: "Pengganti Nasi" });
+    expect(within(dialog).getByText("Belum ada pengganti.")).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole("button", { name: "+ Tambah Pengganti" }));
+    // Any other bahan olahan, not itself.
+    const choice = within(dialog).getByLabelText("Pengganti 1");
+    expect(optionNames(choice)).toEqual(["Pilih bahan olahan", "Nasi Daun Jeruk"]);
+    fireEvent.change(choice, { target: { value: "21" } });
+    fireEvent.change(within(dialog).getByLabelText("Tambahan harga 1"), { target: { value: "2.000" } });
+    // Only one other bahan olahan: nothing more to add.
+    expect(within(dialog).getByRole("button", { name: "+ Tambah Pengganti" })).toBeDisabled();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Simpan" }));
+
+    await waitFor(() =>
+      expect(api.saveSemiSubstitutes.mock.calls[0][0]).toEqual({
+        semiItemId: 20,
+        substitutes: [{ semiItemId: 21, extraPrice: 2000 }],
+      })
+    );
+    await waitFor(() => expect(screen.queryByRole("form", { name: "Pengganti Nasi" })).not.toBeInTheDocument());
+  });
+
+  it("shows the pengganti of a bahan olahan under its name", async () => {
+    api.getSemiItems.mockResolvedValue({
+      data: { data: [{ ...nasi, substitutes: [{ semiItemId: 21, name: "Nasi Daun Jeruk", extraPrice: 2000 }] }] },
+    });
+    renderWithProviders(<StockManagement />, { preloadedState: asAdmin });
+    await findRow("Susu Segar");
+    fireEvent.click(screen.getByRole("button", { name: "Bahan Olahan" }));
+
+    expect((await findRow("Nasi")).textContent.replace(/\s/g, " ")).toContain("Pengganti: Nasi Daun Jeruk (+Rp 2.000)");
   });
 
   it("marks a bahan olahan with no portions left as HARUS MASAK", async () => {

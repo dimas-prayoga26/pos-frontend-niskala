@@ -155,3 +155,34 @@ describe("rekap new promos", () => {
     expect(within(await rowOf("Kopi Susu")).queryByText("Promo")).not.toBeInTheDocument();
   });
 });
+
+describe("Rekap Old", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    api.getOrders.mockResolvedValue({ data: { data: [order] } });
+    [api.getRecaps, api.getSemiItems, api.getUsers, api.getMenuItems].forEach((fn) => fn.mockResolvedValue(empty));
+    api.getStockWastes.mockResolvedValue({ data: { data: { wastes: [], dailyTotals: [] } } });
+  });
+
+  it("is daily only, and its form takes Cash, QRIS and Saldo online masuk but no Transfer masuk", async () => {
+    renderWithProviders(<RecapManagement />, { preloadedState: { user: { role: "Admin", name: "Admin Uji" } } });
+
+    expect(await screen.findByText("Rekap transaksi harian.")).toBeInTheDocument();
+    ["Harian", "Mingguan", "Bulanan"].forEach((name) =>
+      expect(screen.queryByRole("button", { name })).not.toBeInTheDocument()
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: "Tambah Rekap" }));
+    expect(await screen.findByText("Input Rekap Harian")).toBeInTheDocument();
+    expect(screen.getByText("Cash masuk (Rp)")).toBeInTheDocument();
+    expect(screen.getByText("QRIS masuk (Rp)")).toBeInTheDocument();
+    expect(screen.queryByText("Transfer masuk (Rp)")).not.toBeInTheDocument();
+    // What GoFood, Grab, ... paid out, typed like the other amounts.
+    const online = screen.getByText("Saldo online masuk (Rp)").closest("label").querySelector("input");
+    fireEvent.change(online, { target: { value: "76000" } });
+    expect(online).toHaveValue("76.000");
+    // The menu pickers still follow the money inputs.
+    expect(screen.getByText("Menu paling laku")).toBeInTheDocument();
+    expect(screen.getByText("Menu kurang laku")).toBeInTheDocument();
+  });
+});

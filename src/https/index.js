@@ -168,6 +168,9 @@ export const recordSemiProduction = ({ semiItemId, ...data }) =>
   axiosWrapper.post(`/api/stock-item/semi/${semiItemId}/productions`, data);
 export const saveSemiStandard = ({ semiItemId, ...data }) =>
   axiosWrapper.put(`/api/stock-item/semi/${semiItemId}/standard`, data);
+// Pengganti: [{ semiItemId, extraPrice }] a menu may be sold with instead.
+export const saveSemiSubstitutes = ({ semiItemId, substitutes }) =>
+  axiosWrapper.put(`/api/stock-item/semi/${semiItemId}/substitutes`, { substitutes });
 export const deleteSemiProduction = (productionId) =>
   axiosWrapper.delete(`/api/stock-item/semi/productions/${productionId}`);
 // Buang (Modul 3): bahan baku or bahan olahan thrown away, sent as

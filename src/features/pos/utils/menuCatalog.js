@@ -34,6 +34,8 @@ export const buildMenuCatalog = (categories, menuItems, isOnlineOrder) =>
         // A promo package lists its menus (and choices) on the card.
         bundleItems: item.bundleItems || [],
         bundleChoices: item.bundleChoices || [],
+        // Bahan olahan the cashier may swap in the cart (Nasi Daun Jeruk).
+        ingredientChoices: item.ingredientChoices || [],
         discountPercent: Number(item.discountPercent) || 0,
         taxRate:
           item.category?.taxRate ??

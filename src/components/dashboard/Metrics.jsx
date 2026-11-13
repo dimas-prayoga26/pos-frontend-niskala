@@ -183,6 +183,7 @@ const kasMethodOptions = [
   { value: "cash", label: "Cash" },
   { value: "qris", label: "QRIS" },
   { value: "transfer", label: "Transfer" },
+  { value: "online", label: "Saldo Online" },
 ];
 
 const PERIOD_OPTIONS = [
@@ -840,8 +841,9 @@ const Metrics = () => {
     const cashIn = Number(recap.cashIn) || 0;
     const qrisIn = Number(recap.qrisIn) || 0;
     const transferIn = Number(recap.transferIn) || 0;
+    const onlineIn = Number(recap.onlineIn) || 0;
 
-    return total + cashIn + qrisIn + transferIn;
+    return total + cashIn + qrisIn + transferIn + onlineIn;
   }, 0);
   // Same source as Rekap New: every order in the period, recapped or not.
   const netRevenueTotal = getOrdersNetRevenueTotal(filteredOrders);

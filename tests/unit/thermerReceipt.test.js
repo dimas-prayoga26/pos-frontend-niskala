@@ -224,6 +224,21 @@ describe("Thermer receipt", () => {
     expect(lines).not.toContain("Thank you for your order");
   });
 
+  it("prints the bahan olahan swapped in an item (Nasi Daun Jeruk)", () => {
+    const lines = textLines(buildThermerReceiptEntries({
+      ...order,
+      items: [{
+        name: "Rice Bowl Ayam",
+        quantity: 1,
+        price: 27000,
+        ingredientSwaps: [{ fromSemiItemId: 5, toSemiItemId: 6, fromName: "Nasi Putih", toName: "Nasi Daun Jeruk", extraPrice: 2000 }],
+      }],
+    }, { paperWidth: 58 }));
+
+    expect(lines).toEqual(expect.arrayContaining(["Rice Bowl Ayam", "Pilihan: Nasi Daun Jeruk", "Qty: 1                 Rp 27.000"]));
+    expect(lines.indexOf("Pilihan: Nasi Daun Jeruk")).toBe(lines.indexOf("Rice Bowl Ayam") + 1);
+  });
+
   it("keeps text the printer can print", () => {
     expect(toPrinterText("Café Latte – “Special” × 2")).toBe('Cafe Latte - "Special" x 2');
     expect(wrapText("A".repeat(40), 32)).toEqual(["A".repeat(32), "A".repeat(8)]);

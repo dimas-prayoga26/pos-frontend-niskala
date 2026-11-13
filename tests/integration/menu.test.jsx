@@ -370,6 +370,30 @@ describe("kategori promo", () => {
     ]);
   });
 
+  it("shows the HPP of a menu with each pengganti of its bahan olahan under its HPP", async () => {
+    api.getMenuItems.mockResolvedValue({
+      data: {
+        data: [
+          menu(7, "Rice Bowl Ayam", 25000, 4000, {
+            grossProfit: 21000,
+            ingredientChoices: [{
+              semiItemId: 5,
+              name: "Nasi Putih",
+              quantity: 1,
+              unit: "porsi",
+              options: [{ semiItemId: 6, name: "Nasi Daun Jeruk", extraPrice: 2000, hppCost: 4100 }],
+            }],
+          }),
+        ],
+      },
+    });
+    renderWithProviders(<MenuManagement />, { preloadedState: asAdmin });
+
+    fireEvent.click(await screen.findByRole("button", { name: "Menu Items" }));
+    const hppCell = within((await screen.findByText("Rice Bowl Ayam")).closest("tr")).getAllByRole("cell")[5];
+    expect(hppCell.textContent.replace(/\s/g, " ")).toBe("Rp 4.000Nasi Daun Jeruk: Rp 4.100");
+  });
+
   it("shows each menu's persentase: its price over the HPP plus 30%", async () => {
     api.getMenuItems.mockResolvedValue({
       data: {
@@ -385,8 +409,7 @@ describe("kategori promo", () => {
     renderWithProviders(<MenuManagement />, { preloadedState: asAdmin });
 
     fireEvent.click(await screen.findByRole("button", { name: "Menu Items" }));
-    expect(await screen.findByRole("columnheader", { name: "Persentase" })).toBeInTheDocument();
-    expect(screen.queryByRole("columnheader", { name: "Persentase Keuntungan" })).not.toBeInTheDocument();
+    expect(await screen.findByRole("columnheader", { name: "Persentase Keuntungan" })).toBeInTheDocument();
     const factorOf = (name) => {
       const cells = within(screen.getByText(name).closest("tr")).getAllByRole("cell");
       return cells[7].textContent;

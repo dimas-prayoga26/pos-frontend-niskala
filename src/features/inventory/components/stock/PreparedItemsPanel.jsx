@@ -19,6 +19,7 @@ const PreparedItemsPanel = ({
   onWaste,
   onDelete,
   onShowWastes,
+  onSubstitutes,
 }) => (
   <div className="rounded-lg bg-[#1f1f1f] p-4">
     <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -89,6 +90,18 @@ const PreparedItemsPanel = ({
                   <p className="mt-1 text-xs text-[#ababab]">
                     Bahan: {describeBahan(item.components) || "-"}
                   </p>
+                  {item.substitutes?.length > 0 && (
+                    <p className="mt-1 text-xs text-[#d6c7ae]">
+                      Pengganti:{" "}
+                      {item.substitutes
+                        .map((substitute) =>
+                          substitute.extraPrice > 0
+                            ? `${substitute.name} (+${currency(substitute.extraPrice)})`
+                            : substitute.name
+                        )
+                        .join(", ")}
+                    </p>
+                  )}
                 </td>
                 <td className="p-4 text-center">
                   <span className="block whitespace-nowrap text-lg font-bold">
@@ -181,6 +194,14 @@ const PreparedItemsPanel = ({
                             className={linkClass}
                           >
                             Ubah
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => onSubstitutes(item)}
+                            title="Bahan olahan lain yang bisa dipilih kasir, misalnya Nasi Daun Jeruk"
+                            className={linkClass}
+                          >
+                            Pengganti
                           </button>
                           <button
                             type="button"

@@ -12,6 +12,7 @@ import PreparedHistoryDialog from "./stock/PreparedHistoryDialog";
 import PreparedItemDialog from "./stock/PreparedItemDialog";
 import PreparedItemsPanel from "./stock/PreparedItemsPanel";
 import PreparedProductionDialog from "./stock/PreparedProductionDialog";
+import SemiSubstitutesDialog from "./stock/SemiSubstitutesDialog";
 import StockCogsDialog from "./stock/StockCogsDialog";
 import StockItemsPanel from "./stock/StockItemsPanel";
 import WasteDialog from "./stock/WasteDialog";
@@ -59,6 +60,8 @@ const StockManagement = ({ onRestock, createItem }) => {
   const [newSemiName, setNewSemiName] = useState(createItem?.kind === "semi" ? createItem.name : "");
   const [producingItem, setProducingItem] = useState(null);
   const [historyItem, setHistoryItem] = useState(null);
+  // Bahan olahan whose Pengganti are being set.
+  const [substitutesItem, setSubstitutesItem] = useState(null);
   // { kind: "raw" | "semi", item } being thrown away.
   const [wasting, setWasting] = useState(null);
   const showTab = (tab) => {
@@ -105,6 +108,7 @@ const StockManagement = ({ onRestock, createItem }) => {
     onSaved: closeSemiDialog,
     onDeleted: () => setPendingDeleteSemiItem(null),
     onProduced: () => setProducingItem(null),
+    onSubstitutesSaved: () => setSubstitutesItem(null),
   });
   const wasteActions = useWasteActions({ onWasted: () => setWasting(null) });
 
@@ -133,6 +137,7 @@ const StockManagement = ({ onRestock, createItem }) => {
       editingSemiItem ||
       producingItem ||
       historyItem ||
+      substitutesItem ||
       wasting
   );
 
@@ -186,6 +191,17 @@ const StockManagement = ({ onRestock, createItem }) => {
           onWaste={(item) => setWasting({ kind: "semi", item })}
           onDelete={setPendingDeleteSemiItem}
           onShowWastes={() => setHistoryView("wastes")}
+          onSubstitutes={setSubstitutesItem}
+        />
+      )}
+
+      {isAdmin && substitutesItem && (
+        <SemiSubstitutesDialog
+          item={substitutesItem}
+          semiItems={semiItems}
+          onSave={(substitutes) => semiActions.saveSubstitutes(substitutesItem, substitutes)}
+          onCancel={() => setSubstitutesItem(null)}
+          isSaving={semiActions.isSavingSubstitutes}
         />
       )}
       {historyView === "wastes" && (

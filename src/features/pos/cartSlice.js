@@ -14,6 +14,11 @@ const getItemPrice = (item) => {
 };
 const getAddOnTotal = (item) =>
   (item.addOns || []).reduce((total, addOn) => total + (Number(addOn.price) || 0), 0);
+// Bahan olahan swapped on the line (Nasi Daun Jeruk for Nasi Putih) add their
+// extra price to every portion, like add-ons.
+const getSwapTotal = (item) =>
+  (item.ingredientSwaps || []).reduce((total, swap) => total + (Number(swap.extraPrice) || 0), 0);
+const getExtrasTotal = (item) => getAddOnTotal(item) + getSwapTotal(item);
 // Re-adding an item picks up its current tax and price (e.g. after switching
 // between offline and online pricing).
 const syncItemBasePrice = (existingItem, nextItem) => {
@@ -24,7 +29,7 @@ const syncItemBasePrice = (existingItem, nextItem) => {
 
   existingItem.basePrice = nextBasePrice;
   existingItem.originalPrice = nextItem.originalPrice;
-  existingItem.pricePerQuantity = nextBasePrice + getAddOnTotal(existingItem);
+  existingItem.pricePerQuantity = nextBasePrice + getExtrasTotal(existingItem);
 };
 
 const cartSlice = createSlice({
@@ -97,15 +102,59 @@ const cartSlice = createSlice({
       if (!existingItem) return;
 
       const basePrice = existingItem.basePrice || existingItem.pricePerQuantity;
-      const addOnTotal = addOns.reduce(
-        (total, addOn) => total + (Number(addOn.price) || 0),
-        0
-      );
 
       existingItem.basePrice = basePrice;
       existingItem.addOns = addOns;
-      existingItem.pricePerQuantity = basePrice + addOnTotal;
+      existingItem.pricePerQuantity = basePrice + getExtrasTotal(existingItem);
       existingItem.price = getItemPrice(existingItem);
+    },
+
+    // Swaps a bahan olahan of a line for one of its options (toSemiItemId
+    // empty: back to the menu's own). The line becomes "<menu line>~swap-<ids>",
+    // so the menu card keeps adding plain portions and one order can hold
+    // both; it joins a line with the same swaps.
+    swapIngredient: (state, action) => {
+      const { id, fromSemiItemId, toSemiItemId } = action.payload;
+      const index = state.findIndex((item) => item.id === id);
+      const line = state[index];
+      const choice = line?.ingredientChoices?.find(
+        (candidate) => Number(candidate.semiItemId) === Number(fromSemiItemId)
+      );
+      if (!choice) return;
+
+      const option = choice.options.find((candidate) => Number(candidate.semiItemId) === Number(toSemiItemId));
+      const swaps = (line.ingredientSwaps || []).filter(
+        (swap) => Number(swap.fromSemiItemId) !== Number(fromSemiItemId)
+      );
+      if (option) {
+        swaps.push({
+          fromSemiItemId: choice.semiItemId,
+          toSemiItemId: option.semiItemId,
+          fromName: choice.name,
+          toName: option.name,
+          extraPrice: Number(option.extraPrice) || 0,
+        });
+      }
+
+      const baseId = String(line.id).split("~swap-")[0];
+      const nextId = swaps.length
+        ? `${baseId}~swap-${swaps.map((swap) => swap.toSemiItemId).sort((a, b) => a - b).join(".")}`
+        : baseId;
+      const basePrice = line.basePrice || line.pricePerQuantity - getExtrasTotal(line);
+      const twin = state.find((item) => item.id === nextId && item !== line);
+
+      if (twin) {
+        twin.quantity += line.quantity;
+        twin.price = getItemPrice(twin);
+        state.splice(index, 1);
+        return;
+      }
+
+      line.id = nextId;
+      line.ingredientSwaps = swaps;
+      line.basePrice = basePrice;
+      line.pricePerQuantity = basePrice + getExtrasTotal(line);
+      line.price = getItemPrice(line);
     },
 
     // Picks the menu of one portion of a package's choice on a cart line.
@@ -141,6 +190,7 @@ export const {
   removeItem,
   setItemQuantity,
   pickBundleChoice,
+  swapIngredient,
   updateItemCustomization,
   removeAllItems,
 } =

@@ -1,7 +1,7 @@
-import React, { useEffect, useRef } from "react";
+import { useEffect, useRef } from "react";
 import { FaMinus, FaPlus } from "react-icons/fa6";
 import { useDispatch, useSelector } from "react-redux";
-import { addItems, decreaseItem, pickBundleChoice } from "../cartSlice";
+import { addItems, decreaseItem, pickBundleChoice, swapIngredient } from "../cartSlice";
 import { groupBundleOptions } from "../utils/bundleChoices";
 import { formatCurrency } from "../../../shared/lib/format";
 
@@ -111,6 +111,38 @@ const CartInfo = () => {
                         )}
                       </div>
                     )}
+                    {(item.ingredientChoices || []).map((choice) => {
+                      const swap = (item.ingredientSwaps || []).find(
+                        (candidate) => Number(candidate.fromSemiItemId) === Number(choice.semiItemId)
+                      );
+
+                      return (
+                        <select
+                          key={choice.semiItemId}
+                          value={swap?.toSemiItemId ?? ""}
+                          onChange={(event) =>
+                            dispatch(
+                              swapIngredient({
+                                id: item.id,
+                                fromSemiItemId: choice.semiItemId,
+                                toSemiItemId: event.target.value,
+                              })
+                            )
+                          }
+                          aria-label={`Pilihan ${choice.name}`}
+                          className="mt-2 w-full rounded-lg border border-transparent bg-[#262626] px-3 py-2 text-sm text-[#f5f5f5] outline-none"
+                        >
+                          <option value="">{choice.name}</option>
+                          {choice.options.map((option) => (
+                            <option key={option.semiItemId} value={option.semiItemId}>
+                              {option.extraPrice > 0
+                                ? `${option.name} (+${formatCurrency(option.extraPrice)})`
+                                : option.name}
+                            </option>
+                          ))}
+                        </select>
+                      );
+                    })}
                     {item.addOns?.length > 0 && (
                       <p className="mt-1 text-xs text-[#a79981]">
                         {item.addOns.map((addOn) => addOn.name).join(", ")}

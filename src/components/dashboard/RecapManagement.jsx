@@ -277,7 +277,10 @@ const recapFormFields = [
   { id: "dailyExpense", label: "Pengeluaran hari ini (Rp)", type: "text", currency: true },
   { id: "cashIn", label: "Cash masuk (Rp)", type: "text", currency: true },
   { id: "qrisIn", label: "QRIS masuk (Rp)", type: "text", currency: true },
-  { id: "transferIn", label: "Transfer masuk (Rp)", type: "text", currency: true },
+  // Paid out by the online platforms (GoFood, Grab, ...), after their fee.
+  { id: "onlineIn", label: "Saldo online masuk (Rp)", type: "text", currency: true },
+  // No Transfer masuk input: an older recap keeps its transfer_in (sent back
+  // unchanged when edited) and it still counts in Kas masuk.
 ];
 
 const visibleRecapFormFields = SHOW_HPP_FIELDS
@@ -297,6 +300,7 @@ const createEmptyRecapForm = () => ({
   cashIn: "0",
   qrisIn: "0",
   transferIn: "0",
+  onlineIn: "0",
   bestMenuItemId: "",
   bestMenu: "",
   leastMenuItemId: "",
@@ -1031,7 +1035,8 @@ const RecapManagement = () => {
       const cashRecorded =
         (Number(recap.cashIn) || 0) +
         (Number(recap.qrisIn) || 0) +
-        (Number(recap.transferIn) || 0);
+        (Number(recap.transferIn) || 0) +
+        (Number(recap.onlineIn) || 0);
       const dailyExpense = Number(recap.dailyExpense) || 0;
 
       return {
@@ -1135,7 +1140,8 @@ const RecapManagement = () => {
       (Number(row.cashRecorded) ||
         (Number(row.cashIn) || 0) +
           (Number(row.qrisIn) || 0) +
-          (Number(row.transferIn) || 0)),
+          (Number(row.transferIn) || 0) +
+          (Number(row.onlineIn) || 0)),
     0
   );
   const dailyExpenseTotal = dailyTableRows.reduce(
@@ -1396,6 +1402,7 @@ const RecapManagement = () => {
       cashIn: current.cashIn,
       qrisIn: current.qrisIn,
       transferIn: current.transferIn,
+      onlineIn: current.onlineIn,
       bestMenuItemId: current.bestMenuItemId,
       bestMenu: current.bestMenu,
       leastMenuItemId: current.leastMenuItemId,
@@ -1426,6 +1433,7 @@ const RecapManagement = () => {
       cashIn: normalizeNominalInput(recapForm.cashIn),
       qrisIn: normalizeNominalInput(recapForm.qrisIn),
       transferIn: normalizeNominalInput(recapForm.transferIn),
+      onlineIn: normalizeNominalInput(recapForm.onlineIn),
       bestMenuItemId: recapForm.bestMenuItemId || null,
       bestMenuName: recapForm.bestMenu,
       leastMenuItemId: recapForm.leastMenuItemId || null,
@@ -1641,27 +1649,9 @@ const RecapManagement = () => {
             </div>
           </div>
           <p className="mt-1 text-sm text-[#ababab]">
-            Rekap transaksi berdasarkan periode harian, mingguan, dan bulanan.
+            Rekap transaksi harian.
           </p>
         </div>
-        {recapVersion === "old" && (
-          <div className="flex rounded-lg bg-[#1f1f1f] p-1">
-            {recapTabs.map((tab) => (
-              <button
-                key={tab.key}
-                type="button"
-                onClick={() => setActiveTab(tab.key)}
-                className={`rounded-md px-4 py-2 text-sm font-bold ${
-                  activeTab === tab.key
-                    ? "bg-[#a79981] text-[#101010]"
-                    : "text-[#ababab]"
-                }`}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
-        )}
         {recapVersion === "new" && (
           <OrderDateRangeFilter
             dateRange={newRecapDateRange}
@@ -2455,7 +2445,7 @@ const RecapManagement = () => {
                       />
                     )}
 
-                    {field.id === "transferIn" && (
+                    {field.id === "onlineIn" && (
                       <>
                         <SelectField
                           label="Menu paling laku"

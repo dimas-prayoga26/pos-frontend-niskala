@@ -2147,7 +2147,7 @@ const MenuManagement = ({ onCreateIngredient }) => {
                     <th className="p-3">Harga Online</th>
                     <th className="p-3">HPP</th>
                     <th className="p-3">Untung Kotor</th>
-                    <th className="p-3" title="Harga reguler ÷ (HPP + 30%)">Persentase</th>
+                    <th className="p-3" title="Harga reguler ÷ (HPP + 30%)">Persentase Keuntungan</th>
                     <th className="p-3 text-center">Status</th>
                     <th className="p-3 text-center">Aksi</th>
                   </tr>
@@ -2194,6 +2194,17 @@ const MenuManagement = ({ onCreateIngredient }) => {
                       <td className="p-4 text-sm font-semibold text-amber-200">
                         {/* A package's HPP is counted per sale from its menus. */}
                         {isPackageMenu(item) ? "-" : formatCurrency(item.hppCost || item.hpp || 0)}
+                        {/* With a pengganti of its bahan olahan (Nasi Daun Jeruk). */}
+                        {(item.ingredientChoices || []).flatMap((choice) =>
+                          choice.options.map((option) => (
+                            <span
+                              key={`${choice.semiItemId}-${option.semiItemId}`}
+                              className="mt-1 block whitespace-nowrap text-xs font-normal text-[#ababab]"
+                            >
+                              {option.name}: {formatCurrency(option.hppCost)}
+                            </span>
+                          ))
+                        )}
                       </td>
                       <td className="p-4 text-sm font-semibold text-emerald-200">
                         {formatCurrency(item.grossProfit || item.profit || 0)}

@@ -202,6 +202,70 @@ describe("POS menu", () => {
     expect(cart(store).map((item) => item.id)).toEqual(["3-32~1"]);
   });
 
+  it("swaps the nasi of a rice bowl for its pengganti, at its extra price, on a line of its own", async () => {
+    api.getMenuItems.mockResolvedValue({
+      data: {
+        data: [
+          ...menuItems,
+          {
+            id: 22,
+            categoryId: 2,
+            name: "Rice Bowl Ayam",
+            price: 25000,
+            regularPrice: 25000,
+            ingredientChoices: [{
+              semiItemId: 5,
+              name: "Nasi Putih",
+              quantity: 1,
+              unit: "porsi",
+              options: [{ semiItemId: 6, name: "Nasi Daun Jeruk", extraPrice: 2000, hppCost: 4100 }],
+            }],
+          },
+        ],
+      },
+    });
+    Element.prototype.scrollTo ??= () => {};
+    const { store } = renderWithProviders(
+      <>
+        <MenuContainer />
+        <CartInfo />
+      </>,
+      { route: "/menu" }
+    );
+    await screen.findByText("Kopi Susu");
+    fireEvent.click(screen.getAllByText("Snack").at(-1));
+    const bowl = await waitFor(() => itemCard("Rice Bowl Ayam"));
+
+    fireEvent.click(within(bowl).getByRole("button", { name: "+" }));
+    fireEvent.click(within(bowl).getByRole("button", { name: "+" }));
+    const nasi = screen.getByLabelText("Pilihan Nasi Putih");
+    expect(Array.from(nasi.options).map((option) => option.textContent.replace(/\s/g, " "))).toEqual([
+      "Nasi Putih",
+      "Nasi Daun Jeruk (+Rp 2.000)",
+    ]);
+
+    // Both portions get Nasi Daun Jeruk: Rp 27.000 each.
+    fireEvent.change(nasi, { target: { value: "6" } });
+    expect(cart(store).map((item) => [item.id, item.quantity, item.pricePerQuantity, item.price])).toEqual([
+      ["2-22~swap-6", 2, 27000, 54000],
+    ]);
+    expect(cart(store)[0].ingredientSwaps).toEqual([
+      { fromSemiItemId: 5, toSemiItemId: 6, fromName: "Nasi Putih", toName: "Nasi Daun Jeruk", extraPrice: 2000 },
+    ]);
+
+    // The card still adds plain portions, so one order can hold both.
+    fireEvent.click(within(itemCard("Rice Bowl Ayam")).getByRole("button", { name: "+" }));
+    expect(cart(store).map((item) => [item.id, item.quantity, item.price])).toEqual([
+      ["2-22~swap-6", 2, 54000],
+      ["2-22", 1, 25000],
+    ]);
+    expect(within(itemCard("Rice Bowl Ayam")).getByRole("spinbutton")).toHaveValue(3);
+
+    // Back to Nasi Putih joins the plain line at the plain price.
+    fireEvent.change(screen.getAllByLabelText("Pilihan Nasi Putih")[0], { target: { value: "" } });
+    expect(cart(store).map((item) => [item.id, item.quantity, item.price])).toEqual([["2-22", 3, 75000]]);
+  });
+
   it("offers only the menus a package's choice allows", async () => {
     Element.prototype.scrollTo ??= () => {};
     api.getCategories.mockResolvedValue({

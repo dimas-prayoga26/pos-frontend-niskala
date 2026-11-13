@@ -180,6 +180,8 @@ const getItemLines = (item, width) => {
     ...wrapText(item.name, width),
     ...(temperature ? wrapText(`Varian: ${temperature}`, width) : []),
     ...(item.bundleChoices?.length ? wrapText(`Isi: ${bundleChoicesText(item.bundleChoices)}`, width) : []),
+    // Bahan olahan swapped (Nasi Daun Jeruk for Nasi Putih).
+    ...(item.ingredientSwaps || []).flatMap((swap) => wrapText(`Pilihan: ${swap.toName}`, width)),
     ...(discountPercent > 0 ? [`Diskon ${discountPercent}%`] : []),
     ...leftRight(`Qty: ${item.quantity}`, formatReceiptCurrency(item.price), width),
     ...(item.addOns?.length

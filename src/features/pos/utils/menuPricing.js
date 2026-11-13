@@ -41,6 +41,8 @@ export const buildCartItem = (item, { category, isOnlineOrder }) => {
     pricePerQuantity: menuPrice,
     // A promo package shows its fixed menus in the order details.
     ...(item.bundleItems?.length ? { bundleItems: item.bundleItems } : {}),
+    // Bahan olahan the cashier may swap on the line (Nasi Daun Jeruk for Nasi Putih).
+    ...(item.ingredientChoices?.length ? { ingredientChoices: item.ingredientChoices } : {}),
     // A promo with a discount: the cart takes the percent off its price.
     ...(discountPercent ? { discountPercent } : {}),
   };

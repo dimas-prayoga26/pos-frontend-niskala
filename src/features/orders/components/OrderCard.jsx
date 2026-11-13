@@ -405,6 +405,11 @@ const OrderCard = ({
                             Isi: {bundleChoicesText(item.bundleChoices)}
                           </p>
                         )}
+                        {(item.ingredientSwaps || []).map((swap) => (
+                          <p key={swap.toSemiItemId || swap.toName} className="mt-1 text-xs text-[#d6c7ae]">
+                            Pilihan: {swap.toName}
+                          </p>
+                        ))}
                         {item.discountPercent > 0 && (
                           <p className="mt-1 text-xs text-emerald-300">
                             Diskon {item.discountPercent}%

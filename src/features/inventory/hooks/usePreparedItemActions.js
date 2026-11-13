@@ -6,6 +6,7 @@ import {
   deleteSemiProduction,
   recordSemiProduction,
   saveSemiStandard,
+  saveSemiSubstitutes,
   updateSemiItem,
 } from "../api";
 
@@ -16,7 +17,7 @@ const showError = (fallback) => (error) => {
 // Bahan olahan actions: save or delete the item, record a cooking and
 // undo the latest one. Buang is useWasteActions.
 // Callers pass callbacks to close their dialog.
-const usePreparedItemActions = ({ onSaved, onDeleted, onProduced }) => {
+const usePreparedItemActions = ({ onSaved, onDeleted, onProduced, onSubstitutesSaved }) => {
   const queryClient = useQueryClient();
   // Cooking also moves bahan baku stock, so both lists are refreshed.
   const refresh = () => {
@@ -68,6 +69,17 @@ const usePreparedItemActions = ({ onSaved, onDeleted, onProduced }) => {
     },
     onError: showError("Gagal menyimpan takaran standar."),
   });
+  // Pengganti: the kasir's menus offer the new choices.
+  const substitutesMutation = useMutation({
+    mutationFn: saveSemiSubstitutes,
+    onSuccess: (response) => {
+      queryClient.invalidateQueries({ queryKey: ["semi-items"] });
+      queryClient.invalidateQueries({ queryKey: ["menu-items"] });
+      enqueueSnackbar(response?.data?.message || "Pengganti disimpan.", { variant: "success" });
+      onSubstitutesSaved?.();
+    },
+    onError: showError("Gagal menyimpan pengganti."),
+  });
   const undoMutation = useMutation({
     mutationFn: deleteSemiProduction,
     onSuccess: () => {
@@ -87,6 +99,9 @@ const usePreparedItemActions = ({ onSaved, onDeleted, onProduced }) => {
     saveStandard: (item, payload) =>
       standardMutation.mutate({ semiItemId: item.id || item._id, ...payload }),
     isSavingStandard: standardMutation.isPending,
+    saveSubstitutes: (item, substitutes) =>
+      substitutesMutation.mutate({ semiItemId: item.id || item._id, substitutes }),
+    isSavingSubstitutes: substitutesMutation.isPending,
     undoProduction: (productionId) => undoMutation.mutate(productionId),
     isUndoing: undoMutation.isPending,
   };
