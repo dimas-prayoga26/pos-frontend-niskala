@@ -43,6 +43,7 @@ import {
   getOrderNetRevenue,
   getOrdersHppTotal,
   getOrdersNetRevenueTotal,
+  isCrewOrder,
 } from "../../utils";
 import { getOrdersHppSplit } from "../../features/orders/utils/orderMetrics";
 import CreatableSelect2 from "../shared/CreatableSelect2";
@@ -566,7 +567,7 @@ const ProfitFlow = ({ revenue, hpp, grossProfit, wasteCost, netProfit, isLoading
                   value: isLoading ? "..." : formatCurrency(netProfit),
                   tone: "net",
                   description:
-                    "Untung Kotor dikurangi pengeluaran harian di rekap dan Biaya Wastage.",
+                    "Untung Kotor dikurangi pengeluaran harian di rekap, Biaya Wastage, dan Konsumsi Crew.",
                 },
               ]
             : []),
@@ -846,10 +847,13 @@ const Metrics = () => {
     return total + cashIn + qrisIn + transferIn + onlineIn;
   }, 0);
   // Same source as Rekap New: every order in the period, recapped or not.
-  const netRevenueTotal = getOrdersNetRevenueTotal(filteredOrders);
-  const materialSpendTotal = getOrdersHppTotal(filteredOrders, menuItems);
-  const hppSplit = getOrdersHppSplit(filteredOrders, menuItems);
-  const pendingHppCount = filteredOrders.filter((order) => order.hppStatus === "pending").length;
+  // A Konsumsi Crew sells nothing: its HPP is a crew cost, not the sales'.
+  const salesOrders = filteredOrders.filter((order) => !isCrewOrder(order));
+  const crewCostTotal = getOrdersHppTotal(filteredOrders.filter(isCrewOrder), menuItems);
+  const netRevenueTotal = getOrdersNetRevenueTotal(salesOrders);
+  const materialSpendTotal = getOrdersHppTotal(salesOrders, menuItems);
+  const hppSplit = getOrdersHppSplit(salesOrders, menuItems);
+  const pendingHppCount = salesOrders.filter((order) => order.hppStatus === "pending").length;
   const grossProfitTotal = netRevenueTotal - materialSpendTotal;
   const wasteCostTotal = (wastesRes?.data?.data?.dailyTotals || []).reduce(
     (total, day) =>
@@ -858,7 +862,7 @@ const Metrics = () => {
         : total,
     0
   );
-  const netProfitTotal = grossProfitTotal - dailyExpenseTotal - wasteCostTotal;
+  const netProfitTotal = grossProfitTotal - dailyExpenseTotal - wasteCostTotal - crewCostTotal;
   const netCashTotal = cashRecordedTotal - dailyExpenseTotal;
 
   const isLoading =
@@ -995,10 +999,18 @@ const Metrics = () => {
           tone: "warning",
         },
         {
+          title: "Konsumsi Crew",
+          value: isFinancialLoading ? "..." : formatCurrency(crewCostTotal),
+          badge: activePeriod.badge,
+          description: "HPP menu yang dimakan crew saat istirahat, di luar HPP penjualan.",
+          icon: FiPackage,
+          tone: "warning",
+        },
+        {
           title: "Untung Bersih",
           value: isFinancialLoading ? "..." : formatCurrency(netProfitTotal),
           badge: activePeriod.badge,
-          description: "Untung setelah pengeluaran harian dan biaya wastage.",
+          description: "Untung setelah pengeluaran harian, biaya wastage, dan konsumsi crew.",
           icon: FiDollarSign,
           tone: "net",
         },

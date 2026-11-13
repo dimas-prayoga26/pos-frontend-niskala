@@ -154,6 +154,35 @@ describe("rekap new promos", () => {
     expect(within(await rowOf("Paket Hemat")).getByText("Promo")).toBeInTheDocument();
     expect(within(await rowOf("Kopi Susu")).queryByText("Promo")).not.toBeInTheDocument();
   });
+
+  it("keeps a Konsumsi Crew out of Total Promo, on a card and lines of its own", async () => {
+    api.getOrders.mockResolvedValue({
+      data: {
+        data: [
+          {
+            id: 2,
+            orderDate: `${today} 12:30:00`,
+            orderType: "Crew",
+            paymentMethod: "Crew",
+            customerDetails: { name: "Budi" },
+            bills: { total: 0, tax: 0, totalWithTax: 0 },
+            items: [
+              { id: "d", menuItemId: 7, name: "Nasi Goreng Crew", quantity: 1, pricePerQuantity: 0, price: 0, discountPercent: 100, discountAmount: 20000 },
+            ],
+          },
+        ],
+      },
+    });
+    renderWithProviders(<RecapManagement />, { preloadedState: asAdmin });
+    fireEvent.click(await screen.findByRole("button", { name: "New" }));
+
+    expect((await screen.findByText("Total Promo")).parentElement).toHaveTextContent(/^Total PromoRp\s0$/);
+    expect(screen.getByText("Konsumsi Crew").parentElement).toHaveTextContent(/^Konsumsi Crew\(-Rp\s20\.000\)$/);
+    const row = (await screen.findByText("Nasi Goreng Crew")).closest("tr");
+    // A Crew badge, and Crew as its payment.
+    expect(within(row).getAllByText("Crew")).toHaveLength(2);
+    expect(within(row).queryByText("Promo")).not.toBeInTheDocument();
+  });
 });
 
 describe("Rekap Old", () => {

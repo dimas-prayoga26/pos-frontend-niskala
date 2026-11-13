@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import BottomNav from "../../../shared/ui/BottomNav";
 import BackButton from "../../../shared/ui/BackButton";
@@ -7,10 +7,27 @@ import CustomerInfo from "../../../components/menu/CustomerInfo";
 import CartInfo from "../components/CartInfo";
 import Bill from "../../../components/menu/Bill";
 import { setCustomer } from "../../../redux/slices/customerSlice";
+import { CREW_MEAL_START_HOUR, CREW_ORDER_TYPE, isCrewMealTime } from "../../../utils";
+
+const CREW_OPENS_AT = `${String(CREW_MEAL_START_HOUR).padStart(2, "0")}:00`;
+
+// Whether Konsumsi Crew is open, checked every 30 seconds so the button turns
+// on at 12:00 without a reload.
+const useCrewMealTime = () => {
+  const [isOpen, setIsOpen] = useState(() => isCrewMealTime());
+
+  useEffect(() => {
+    const timer = setInterval(() => setIsOpen(isCrewMealTime()), 30000);
+    return () => clearInterval(timer);
+  }, []);
+
+  return isOpen;
+};
 
 const Menu = () => {
   const dispatch = useDispatch();
   const orderType = useSelector((state) => state.customer.orderType || "Offline");
+  const isCrewOpen = useCrewMealTime();
 
     useEffect(() => {
       document.title = "POS | Menu"
@@ -56,6 +73,26 @@ const Menu = () => {
                 }`}
               >
                 Online
+              </button>
+              {/* Konsumsi Crew: a crew member's free meal, from 12:00. */}
+              <button
+                onClick={() =>
+                  dispatch(setCustomer({
+                    orderType: CREW_ORDER_TYPE,
+                    orderPlatformId: null,
+                    orderPlatform: "",
+                    platformTax: 0,
+                  }))
+                }
+                disabled={!isCrewOpen}
+                title={isCrewOpen ? "Konsumsi crew: menu gratis" : `Mulai jam ${CREW_OPENS_AT}`}
+                className={`px-4 py-2 text-sm font-semibold rounded-md disabled:cursor-not-allowed disabled:opacity-40 ${
+                  orderType === CREW_ORDER_TYPE
+                    ? "bg-[#a79981] text-[#101010]"
+                    : "text-[#ababab]"
+                }`}
+              >
+                Crew
               </button>
             </div>
           </div>

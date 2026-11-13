@@ -11,7 +11,13 @@ import NonCashPaymentModal from "./NonCashPaymentModal";
 import { useReceiptPaperDialog } from "../invoice/ReceiptPaperDialog";
 import { hasMissingBundlePicks } from "../../features/pos/utils/bundleChoices";
 import { MdWarningAmber } from "react-icons/md";
-import { formatCurrency, normalizeNominalInput } from "../../utils";
+import {
+  CREW_MEAL_START_HOUR,
+  CREW_ORDER_TYPE,
+  formatCurrency,
+  isCrewMealTime,
+  normalizeNominalInput,
+} from "../../utils";
 import { isAndroidDevice } from "../../utils/printReceipt";
 
 const getItemTaxRate = (item) => {
@@ -52,17 +58,21 @@ const Bill = () => {
   const total = useSelector(getTotalPrice);
   const totalDiscount = useSelector(getTotalDiscount);
   const orderType = customerData.orderType || "Offline";
+  // Konsumsi Crew: the menus are free (their value shows as one minus).
+  const isCrewOrder = orderType === CREW_ORDER_TYPE;
   const onlineOrderCharge = 0;
   const taxableTotal = total + onlineOrderCharge;
-  const itemTax = cartData.reduce(
-    (sum, item) => sum + ((Number(item.price) || 0) * getItemTaxRate(item)) / 100,
-    0
-  );
+  const itemTax = isCrewOrder
+    ? 0
+    : cartData.reduce(
+        (sum, item) => sum + ((Number(item.price) || 0) * getItemTaxRate(item)) / 100,
+        0
+      );
   const rawPlatformFee = Number(normalizeNominalInput(customerData.platformTax)) || 0;
   const platformFee = orderType === "Online" ? Math.max(rawPlatformFee, 0) : 0;
   const tax = itemTax;
   const taxLabel = getTaxLabel(cartData);
-  const totalPriceWithTax = Math.max(taxableTotal + tax - platformFee, 0);
+  const totalPriceWithTax = isCrewOrder ? 0 : Math.max(taxableTotal + tax - platformFee, 0);
   const isCateringOrder = cartData.some(
     (item) => item.categoryName === "Catering"
   );
@@ -109,7 +119,10 @@ const Bill = () => {
     );
   };
 
-  const buildOrderData = (paymentData, selectedPaymentMethod = paymentMethod) => ({
+  const buildOrderData = (
+    paymentData,
+    selectedPaymentMethod = isCrewOrder ? CREW_ORDER_TYPE : paymentMethod
+  ) => ({
     customerDetails: {
       name: getCustomerName(),
       phone: orderType === "Offline" ? customerData.customerPhone?.trim() || "" : "",
@@ -121,7 +134,7 @@ const Bill = () => {
     platformTax: platformFee,
     orderStatus: "In Progress",
     bills: {
-      total: total,
+      total: isCrewOrder ? 0 : total,
       onlineOrderCharge,
       tax: tax,
       totalWithTax: totalPriceWithTax,
@@ -158,6 +171,23 @@ const Bill = () => {
 
     if (hasMissingBundlePicks(cartData)) {
       enqueueSnackbar("Pilih menu isi paket dulu.", { variant: "warning" });
+      return;
+    }
+
+    if (isCrewOrder) {
+      if (!customerData.customerName?.trim()) {
+        enqueueSnackbar("Isi nama crew dulu.", { variant: "warning" });
+        return;
+      }
+      if (!isCrewMealTime()) {
+        enqueueSnackbar(
+          `Konsumsi Crew baru bisa mulai jam ${String(CREW_MEAL_START_HOUR).padStart(2, "0")}:00.`,
+          { variant: "warning" }
+        );
+        return;
+      }
+
+      submitOrder(buildOrderData());
       return;
     }
 
@@ -303,7 +333,7 @@ const Bill = () => {
         ...buildOrderData(),
         orderCode: "DRAFT",
         createdAt: new Date().toISOString(),
-        paymentMethod: paymentMethod || "-",
+        paymentMethod: isCrewOrder ? CREW_ORDER_TYPE : paymentMethod || "-",
       }, { isDraft: true, paperWidth });
 
       if (didPrint === false && !isAndroidDevice()) {
@@ -331,6 +361,14 @@ const Bill = () => {
           <p className="text-xs text-[#ababab] font-medium mt-2">Diskon</p>
           <h1 className="text-emerald-300 text-md font-bold">
             -{formatCurrency(totalDiscount)}
+          </h1>
+        </div>
+      )}
+      {isCrewOrder && (
+        <div className="flex items-center justify-between px-5 mt-2">
+          <p className="text-xs text-[#ababab] font-medium mt-2">Konsumsi Crew</p>
+          <h1 className="text-emerald-300 text-md font-bold">
+            -{formatCurrency(total)}
           </h1>
         </div>
       )}
@@ -434,6 +472,7 @@ const Bill = () => {
           </div>
         </>
       )}
+      {!isCrewOrder && (
       <div className="flex flex-col sm:flex-row items-center gap-3 px-5 mt-4">
         <button
           onClick={() => setPaymentMethod("Tunai")}
@@ -452,6 +491,7 @@ const Bill = () => {
           Non Tunai
         </button>
       </div>
+      )}
 
       {paperDialog}
 

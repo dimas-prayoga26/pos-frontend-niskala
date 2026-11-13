@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { setCustomer } from "../../redux/slices/customerSlice";
 import {
+  CREW_ORDER_TYPE,
   formatDate,
   formatNominalInput,
   getJakartaDateKey,
@@ -28,6 +29,8 @@ const CustomerInfo = () => {
     customerData.selectedCategoryName === "Catering" ||
     cartData.some((item) => item.categoryName === "Catering");
   const isOnlineOrder = customerData.orderType === "Online";
+  // Konsumsi Crew: the name is the crew member's, there is no phone.
+  const isCrewOrder = customerData.orderType === CREW_ORDER_TYPE;
   const todayKey = getJakartaDateKey();
   const displayOrderDate =
     isOnlineOrder && customerData.orderDate ? customerData.orderDate : new Date();
@@ -125,19 +128,23 @@ const CustomerInfo = () => {
 
       <div className="mt-4 space-y-3">
         <div>
-          <label className="block text-[#ababab] mb-2 text-xs font-medium">
-            Customer Name
+          <label
+            htmlFor="customer-name"
+            className="block text-[#ababab] mb-2 text-xs font-medium"
+          >
+            {isCrewOrder ? "Nama Crew" : "Customer Name"}
           </label>
           <input
+            id="customer-name"
             value={customerData.customerName}
             onChange={(event) => updateCustomer("name", event.target.value)}
             type="text"
-            placeholder="Guest"
+            placeholder={isCrewOrder ? "Nama crew" : "Guest"}
             className="w-full rounded-lg bg-[#1f1f1f] px-4 py-3 text-sm text-white outline-none"
           />
         </div>
 
-        {!isOnlineOrder && (
+        {!isOnlineOrder && !isCrewOrder && (
           <div>
             <label className="block text-[#ababab] mb-2 text-xs font-medium">
               Nomor Telepon

@@ -5,7 +5,12 @@ import { setCustomer } from "../../../redux/slices/customerSlice";
 import { getCategories, getMenuItems } from "../api";
 import { addItems, decreaseItem, setItemQuantity } from "../cartSlice";
 import { buildMenuCatalog } from "../utils/menuCatalog";
-import { buildBundleSlots, isBundleChoiceLineOf, nextBundleLineId } from "../utils/bundleChoices";
+import {
+  buildBundleSlots,
+  isBundleChoiceLineOf,
+  nextBundleLineId,
+  pickedBundleChoices,
+} from "../utils/bundleChoices";
 import { buildCartItem, getCartItemId, getMenuCardPrice } from "../utils/menuPricing";
 import CategorySelector from "./CategorySelector";
 import MenuItemCard from "./MenuItemCard";
@@ -67,16 +72,19 @@ const MenuContainer = () => {
   const choiceLines = (cartItemId) =>
     cartData.filter((line) => isBundleChoiceLineOf(line.id, cartItemId));
 
-  const addChoicePackage = (item, cartItemId) =>
+  const addChoicePackage = (item, cartItemId) => {
+    const bundleSlots = buildBundleSlots(item, menuData);
     dispatch(
       addItems({
         ...toCartItem(item),
         id: nextBundleLineId(cartData, cartItemId),
-        bundleSlots: buildBundleSlots(item, menuData),
-        bundleChoices: [],
+        bundleSlots,
+        // A choice of one menu starts picked.
+        bundleChoices: pickedBundleChoices(bundleSlots),
         quantity: 1,
       })
     );
+  };
 
   return (
     <>

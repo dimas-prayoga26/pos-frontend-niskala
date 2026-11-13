@@ -1,6 +1,20 @@
 // Order figures used by home, orders, dashboard and recaps: display code,
 // money actually received, and HPP (cost of goods) per item/order.
-import { getJakartaDateKey, getJakartaParts } from "../../../shared/lib/dates";
+import { APP_TIME_ZONE, getJakartaDateKey, getJakartaParts } from "../../../shared/lib/dates";
+
+// Konsumsi Crew: a crew member's free meal on break (order type "Crew"),
+// from 12:00 Jakarta time. Its HPP is a crew cost, apart from the sales'.
+export const CREW_ORDER_TYPE = "Crew";
+export const CREW_MEAL_START_HOUR = 12;
+export const isCrewOrder = (order) => order?.orderType === CREW_ORDER_TYPE;
+export const isCrewMealTime = (now = new Date()) =>
+  Number(
+    new Intl.DateTimeFormat("en-GB", {
+      timeZone: APP_TIME_ZONE,
+      hour: "2-digit",
+      hourCycle: "h23",
+    }).format(now)
+  ) >= CREW_MEAL_START_HOUR;
 
 export const QRIS_FEE_RATE = 0.007;
 // From October 2026 QRIS payments up to Rp100.000 carry no fee (MDR 0%) and

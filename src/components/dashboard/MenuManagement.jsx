@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   keepPreviousData,
   useMutation,
@@ -23,6 +23,7 @@ import {
 import { formatCurrency } from "../../utils";
 import { backendBaseUrl } from "../../https/backendUrl";
 import CreatableSelect2 from "../shared/CreatableSelect2";
+import MultiSelect2 from "../../shared/ui/MultiSelect2";
 import { bundleContentsText } from "../../features/pos/utils/bundleChoices";
 import { MdErrorOutline } from "react-icons/md";
 
@@ -215,6 +216,47 @@ const getBundleLinePrice = (line, menuItemsById) => {
   const item = menuItemsById.get(String(line.menuItemId));
   return Number(item?.regularPrice ?? item?.price ?? 0);
 };
+// A promo is filled with boxes (+ Tambah Pilihan): the cashier picks one
+// menu of each box (Testing: Americano or Elberry Americano; Morning Ritual:
+// a coffee and a roti); a box of one menu always goes in.
+// The name of a box whose menus sit in several categories: the cashier's
+// select reads "Pilih Menu".
+const DEFAULT_CHOICE_LABEL = "Menu";
+const menuCategoryIdOf = (item) => String(item?.categoryId ?? item?.category?.id ?? "");
+// Ordinary menus a package can hold, grouped per ordinary category (its own
+// first), without the excluded ids.
+const buildPackageMenuOptions = (categories, menuItems, excluded, ownCategoryId = "") => {
+  const ordered = [
+    ...categories.filter(
+      (category) => ownCategoryId && getCategoryId(category) === ownCategoryId
+    ),
+    ...categories.filter(
+      (category) =>
+        getCategoryId(category) !== ownCategoryId &&
+        !category.isBundle &&
+        category.isActive !== false
+    ),
+  ];
+  return [
+    { id: "", text: "Pilih menu" },
+    ...ordered
+      .map((category) => ({
+        text: category.name,
+        children: menuItems
+          .filter(
+            (item) =>
+              !isPackageMenu(item) &&
+              menuCategoryIdOf(item) === getCategoryId(category) &&
+              !excluded.has(getMenuItemId(item))
+          )
+          .map((item) => ({
+            id: getMenuItemId(item),
+            text: item.isAvailable === false ? `${item.name} (tidak tersedia)` : item.name,
+          })),
+      }))
+      .filter((group) => group.children.length),
+  ];
+};
 const normalizeStockUnit = (unit) => String(unit || "").trim().toLowerCase();
 
 // A recipe line uses a bahan baku (stockItemId) or a bahan olahan
@@ -294,6 +336,7 @@ const MenuManagement = ({ onCreateIngredient }) => {
   const [activeSection, setActiveSection] = useState("categories");
   const [categoryForm, setCategoryForm] = useState(emptyCategoryForm);
   const [menuForm, setMenuForm] = useState(emptyMenuForm);
+  const newChoiceCount = useRef(0);
   const [editingCategory, setEditingCategory] = useState(null);
   const [editingMenuItem, setEditingMenuItem] = useState(null);
   const [isCategoryFormOpen, setIsCategoryFormOpen] = useState(false);
@@ -356,82 +399,50 @@ const MenuManagement = ({ onCreateIngredient }) => {
     categories.find((category) => getCategoryId(category) === String(menuForm.categoryId))
       ?.isBundle
   );
-  const editingMenuItemId = editingMenuItem ? getMenuItemId(editingMenuItem) : "";
-  const bundleKeys = menuForm.bundleItems.map(bundleLineKey).join("|");
   // A promo sells at its price less its discount percent (e.g. 100% for a
   // Google Maps review).
   const discountText = String(menuForm.discountPercent ?? "").trim().replace(",", ".");
   const promoDiscount = isBundleForm && discountText ? Number(discountText) : 0;
-  // Choices of ordinary categories and ordinary menus not yet in the package
-  // (and never the package itself).
-  const bundleMenuOptions = useMemo(() => {
-    const chosen = new Set(bundleKeys.split("|"));
-    return [
-      { id: "", text: "Pilih menu" },
-      ...categories
-        .filter(
-          (category) =>
-            !category.isBundle &&
-            category.isActive !== false &&
-            !chosen.has(`category:${getCategoryId(category)}`)
-        )
-        .map((category) => ({
-          id: `category:${getCategoryId(category)}`,
-          text: `Pilihan ${category.name}`,
-        })),
-      ...menuItems
-        .filter(
-          (item) =>
-            !isPackageMenu(item) &&
-            getMenuItemId(item) !== editingMenuItemId &&
-            !chosen.has(getMenuItemId(item))
-        )
-        .map((item) => ({
-          id: getMenuItemId(item),
-          text: item.isAvailable === false ? `${item.name} (tidak tersedia)` : item.name,
-        })),
-    ];
-  }, [categories, menuItems, bundleKeys, editingMenuItemId]);
   // Ordinary menus of a category: what a package's choice can offer.
   const categoryMenusOf = (categoryId) =>
     menuItems.filter(
-      (item) =>
-        !isPackageMenu(item) &&
-        String(item.categoryId ?? item.category?.id ?? "") === String(categoryId)
+      (item) => !isPackageMenu(item) && menuCategoryIdOf(item) === String(categoryId)
     );
-  // A choice's name: its label, else its category's.
+  const categoryNameOf = (categoryId) =>
+    categories.find((category) => getCategoryId(category) === String(categoryId))?.name;
+  // A new box's name: its one menu's, else the category of its menus, or
+  // "Menu" when they sit in several.
+  const menusNameOf = (line) => {
+    const menus = offeredMenusOf(line);
+    if (menus.length === 1) return menus[0].name;
+    const categoryIds = [...new Set(menus.map(menuCategoryIdOf))];
+    if (!categoryIds.length) return "";
+    return categoryIds.length === 1
+      ? categoryNameOf(categoryIds[0]) || DEFAULT_CHOICE_LABEL
+      : DEFAULT_CHOICE_LABEL;
+  };
+  // A choice's name: its label, else its category's, else its menus'.
   const choiceNameOf = (line) =>
     String(line.label || "").trim() ||
-    categories.find((category) => getCategoryId(category) === String(line.categoryId))?.name ||
+    (line.categoryId && categoryNameOf(line.categoryId)) ||
     line.name ||
-    "-";
+    menusNameOf(line);
   // Ordinary menus a choice can still offer, grouped per category (its own
   // first): Pilihan Coffee can offer Black Coffee and White Coffee menus.
-  const choiceMenuOptionsOf = (line) => {
-    const offered = new Set(line.menuItemIds || []);
-    const own = String(line.categoryId || "");
-    const ordered = [
-      ...categories.filter((category) => own && getCategoryId(category) === own),
-      ...categories.filter(
-        (category) =>
-          getCategoryId(category) !== own && !category.isBundle && category.isActive !== false
-      ),
-    ];
-    return [
-      { id: "", text: "Pilih menu" },
-      ...ordered
-        .map((category) => ({
-          text: category.name,
-          children: categoryMenusOf(getCategoryId(category))
-            .filter((item) => !offered.has(getMenuItemId(item)))
-            .map((item) => ({
-              id: getMenuItemId(item),
-              text: item.isAvailable === false ? `${item.name} (tidak tersedia)` : item.name,
-            })),
-        }))
-        .filter((group) => group.children.length),
-    ];
-  };
+  // Every ordinary menu a box can hold, picked or not, with its HPP.
+  const choiceMenuOptionsOf = (line) =>
+    buildPackageMenuOptions(categories, menuItems, new Set(), String(line.categoryId || "")).map(
+      (group) =>
+        group.children
+          ? {
+              ...group,
+              children: group.children.map((option) => ({
+                ...option,
+                text: `${option.text} · ${formatCurrency(hppOf(menuItemsById.get(option.id)))}`,
+              })),
+            }
+          : group
+    );
   const hppOf = (item) => Number(item?.hppCost ?? item?.hpp ?? 0);
   // Menus a choice line offers (its selected chips).
   const offeredMenusOf = (line) =>
@@ -782,7 +793,16 @@ const MenuManagement = ({ onCreateIngredient }) => {
   };
 
   const updateMenuForm = (field, value) => {
-    setMenuForm((current) => ({ ...current, [field]: value }));
+    // A new promo starts with one empty box to fill.
+    const isNewPromo =
+      field === "categoryId" &&
+      categories.find((category) => getCategoryId(category) === String(value))?.isBundle;
+    const firstBox = isNewPromo ? newChoiceLine() : null;
+    setMenuForm((current) => ({
+      ...current,
+      [field]: value,
+      ...(firstBox && !current.bundleItems.length ? { bundleItems: [firstBox] } : {}),
+    }));
   };
 
   const updateMenuIngredient = (index, field, value) => {
@@ -871,48 +891,32 @@ const MenuManagement = ({ onCreateIngredient }) => {
     }));
   };
 
-  const addBundleMenu = (optionId) => {
-    if (!optionId) return;
+  // A Pilihan Menu box of its own.
+  const newChoiceLine = (menuItemIds = []) => {
+    newChoiceCount.current += 1;
+    return {
+      isChoice: true,
+      choiceId: `new-${newChoiceCount.current}`,
+      categoryId: "",
+      label: "",
+      quantity: "1",
+      menuItemIds,
+    };
+  };
 
-    const id = String(optionId);
-    const categoryId = id.startsWith("category:") ? id.slice("category:".length) : "";
-    // A choice starts empty: its menus are picked one by one.
-    const line = categoryId
-      ? { isChoice: true, categoryId, label: "", quantity: "1", menuItemIds: [] }
-      : { menuItemId: id, quantity: "1" };
-
-    setMenuForm((current) =>
-      current.bundleItems.some((existing) => bundleLineKey(existing) === bundleLineKey(line))
-        ? current
-        : { ...current, bundleItems: [...current.bundleItems, line] }
-    );
+  // A new choice starts empty: its menus are picked one by one.
+  const addBundleChoice = () => {
+    const line = newChoiceLine();
+    setMenuForm((current) => ({ ...current, bundleItems: [...current.bundleItems, line] }));
   };
 
   // Offers or withdraws a menu in a package's choice.
-  const toggleChoiceMenu = (index, menuItemId) => {
-    setMenuForm((current) => ({
-      ...current,
-      bundleItems: current.bundleItems.map((line, lineIndex) => {
-        if (lineIndex !== index) return line;
-
-        const ids = line.menuItemIds || [];
-        return {
-          ...line,
-          menuItemIds: ids.includes(menuItemId)
-            ? ids.filter((id) => id !== menuItemId)
-            : [...ids, menuItemId],
-        };
-      }),
-    }));
-  };
-
-  const addChoiceMenu = (index, menuItemId) => {
+  // The menus a box offers, as picked in its multiple select.
+  const setChoiceMenus = (index, menuItemIds) => {
     setMenuForm((current) => ({
       ...current,
       bundleItems: current.bundleItems.map((line, lineIndex) =>
-        lineIndex === index && !(line.menuItemIds || []).includes(menuItemId)
-          ? { ...line, menuItemIds: [...(line.menuItemIds || []), menuItemId] }
-          : line
+        lineIndex === index ? { ...line, menuItemIds } : line
       ),
     }));
   };
@@ -986,20 +990,31 @@ const MenuManagement = ({ onCreateIngredient }) => {
     const hppCost = autoHppCost;
     const grossProfit = autoGrossProfit;
     const bundleLines = isBundleForm
-      ? menuForm.bundleItems.map((line) => ({ ...line, quantity: Number(line.quantity) }))
+      ? menuForm.bundleItems.map((line, index) => ({
+          ...line,
+          index,
+          quantity: Number(line.quantity),
+        }))
       : [];
-    const bundleItems = bundleLines
-      .filter((line) => !line.isChoice)
-      .map((line) => ({ menuItemId: Number(line.menuItemId), quantity: line.quantity }));
-    const bundleChoices = bundleLines
-      .filter((line) => line.isChoice)
-      .map((line) => ({
-        categoryId: line.categoryId ? Number(line.categoryId) : null,
-        // Left blank: named after its category, or keeps its name without one.
-        label: String(line.label || "").trim() || (line.categoryId ? null : line.name || null),
-        quantity: line.quantity,
-        menuItemIds: (line.menuItemIds || []).map(Number),
-      }));
+    // A Pilihan Menu box of a single menu has nothing to pick: it is a fixed
+    // menu (Siang Kenyang's CLEO).
+    const saveLines = bundleLines;
+    const isFixedLine = (line) => !line.isChoice || (line.menuItemIds || []).length === 1;
+    const bundleItems = saveLines.filter(isFixedLine).map((line) => ({
+      menuItemId: Number(line.isChoice ? line.menuItemIds[0] : line.menuItemId),
+      quantity: line.quantity,
+    }));
+    const choiceLines = saveLines.filter((line) => !isFixedLine(line));
+    const bundleChoices = choiceLines.map((line) => ({
+      categoryId: line.categoryId ? Number(line.categoryId) : null,
+      // Left blank: named after its category; without one, it keeps its name
+      // or takes its menus' category ("Menu" for several).
+      label:
+        String(line.label || "").trim() ||
+        (line.categoryId ? null : choiceNameOf(line) || DEFAULT_CHOICE_LABEL),
+      quantity: line.quantity,
+      menuItemIds: (line.menuItemIds || []).map(Number),
+    }));
 
     const hasMenuImage =
       Boolean(menuForm.imageFile) || Boolean(menuForm.imagePath.trim());
@@ -1030,7 +1045,20 @@ const MenuManagement = ({ onCreateIngredient }) => {
       (line) => line.isChoice && !(line.menuItemIds || []).length
     );
     if (emptyChoice) {
-      enqueueSnackbar(`Pilih minimal 1 menu untuk Pilihan ${choiceNameOf(emptyChoice)}.`, {
+      enqueueSnackbar(
+        `Pilih minimal 1 menu untuk Pilihan ${choiceNameOf(emptyChoice) || emptyChoice.index + 1}.`,
+        { variant: "warning" }
+      );
+      return;
+    }
+
+    // Choices of the same name would merge into one.
+    const choiceNames = choiceLines.map((line) => choiceNameOf(line).toLowerCase());
+    const sameName = choiceLines.find(
+      (line, index) => choiceNames[index] && choiceNames.indexOf(choiceNames[index]) !== index
+    );
+    if (sameName) {
+      enqueueSnackbar(`Nama Pilihan ${choiceNameOf(sameName)} dipakai dua kali.`, {
         variant: "warning",
       });
       return;
@@ -1121,6 +1149,34 @@ const MenuManagement = ({ onCreateIngredient }) => {
   };
 
   const startEditMenuItem = (item) => {
+    const fixedLines = item.bundleItems || [];
+    const choices = item.bundleChoices || [];
+    // A choice saved without its menus offers every menu of its category.
+    const offeredIdsOf = (choice) =>
+      choice.menuItemIds?.length
+        ? choice.menuItemIds.map(String)
+        : categoryMenusOf(choice.categoryId).map(getMenuItemId);
+    // Every menu of a package in a box: a fixed menu is a box of that one
+    // menu (it always goes in), a choice a box the cashier picks one of.
+    const bundleItems = [
+      ...fixedLines.map((line) => ({
+        isChoice: true,
+        choiceId: `menu-${line.menuItemId}`,
+        categoryId: "",
+        label: "",
+        quantity: String(line.quantity ?? 1),
+        menuItemIds: [String(line.menuItemId)],
+      })),
+      ...choices.map((choice) => ({
+        isChoice: true,
+        choiceId: String(choice.id),
+        categoryId: choice.categoryId ? String(choice.categoryId) : "",
+        label: choice.label || "",
+        name: choice.categoryName,
+        quantity: String(choice.quantity ?? 1),
+        menuItemIds: offeredIdsOf(choice),
+      })),
+    ];
     setEditingMenuItem(item);
     setIsMenuFormOpen(true);
     setMenuForm({
@@ -1147,25 +1203,7 @@ const MenuManagement = ({ onCreateIngredient }) => {
           note: ingredient.note || "",
         };
       }),
-      bundleItems: [
-        ...(item.bundleItems || []).map((line) => ({
-          menuItemId: String(line.menuItemId),
-          name: line.name,
-          quantity: String(line.quantity ?? 1),
-        })),
-        ...(item.bundleChoices || []).map((choice) => ({
-          isChoice: true,
-          choiceId: String(choice.id),
-          categoryId: choice.categoryId ? String(choice.categoryId) : "",
-          label: choice.label || "",
-          name: choice.categoryName,
-          quantity: String(choice.quantity ?? 1),
-          // A choice saved without its menus offers every menu of its category.
-          menuItemIds: choice.menuItemIds?.length
-            ? choice.menuItemIds.map(String)
-            : categoryMenusOf(choice.categoryId).map(getMenuItemId),
-        })),
-      ],
+      bundleItems,
       imageFile: null,
       imagePath: item.imagePath || "",
     });
@@ -1656,34 +1694,33 @@ const MenuManagement = ({ onCreateIngredient }) => {
             </label>
             {isBundleForm ? (
             <div className="mt-4">
-              <span className="text-sm font-semibold text-[#ababab]">Isi Paket</span>
-              <div className="mt-2">
-                <CreatableSelect2
-                  options={bundleMenuOptions}
-                  value=""
-                  onSelect={(option) => addBundleMenu(option?.id || "")}
-                  placeholder="Pilih menu"
-                  label="Tambah menu paket"
-                />
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-semibold text-[#ababab]">Isi Paket</span>
+                <button
+                  type="button"
+                  onClick={addBundleChoice}
+                  className="rounded-md bg-[#333] px-3 py-1 text-xs font-bold text-[#f5f5f5]"
+                >
+                  + Tambah Pilihan
+                </button>
               </div>
               <div className="mt-3 space-y-2">
                 {menuForm.bundleItems.map((line, index) => {
-                  const choiceCategory = line.categoryId
-                    ? categories.find(
-                        (category) => getCategoryId(category) === String(line.categoryId)
-                      )
-                    : null;
+                  const choiceName = line.isChoice ? choiceNameOf(line) : "";
                   const bundleMenuName = line.isChoice
-                    ? `Pilihan ${choiceNameOf(line)}`
+                    ? `Pilihan ${choiceName || index + 1}`
                     : menuItemsById.get(String(line.menuItemId))?.name || line.name || "-";
                   const bundleMenuPrice = getBundleLinePrice(line, menuItemsById);
+                  const lineQuantity = Number(line.quantity) || 0;
                   // The POS hides the package while a line has no available menu.
                   // A choice needs one available menu among those it offers.
+                  const choiceMenus = line.menuItemIds?.length
+                    ? offeredMenusOf(line)
+                    : line.categoryId
+                      ? categoryMenusOf(line.categoryId)
+                      : null;
                   const isLineUnavailable = line.isChoice
-                    ? !(line.menuItemIds?.length
-                        ? offeredMenusOf(line)
-                        : categoryMenusOf(line.categoryId)
-                      ).some((item) => item.isAvailable !== false)
+                    ? Boolean(choiceMenus) && !choiceMenus.some((item) => item.isAvailable !== false)
                     : menuItemsById.get(String(line.menuItemId))?.isAvailable === false;
 
                   return (
@@ -1700,11 +1737,22 @@ const MenuManagement = ({ onCreateIngredient }) => {
                           <p className="text-xs font-semibold text-red-300">Tidak tersedia</p>
                         )}
                       </div>
-                      <span className="truncate text-right text-sm font-semibold text-[#ababab]">
-                        {line.isChoice
-                          ? ""
-                          : formatCurrency(bundleMenuPrice * (Number(line.quantity) || 0))}
-                      </span>
+                      {/* A choice shows the HPP on each of its menus instead. */}
+                      <div className="min-w-0 text-right">
+                        {!line.isChoice && (
+                          <>
+                            <p className="truncate text-sm font-semibold text-[#ababab]">
+                              {formatCurrency(bundleMenuPrice * lineQuantity)}
+                            </p>
+                            <p className="truncate text-xs text-amber-200">
+                              HPP{" "}
+                              {formatCurrency(
+                                lineQuantity * hppOf(menuItemsById.get(String(line.menuItemId)))
+                              )}
+                            </p>
+                          </>
+                        )}
+                      </div>
                       <button
                         type="button"
                         onClick={() => removeBundleMenu(index)}
@@ -1720,39 +1768,24 @@ const MenuManagement = ({ onCreateIngredient }) => {
                           value={line.label || ""}
                           onChange={(event) => setChoiceLabel(index, event.target.value)}
                           maxLength={100}
-                          placeholder={choiceCategory?.name || "Nama pilihan"}
+                          placeholder={choiceNameOf({ ...line, label: "" }) || "Nama pilihan"}
                           aria-label={`Nama ${bundleMenuName}`}
                           className="w-full rounded-lg border border-transparent bg-[#262626] px-3 py-2 text-sm text-[#f5f5f5] outline-none focus:border-[#a79981]"
                         />
-                        <CreatableSelect2
+                        <MultiSelect2
                           options={choiceMenuOptionsOf(line)}
-                          value=""
-                          onSelect={(option) => option?.id && addChoiceMenu(index, String(option.id))}
+                          value={line.menuItemIds || []}
+                          onChange={(menuItemIds) => setChoiceMenus(index, menuItemIds)}
                           placeholder="Pilih menu"
-                          label={`Tambah menu ke ${bundleMenuName}`}
+                          label={`Menu ${bundleMenuName}`}
                         />
+                        {/* What the cashier gets: one menu always goes in. */}
                         {offeredMenusOf(line).length > 0 && (
-                          <div className="flex flex-wrap gap-2">
-                            {offeredMenusOf(line).map((item) => (
-                              <span
-                                key={getMenuItemId(item)}
-                                className="flex items-center gap-2 rounded-lg border border-[#a79981] bg-[#a79981]/20 py-1 pl-3 pr-1 text-xs font-semibold text-[#f5f5f5]"
-                              >
-                                {item.name}
-                                <span className="font-normal text-amber-200">
-                                  {formatCurrency(hppOf(item))}
-                                </span>
-                                <button
-                                  type="button"
-                                  onClick={() => toggleChoiceMenu(index, getMenuItemId(item))}
-                                  aria-label={`Hapus ${item.name} dari ${bundleMenuName}`}
-                                  className="h-6 w-6 rounded-md bg-[#333] font-bold text-red-300"
-                                >
-                                  ×
-                                </button>
-                              </span>
-                            ))}
-                          </div>
+                          <p className="text-xs text-[#ababab]">
+                            {offeredMenusOf(line).length === 1
+                              ? "1 menu: selalu ikut, kasir tidak memilih."
+                              : `Kasir pilih ${lineQuantity} dari ${offeredMenusOf(line).length} menu.`}
+                          </p>
                         )}
                       </div>
                     )}

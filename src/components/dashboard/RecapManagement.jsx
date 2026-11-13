@@ -33,6 +33,7 @@ import {
   getOrdersGrossRevenueTotal,
   getOrdersHppTotal,
   isCashPayment,
+  isCrewOrder,
   isOrderPlatformMatch,
   isQrPayment,
 } from "../../utils";
@@ -794,11 +795,14 @@ const RecapManagement = () => {
         summary.grossSales += grossAmount;
         summary.netSales += netAmount;
         summary.discounts += incomeDeduction;
-        // Promo discounts (shown only: neither income nor a loss).
-        summary.promo += (order.items || []).reduce(
+        // Promo discounts (shown only: neither income nor a loss). A Konsumsi
+        // Crew's lines carry the menus' value: apart from the promos.
+        const discountTotal = (order.items || []).reduce(
           (total, item) => total + (Number(item.discountAmount) || 0),
           0
         );
+        if (isCrewOrder(order)) summary.crew += discountTotal;
+        else summary.promo += discountTotal;
 
         if (order.orderType !== "Online" && isCashPayment(order.paymentMethod)) {
           summary.cashSales += netAmount;
@@ -829,6 +833,7 @@ const RecapManagement = () => {
         netSales: 0,
         discounts: 0,
         promo: 0,
+        crew: 0,
         cashSales: 0,
         qrSales: 0,
         shopeeFoodSales: 0,
@@ -869,11 +874,13 @@ const RecapManagement = () => {
           // A promo line is marked; with a discount it shows its price and
           // the discount as a minus.
           const discountAmount = Number(item.discountAmount) || 0;
+          const isCrew = isCrewOrder(order);
           const isPromo =
-            discountAmount > 0 ||
-            Number(item.discountPercent) > 0 ||
-            (item.bundleChoices?.length || 0) > 0 ||
-            promoMenuIds.has(Number(item.menuItemId ?? item.sourceMenuItemId));
+            !isCrew &&
+            (discountAmount > 0 ||
+              Number(item.discountPercent) > 0 ||
+              (item.bundleChoices?.length || 0) > 0 ||
+              promoMenuIds.has(Number(item.menuItemId ?? item.sourceMenuItemId)));
           const listUnitPrice =
             discountAmount > 0 && quantity > 0
               ? ((Number(item.price) || 0) + discountAmount) / quantity
@@ -898,6 +905,7 @@ const RecapManagement = () => {
             weekLabel: weekInfo.label,
             menu: menuName || "-",
             isPromo,
+            isCrew,
             discountAmount,
             listUnitPrice,
             quantity,
@@ -1301,6 +1309,12 @@ const RecapManagement = () => {
       title: "Total Promo",
       value: formatPromoAmount(newRecapTotals.promo),
       color: "#be3e3f",
+    },
+    {
+      // The menus the crew ate, at their normal price (no income).
+      title: "Konsumsi Crew",
+      value: formatPromoAmount(newRecapTotals.crew),
+      color: "#0e7490",
     },
     {
       title: "Total Penjualan dengan Tunai",
@@ -1861,6 +1875,11 @@ const RecapManagement = () => {
                           {row.isPromo && (
                             <span className="shrink-0 rounded-md bg-amber-900/50 px-2 py-0.5 text-xs font-bold text-amber-200">
                               Promo
+                            </span>
+                          )}
+                          {row.isCrew && (
+                            <span className="shrink-0 rounded-md bg-sky-900/50 px-2 py-0.5 text-xs font-bold text-sky-200">
+                              Crew
                             </span>
                           )}
                         </div>

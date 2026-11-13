@@ -17,6 +17,12 @@ vi.mock("../../src/https/index", async (importOriginal) => ({
 
 const asAdmin = { user: { _id: 1, name: "Admin", email: "a", phone: "1", role: "Admin", isAuth: true } };
 const optionNames = (select) => Array.from(select.options).map((option) => option.textContent);
+// Picks more menus in a box's multiple select (its tags).
+const pickMenus = (boxName, ...ids) => {
+  const select = screen.getByLabelText(`Menu ${boxName}`);
+  $(select).val([...($(select).val() || []), ...ids]).trigger("change");
+};
+const plainText = (texts) => texts.map((text) => text.replace(/\s/g, " "));
 // Types into the open search of a select2 picker.
 const searchIn = (select, term) =>
   act(() => {
@@ -226,7 +232,7 @@ describe("kategori promo", () => {
     );
   });
 
-  it("fills a promo menu with menus instead of bahan", async () => {
+  it("fills a promo with boxes: one menu always goes in, of several the cashier picks one", async () => {
     api.updateMenuItem.mockResolvedValue({ data: { success: true } });
     renderWithProviders(<MenuManagement />, { preloadedState: asAdmin });
 
@@ -237,61 +243,39 @@ describe("kategori promo", () => {
     );
 
     expect(screen.queryByText("Komposisi Bahan")).not.toBeInTheDocument();
-    expect(screen.getByText("Isi Paket")).toBeInTheDocument();
     expect(screen.getByLabelText("Harga")).toHaveValue("28000");
-    // Choices of ordinary categories, then ordinary menus not in the package yet.
-    const picker = screen.getByLabelText("Tambah menu paket");
-    await waitFor(() =>
-      expect(optionNames(picker)).toEqual(["Pilih menu", "Pilihan Kopi", "Teh", "Roti Baru (tidak tersedia)"])
-    );
-    expect(screen.queryByText("Harga normal")).not.toBeInTheDocument();
-    // No HPP in the form (each sale counts its menus); the profit is typed in.
-    expect(screen.queryByText("HPP paket")).not.toBeInTheDocument();
+    // No Jenis Paket and no list picker: only boxes.
+    expect(screen.queryByRole("group", { name: "Jenis paket" })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Tambah menu paket")).not.toBeInTheDocument();
     expect(screen.getByLabelText("Gross Profit")).toHaveValue("16600");
 
-    $(picker).val("9").trigger($.Event("select2:select", { params: { data: { id: "9", text: "Teh" } } }));
-    expect(await screen.findByRole("button", { name: "Hapus Teh" })).toBeInTheDocument();
-    // Each menu counts once: no quantity input.
-    expect(screen.queryByLabelText(/^Jumlah /)).not.toBeInTheDocument();
-    // An unavailable menu hides the package from the POS, so its line says so.
-    $(picker).val("10").trigger($.Event("select2:select", { params: { data: { id: "10", text: "Roti Baru" } } }));
-    expect(await screen.findByText("Tidak tersedia")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Hapus Roti Baru" }));
-    expect(screen.queryByText("Tidak tersedia")).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Hapus Croissant" }));
+    // Its two fixed menus: a box each, named after the menu, always in.
+    const boxOf = (name) => screen.getByRole("button", { name: `Hapus Pilihan ${name}` }).closest("div.rounded-lg");
+    expect(within(boxOf("Kopi Susu")).getByText("1 menu: selalu ikut, kasir tidak memilih.")).toBeInTheDocument();
+    expect(within(boxOf("Croissant")).getByText("1 menu: selalu ikut, kasir tidak memilih.")).toBeInTheDocument();
+    expect(within(boxOf("Kopi Susu")).queryByText(/^HPP Rp/)).not.toBeInTheDocument();
 
-    // A choice of Kopi: the cashier picks the menu when ordering.
-    $(picker)
-      .val("category:1")
-      .trigger($.Event("select2:select", { params: { data: { id: "category:1", text: "Pilihan Kopi" } } }));
-    // A new choice starts empty; its Kopi menus are picked one by one (the
-    // cashier will only see those). No HPP sum is shown.
-    const choicePicker = await screen.findByLabelText("Tambah menu ke Pilihan Kopi");
-    expect(screen.queryByText(/^HPP Rp/)).not.toBeInTheDocument();
-    expect(optionNames(choicePicker)).toEqual([
-      "Pilih menu",
-      "Kopi Susu",
-      "Croissant",
-      "Teh",
-      "Roti Baru (tidak tersedia)",
+    // Teh in the Kopi Susu box: the cashier picks Kopi Susu or Teh.
+    pickMenus("Pilihan Kopi Susu", "9");
+    expect(await screen.findByText("Pilihan Kopi")).toBeInTheDocument();
+    expect(within(boxOf("Kopi")).getByText("Kasir pilih 1 dari 2 menu.")).toBeInTheDocument();
+
+    // A new box starts empty, its multiple select offering ordinary menus of
+    // every category with their HPP; an unavailable menu hides the package
+    // from the POS, so its box says so.
+    fireEvent.click(screen.getByRole("button", { name: "+ Tambah Pilihan" }));
+    const thirdPicker = await screen.findByLabelText("Menu Pilihan 3");
+    expect($(thirdPicker).val()).toEqual([]);
+    expect(plainText(optionNames(thirdPicker))).toEqual([
+      "Kopi Susu · Rp 6.000",
+      "Croissant · Rp 5.400",
+      "Teh · Rp 2.000",
+      "Roti Baru (tidak tersedia) · Rp 3.000",
     ]);
-    const addToChoice = (id, text) =>
-      $(screen.getByLabelText("Tambah menu ke Pilihan Kopi"))
-        .val(id)
-        .trigger($.Event("select2:select", { params: { data: { id, text } } }));
-    addToChoice("7", "Kopi Susu");
-    addToChoice("9", "Teh");
-    addToChoice("8", "Croissant");
-    await waitFor(() =>
-      expect(optionNames(screen.getByLabelText("Tambah menu ke Pilihan Kopi"))).toEqual([
-        "Pilih menu",
-        "Roti Baru (tidak tersedia)",
-      ])
-    );
-    fireEvent.click(screen.getByRole("button", { name: "Hapus Croissant dari Pilihan Kopi" }));
-    expect(
-      screen.queryByRole("button", { name: "Hapus Croissant dari Pilihan Kopi" })
-    ).not.toBeInTheDocument();
+    pickMenus("Pilihan 3", "10");
+    expect(await screen.findByText("Tidak tersedia")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Hapus Pilihan Roti Baru" }));
+    expect(screen.queryByText("Tidak tersedia")).not.toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("Gross Profit"), { target: { value: "12000" } });
 
     fireEvent.click(screen.getByRole("button", { name: "Simpan" }));
@@ -300,13 +284,42 @@ describe("kategori promo", () => {
       menuItemId: 20,
       categoryId: "2",
       ingredients: [],
-      bundleItems: [
-        { menuItemId: 7, quantity: 1 },
-        { menuItemId: 9, quantity: 1 },
-      ],
-      bundleChoices: [{ categoryId: 1, quantity: 1, menuItemIds: [7, 9] }],
+      bundleItems: [{ menuItemId: 8, quantity: 1 }],
+      bundleChoices: [{ categoryId: null, label: "Kopi", quantity: 1, menuItemIds: [7, 9] }],
       hppCost: 0,
       grossProfit: 12000,
+    });
+  });
+
+  it("opens a promo's choice as a box and keeps its category", async () => {
+    api.updateMenuItem.mockResolvedValue({ data: { success: true } });
+    api.getMenuItems.mockResolvedValue({
+      data: {
+        data: [
+          menu(7, "Kopi Susu", 18000, 6000),
+          menu(9, "Teh", 10000, 2000),
+          menu(21, "Pilih Kopi", 20000, 0, {
+            categoryId: 2,
+            isBundle: true,
+            bundleChoices: [{ id: 16, categoryId: 1, label: null, categoryName: "Kopi", quantity: 1, menuItemIds: [7, 9] }],
+          }),
+        ],
+      },
+    });
+    renderWithProviders(<MenuManagement />, { preloadedState: asAdmin });
+
+    fireEvent.click(await screen.findByRole("button", { name: "Menu Items" }));
+    fireEvent.click(
+      within((await screen.findByText("Pilih Kopi")).closest("tr")).getByRole("button", { name: "Ubah" })
+    );
+
+    expect(screen.getByText("Pilihan Kopi")).toBeInTheDocument();
+    expect(screen.getByText("Kasir pilih 1 dari 2 menu.")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Simpan" }));
+    await waitFor(() => expect(api.updateMenuItem).toHaveBeenCalled());
+    expect(api.updateMenuItem.mock.calls[0][0]).toMatchObject({
+      bundleItems: [],
+      bundleChoices: [{ categoryId: 1, label: null, quantity: 1, menuItemIds: [7, 9] }],
     });
   });
 
@@ -331,6 +344,7 @@ describe("kategori promo", () => {
           menu(30, "Siang Kenyang", 35000, 0, {
             categoryId: 2,
             isBundle: true,
+            bundleItems: [{ menuItemId: 7, name: "Kopi Susu", quantity: 1 }],
             bundleChoices: [
               { id: 15, categoryId: null, label: "Coffee", categoryName: "Coffee", quantity: 1, menuItemIds: [11] },
             ],
@@ -345,18 +359,26 @@ describe("kategori promo", () => {
       within((await screen.findByText("Siang Kenyang")).closest("tr")).getByRole("button", { name: "Ubah" })
     );
 
+    // Its fixed menu is a box of that one menu.
+    expect(screen.getByText("Pilihan Kopi Susu")).toBeInTheDocument();
     // The category Coffee is gone; the choice keeps its name and menus.
     expect(await screen.findByText("Pilihan Coffee")).toBeInTheDocument();
     expect(screen.getByLabelText("Nama Pilihan Coffee")).toHaveValue("Coffee");
     // Its menus can come from any ordinary category, grouped per category.
-    const choicePicker = screen.getByLabelText("Tambah menu ke Pilihan Coffee");
-    expect(optionNames(choicePicker)).toEqual(["Pilih menu", "Kopi Susu", "Cafe Latte"]);
+    const choicePicker = screen.getByLabelText("Menu Pilihan Coffee");
+    expect($(choicePicker).val()).toEqual(["11"]);
+    expect(plainText(optionNames(choicePicker))).toEqual([
+      "Kopi Susu · Rp 6.000",
+      "Americano · Rp 3.000",
+      "Cafe Latte · Rp 5.000",
+    ]);
     expect(Array.from(choicePicker.querySelectorAll("optgroup")).map((group) => group.label)).toEqual([
       "Kopi",
+      "Black Coffee",
       "White Coffee",
     ]);
-    $(choicePicker).val("12").trigger($.Event("select2:select", { params: { data: { id: "12", text: "Cafe Latte" } } }));
-    expect(await screen.findByRole("button", { name: "Hapus Cafe Latte dari Pilihan Coffee" })).toBeInTheDocument();
+    pickMenus("Pilihan Coffee", "12");
+    expect(await screen.findByText("Kasir pilih 1 dari 2 menu.")).toBeInTheDocument();
 
     // Left blank it keeps its name; a new one renames it.
     fireEvent.change(screen.getByLabelText("Nama Pilihan Coffee"), { target: { value: " " } });
@@ -368,6 +390,7 @@ describe("kategori promo", () => {
     expect(api.updateMenuItem.mock.calls[0][0].bundleChoices).toEqual([
       { categoryId: null, label: "Kopi Siang", quantity: 1, menuItemIds: [11, 12] },
     ]);
+    expect(api.updateMenuItem.mock.calls[0][0].bundleItems).toEqual([{ menuItemId: 7, quantity: 1 }]);
   });
 
   it("shows the HPP of a menu with each pengganti of its bahan olahan under its HPP", async () => {
@@ -457,7 +480,8 @@ describe("kategori promo", () => {
     // Without a discount the profit is typed in.
     expect(screen.getByLabelText("Gross Profit")).toBeEnabled();
 
-    // Rp 15.000 less 80% = Rp 3.000, less the HPP of Kopi Susu (6.000) and Croissant (5.400).
+    // Rp 15.000 less 80% = Rp 3.000, less the HPP of Kopi Susu (6.000) and
+    // Croissant (5.400), both always in.
     fireEvent.change(screen.getByLabelText("Harga"), { target: { value: "15000" } });
     fireEvent.change(screen.getByLabelText("Diskon (%)"), { target: { value: "80" } });
     const grossProfit = screen.getByLabelText("Gross Profit");
@@ -495,8 +519,8 @@ describe("kategori promo", () => {
     fireEvent.click(
       within((await screen.findByText("Paket Hemat")).closest("tr")).getByRole("button", { name: "Ubah" })
     );
-    fireEvent.click(screen.getByRole("button", { name: "Hapus Croissant" }));
-    fireEvent.click(screen.getByRole("button", { name: "Hapus Kopi Susu" }));
+    fireEvent.click(screen.getByRole("button", { name: "Hapus Pilihan Croissant" }));
+    fireEvent.click(screen.getByRole("button", { name: "Hapus Pilihan Kopi Susu" }));
     fireEvent.click(screen.getByRole("button", { name: "Simpan" }));
 
     expect(await screen.findByText("Paket minimal berisi 1 menu.")).toBeInTheDocument();
@@ -511,7 +535,7 @@ describe("kategori promo", () => {
     fireEvent.click(
       within((await screen.findByText("Paket Hemat")).closest("tr")).getByRole("button", { name: "Ubah" })
     );
-    fireEvent.click(screen.getByRole("button", { name: "Hapus Croissant" }));
+    fireEvent.click(screen.getByRole("button", { name: "Hapus Pilihan Croissant" }));
     fireEvent.click(screen.getByRole("button", { name: "Simpan" }));
 
     await waitFor(() => expect(api.updateMenuItem).toHaveBeenCalled());

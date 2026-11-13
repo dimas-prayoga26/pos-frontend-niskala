@@ -149,13 +149,16 @@ const textEntries = (lines, options) => lines.map((line) => textEntry(line, opti
 export const centerLine = (text, width, characterScale = 1) =>
   `${" ".repeat(Math.max(0, Math.floor((width / characterScale - text.length) / 2)))}${text}`;
 
+// Konsumsi Crew: a crew member's free meal.
+const isCrewReceipt = (orderInfo) => orderInfo?.orderType === "Crew";
+
 const getMetaRows = (orderInfo) => {
   const customer = orderInfo.customerDetails || {};
   const catering = orderInfo.cateringDetails;
 
   return [
     ["Order ID", orderInfo.orderId || orderInfo.orderCode || orderInfo.id],
-    ["Customer", customer.name],
+    [isCrewReceipt(orderInfo) ? "Crew" : "Customer", customer.name],
     orderInfo.orderType === "Offline" && customer.phone ? ["Telepon", customer.phone] : null,
     ["Date", formatJakartaReceiptDateTime(orderInfo.orderDate || orderInfo.createdAt || undefined)],
     ["Payment", orderInfo.paymentMethod],
@@ -215,7 +218,7 @@ export const buildThermerReceiptEntries = (
           textEntry(centerLine("NISKALA", width, 2), { bold: true, format: FORMAT_DOUBLE }),
           textEntry(centerLine("COFFEE", width)),
         ]),
-    textEntry(centerLine("Order Receipt", width)),
+    textEntry(centerLine(isCrewReceipt(orderInfo) ? "Konsumsi Crew" : "Order Receipt", width)),
     separator,
     ...metaRows.flatMap(([label, value]) => textEntries(labelValue(label, value, labelWidth, width))),
     separator,

@@ -12,8 +12,12 @@ const queryRefetchInterval =
       : 15000;
 
 // An expired session (401) is not retried; useLoadSession sends the user to /auth.
+// Neither is a busy server (429 rate limit, 503, 508 hosting out of
+// processes): retrying at once only adds to its load, and the next refetch
+// comes anyway.
+const NO_RETRY_STATUSES = new Set([401, 429, 503, 508]);
 const shouldRetryQuery = (failureCount, error) => {
-  if (error?.response?.status === 401) return false;
+  if (NO_RETRY_STATUSES.has(error?.response?.status)) return false;
 
   return failureCount < 3;
 };

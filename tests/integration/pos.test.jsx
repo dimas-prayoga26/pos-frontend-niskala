@@ -202,6 +202,46 @@ describe("POS menu", () => {
     expect(cart(store).map((item) => item.id)).toEqual(["3-32~1"]);
   });
 
+  it("lets the cashier pick one menu of a Pilihan Menu promo, and picks a lone menu itself", async () => {
+    const promo = (id, name, menuItemIds) => ({
+      id,
+      categoryId: 3,
+      name,
+      price: 0,
+      regularPrice: 0,
+      discountPercent: 100,
+      isBundle: true,
+      bundleItems: [],
+      bundleChoices: [{ categoryId: null, categoryName: "Menu", quantity: 1, menuItemIds }],
+    });
+    api.getCategories.mockResolvedValue({
+      data: { data: [...categories, { id: 3, name: "Promo", taxRate: null, isBundle: true }] },
+    });
+    api.getMenuItems.mockResolvedValue({
+      data: { data: [...menuItems, promo(33, "Review Maps", [11, 12]), promo(34, "Review Satu", [12])] },
+    });
+    Element.prototype.scrollTo ??= () => {};
+    const { store } = renderWithProviders(
+      <>
+        <MenuContainer />
+        <CartInfo />
+      </>,
+      { route: "/menu" }
+    );
+    await screen.findByText("Kopi Susu");
+
+    fireEvent.click(screen.getAllByText("Promo").at(-1));
+    await screen.findByText("Review Maps");
+    fireEvent.click(within(itemCard("Review Maps")).getByRole("button", { name: "+" }));
+    const select = screen.getByLabelText("Pilih Menu");
+    expect(Array.from(select.options).map((option) => option.textContent)).toEqual(["Pilih Menu", "Kopi Susu", "Americano"]);
+    fireEvent.change(select, { target: { value: "12" } });
+    expect(cart(store)[0].bundleChoices).toEqual([{ menuItemId: 12, name: "Americano", quantity: 1 }]);
+
+    fireEvent.click(within(itemCard("Review Satu")).getByRole("button", { name: "+" }));
+    expect(cart(store)[1].bundleChoices).toEqual([{ menuItemId: 12, name: "Americano", quantity: 1 }]);
+  });
+
   it("swaps the nasi of a rice bowl for its pengganti, at its extra price, on a line of its own", async () => {
     api.getMenuItems.mockResolvedValue({
       data: {

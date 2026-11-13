@@ -20,8 +20,10 @@ vi.mock("pusher-js", () => ({
       pushers.push(this);
     }
 
+    // Like Pusher: subscribing again keeps the same channel.
     subscribe(name) {
-      this.channel = { name, handlers: {}, bind(event, handler) { this.handlers[event] = handler; } };
+      this.subscriptions = (this.subscriptions || 0) + 1;
+      this.channel ??= { name, handlers: {}, bind(event, handler) { this.handlers[event] = handler; } };
       return this.channel;
     }
   },
@@ -95,6 +97,46 @@ describe("realtime", () => {
     await waitFor(() => expect(axiosWrapper.get).toHaveBeenCalled());
     await new Promise((resolve) => setTimeout(resolve, 20));
     expect(pushers).toHaveLength(0);
+  });
+
+  it("never falls back to Socket.IO when the backend does not answer, and asks again later", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      axiosWrapper.get
+        .mockRejectedValueOnce(Object.assign(new Error("Loop Detected"), { response: { status: 508 } }))
+        .mockResolvedValue({ data: { data: pusherConfig } });
+      await renderRealtime({ isAuth: true });
+
+      await waitFor(() => expect(axiosWrapper.get).toHaveBeenCalledTimes(1));
+      await vi.advanceTimersByTimeAsync(25000);
+      expect(axiosWrapper.get).toHaveBeenCalledTimes(1);
+      expect(socket.on).not.toHaveBeenCalled();
+
+      await vi.advanceTimersByTimeAsync(5000);
+      await waitFor(() => expect(pushers).toHaveLength(1));
+      expect(axiosWrapper.get).toHaveBeenCalledTimes(2);
+      expect(socket.on).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("subscribes again later when the backend could not sign the subscription", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      axiosWrapper.get.mockResolvedValue({ data: { data: pusherConfig } });
+      await renderRealtime({ isAuth: true });
+      await waitFor(() => expect(pushers).toHaveLength(1));
+      const [pusher] = pushers;
+      expect(pusher.subscriptions).toBe(1);
+
+      pusher.channel.handlers["pusher:subscription_error"]({ status: 508 });
+      await vi.advanceTimersByTimeAsync(30000);
+      expect(pusher.subscriptions).toBe(2);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("stays on Socket.IO when the backend has no Pusher", async () => {

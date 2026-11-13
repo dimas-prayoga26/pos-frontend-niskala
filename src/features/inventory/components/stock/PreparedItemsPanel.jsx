@@ -166,6 +166,16 @@ const PreparedItemsPanel = ({
                       >
                         Catat Masak
                       </button>
+                      {isAdmin && (
+                        <button
+                          type="button"
+                          onClick={() => onSubstitutes(item)}
+                          title="Bahan olahan lain yang bisa dipilih kasir, misalnya Nasi Daun Jeruk"
+                          className="whitespace-nowrap rounded-md border border-[#a79981]/60 px-3 py-1.5 font-semibold text-[#d6c7ae] hover:bg-[#a79981]/10"
+                        >
+                          Pengganti
+                        </button>
+                      )}
                       <button
                         type="button"
                         onClick={() => onWaste(item)}
@@ -194,14 +204,6 @@ const PreparedItemsPanel = ({
                             className={linkClass}
                           >
                             Ubah
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => onSubstitutes(item)}
-                            title="Bahan olahan lain yang bisa dipilih kasir, misalnya Nasi Daun Jeruk"
-                            className={linkClass}
-                          >
-                            Pengganti
                           </button>
                           <button
                             type="button"

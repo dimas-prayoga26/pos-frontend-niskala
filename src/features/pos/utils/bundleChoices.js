@@ -37,13 +37,18 @@ export const buildBundleSlots = (item, catalog) =>
         .map((option) => ({ option, group: category.name }))
     );
 
+    const options = candidates
+      .filter(({ option }) => !option.bundleItems?.length && !option.bundleChoices?.length)
+      .map(({ option, group }) => ({ id: option.id, name: option.name, group }));
+
     return {
       categoryId: choice.categoryId,
       categoryName: choice.categoryName,
-      options: candidates
-        .filter(({ option }) => !option.bundleItems?.length && !option.bundleChoices?.length)
-        .map(({ option, group }) => ({ id: option.id, name: option.name, group })),
-      picks: Array.from({ length: Number(choice.quantity) || 0 }, () => null),
+      options,
+      // A choice of one menu has nothing to pick: it starts picked.
+      picks: Array.from({ length: Number(choice.quantity) || 0 }, () =>
+        options.length === 1 ? Number(options[0].id) || null : null
+      ),
     };
   });
 
