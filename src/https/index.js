@@ -7,6 +7,9 @@ export const login = (data) => axiosWrapper.post("/api/user/login", data);
 export const register = (data) => axiosWrapper.post("/api/user/register", data);
 export const getUserData = () => axiosWrapper.get("/api/user");
 export const getUsers = () => axiosWrapper.get("/api/user/all");
+// Account management (admin): register makes an account.
+export const updateUser = ({ userId, ...data }) => axiosWrapper.put(`/api/user/${userId}`, data);
+export const deleteUser = (userId) => axiosWrapper.delete(`/api/user/${userId}`);
 export const logout = () => axiosWrapper.post("/api/user/logout");
 
 // Category Endpoints
@@ -88,6 +91,10 @@ export const deleteSupplier = (id) => axiosWrapper.delete(`/api/shopping/supplie
 export const getPurchases = (params) => axiosWrapper.get("/api/shopping/purchases", { params });
 // Summary cards of the Belanja page (?from=&to=).
 export const getShoppingSummary = (params) => axiosWrapper.get("/api/shopping/summary", { params });
+// History of Belanja (admins): every purchase line made, changed or deleted.
+// params: page (10 a page), action (create, edit, delete), search.
+export const getShoppingActivityLogs = (params) =>
+  axiosWrapper.get("/api/shopping/activity-logs", { params });
 // The "Per Nota" history: posted nota with all their lines.
 export const getPurchaseNotas = (params) => axiosWrapper.get("/api/shopping/purchases/notas", { params });
 export const savePurchase = (data) => axiosWrapper.post("/api/shopping/purchases", data);

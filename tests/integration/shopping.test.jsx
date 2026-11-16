@@ -24,6 +24,7 @@ vi.mock("../../src/https/index", async (importOriginal) => ({
   getPurchaseDrafts: vi.fn(),
   getPurchaseNotas: vi.fn(),
   getPurchases: vi.fn(),
+  getShoppingActivityLogs: vi.fn(),
   getShoppingSummary: vi.fn(),
   getShoppingSuppliers: vi.fn(),
   getSupplyPurchaseDrafts: vi.fn(),
@@ -173,6 +174,58 @@ describe("shopping history", () => {
     receiptImages.compressReceiptImage.mockImplementation(async (file) => file);
     URL.createObjectURL = vi.fn((file) => `blob:${file.name}`);
     URL.revokeObjectURL = vi.fn();
+  });
+
+  it("shows the History of every line made, changed and deleted, 10 a page, by period, to admins only", async () => {
+    const logOf = (index, action = "create") => ({
+      id: `raw-${index}`,
+      kind: index === 1 ? "Perlengkapan" : "Bahan Baku",
+      itemName: `Barang ${index}`,
+      supplierName: "Pasar",
+      action,
+      oldData: { quantity: 500, unit: "gr", unitPrice: 20 },
+      newData: { quantity: 400, unit: "gr", unitPrice: 25 },
+      userName: "Admin",
+      createdAt: "2026-11-16T03:00:00Z",
+    });
+    // 12 logs: 10 on page 1, 2 on page 2; the server filters and pages.
+    api.getShoppingActivityLogs.mockImplementation(async ({ page = 1, action } = {}) => {
+      const all = Array.from({ length: 12 }, (_, index) => logOf(index + 1, index === 11 ? "delete" : index === 10 ? "edit" : "create"));
+      const matching = action ? all.filter((log) => log.action === action) : all;
+      return { data: { data: { logs: matching.slice((page - 1) * 10, page * 10), total: matching.length, page, pageSize: 10 } } };
+    });
+    const cashier = renderShopping(false);
+    expect(screen.queryByRole("button", { name: "History" })).not.toBeInTheDocument();
+    cashier.unmount();
+
+    renderShopping(true);
+    fireEvent.click(await screen.findByRole("button", { name: "History" }));
+    const dialog = await screen.findByRole("dialog", { name: "History Belanja" });
+    expect(await within(dialog).findByText("Barang 1")).toBeInTheDocument();
+    expect(within(dialog).getByText("Perlengkapan")).toBeInTheDocument();
+    expect(within(dialog).getByText("Barang 10")).toBeInTheDocument();
+    expect(within(dialog).queryByText("Barang 11")).not.toBeInTheDocument();
+    expect(within(dialog).getByText("Showing 1 - 10 of 12")).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "Prev" })).toBeDisabled();
+
+    fireEvent.click(within(dialog).getByRole("button", { name: "Next" }));
+    expect(await within(dialog).findByText("Barang 11")).toBeInTheDocument();
+    expect(within(dialog).getByText("Showing 11 - 12 of 12")).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "Next" })).toBeDisabled();
+
+    // No Tambah/Edit/Hapus filter: a period of days instead, sent to the
+    // server from page 1.
+    expect(within(dialog).queryByRole("button", { name: "Edit" })).not.toBeInTheDocument();
+    expect(within(dialog).getByText("Semua waktu")).toBeInTheDocument();
+    fireEvent.change(within(dialog).getByLabelText("Periode"), { target: { value: "today" } });
+    const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jakarta" }).format(new Date());
+    await waitFor(() =>
+      expect(api.getShoppingActivityLogs).toHaveBeenLastCalledWith({ page: 1, from: today, to: today })
+    );
+    expect(await within(dialog).findByText("Showing 1 - 10 of 12")).toBeInTheDocument();
+
+    fireEvent.click(within(dialog).getByRole("button", { name: "Tutup" }));
+    expect(screen.queryByRole("dialog", { name: "History Belanja" })).not.toBeInTheDocument();
   });
 
   it("lists Per Item: every purchase of an item summed, the date and COGS of the latest, and the TOTAL PENGELUARAN, paged and searchable", async () => {

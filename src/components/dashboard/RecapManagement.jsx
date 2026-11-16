@@ -15,15 +15,16 @@ import {
   getRecaps,
   getSemiItems,
   getStockWastes,
-  getUsers,
 } from "../../https";
 import OrderDateRangeFilter from "../../features/orders/components/OrderDateRangeFilter";
 import {
   filterOrdersByDateRange,
   getSummaryDateRangeLabel,
 } from "../../features/orders/utils/orderFilters";
+import { getDailyRecapSystem, isCateringOrder } from "../../features/orders/utils/recapDaily";
 import CreatableSelect2 from "../shared/CreatableSelect2";
 import RecapItemCostDialog from "./RecapItemCostDialog";
+import RecapOrderHistoryDialog from "./RecapOrderHistoryDialog";
 import {
   formatCurrency,
   getOrderGrossRevenue,
@@ -290,8 +291,6 @@ const visibleRecapFormFields = SHOW_HPP_FIELDS
 
 const createEmptyRecapForm = () => ({
   date: getTodayInputValue(),
-  shiftOfficerId: "",
-  shiftOfficer: "",
   transactionTotal: "0",
   offlineRevenue: "0",
   onlineRevenue: "0",
@@ -332,56 +331,87 @@ const createEmptyMonthlyRecapForm = () => ({
   nextMonthStrategy: "",
 });
 
-const isCateringOrder = (order) =>
-  Boolean(order.cateringDetails) ||
-  order.orderType === "Catering" ||
-  order.items?.some((item) => item.categoryName === "Catering");
+// Notas of one day (YYYY-MM-DD).
+const getOrdersOfDate = (orders, date) => {
+  const selectedDate = getLocalDate(date);
+  const selectedDateKey = selectedDate ? getDateKey(selectedDate) : date;
 
+  return orders.filter((order) => {
+    const orderDate = getLocalDate(order.orderDate);
+
+    return orderDate && getDateKey(orderDate) === selectedDateKey;
+  });
+};
+
+// Fields of the Rekap Harian form with a system amount (from the notas of
+// its day): the value filled in, and the breakdown shown under it.
+const getRecapSystemAmounts = (system) => ({
+  transactionTotal: { value: system.transactionTotal },
+  offlineRevenue: { value: system.offlineRevenue },
+  onlineRevenue: { value: system.onlineRevenue },
+  cateringRevenue: { value: system.cateringRevenue },
+  cashIn: { value: system.cash.net },
+  qrisIn: {
+    value: system.qris.net,
+    detail: system.qris.fee
+      ? `${formatCurrency(system.qris.gross)} - MDR ${formatCurrency(system.qris.fee)}`
+      : "",
+  },
+  onlineIn: {
+    value: system.online.net,
+    detail: system.online.fee
+      ? `${formatCurrency(system.online.gross)} - Platform ${formatCurrency(system.online.fee)}`
+      : "",
+  },
+});
+
+// A new daily recap: every amount the notas of its day give, editable.
 const createRecapFormFromOrders = (
   orders,
   menuItems,
   date = getTodayInputValue()
 ) => {
-  const selectedDate = getLocalDate(date);
-  const selectedDateKey = selectedDate ? getDateKey(selectedDate) : date;
-  const dailyOrders = orders.filter((order) => {
-    const orderDate = getLocalDate(order.orderDate);
-
-    return orderDate && getDateKey(orderDate) === selectedDateKey;
-  });
-  const hppTotal = getOrdersHppTotal(dailyOrders, menuItems);
-
-  const summary = dailyOrders.reduce(
-    (current, order) => {
-      const grossRevenue = getOrderGrossRevenue(order);
-      const isCatering = isCateringOrder(order);
-
-      if (isCatering) {
-        current.cateringRevenue += grossRevenue;
-      } else if (order.orderType === "Online") {
-        current.onlineRevenue += grossRevenue;
-      } else {
-        current.offlineRevenue += grossRevenue;
-      }
-
-      return current;
-    },
-    {
-      offlineRevenue: 0,
-      onlineRevenue: 0,
-      cateringRevenue: 0,
-    }
+  const dailyOrders = getOrdersOfDate(orders, date);
+  const system = getDailyRecapSystem(dailyOrders, menuItems);
+  const amounts = Object.fromEntries(
+    Object.entries(getRecapSystemAmounts(system)).map(([field, amount]) => [field, String(amount.value)])
   );
 
   return {
     ...createEmptyRecapForm(),
+    ...amounts,
     date,
-    transactionTotal: String(dailyOrders.length),
-    offlineRevenue: String(summary.offlineRevenue),
-    onlineRevenue: String(summary.onlineRevenue),
-    cateringRevenue: String(summary.cateringRevenue),
-    hppTotal: normalizeSystemCurrency(hppTotal),
+    hppTotal: normalizeSystemCurrency(getOrdersHppTotal(dailyOrders, menuItems)),
   };
+};
+
+// The system amount under a field of the Rekap Harian form, and how far the
+// typed amount is from it, with a button back to it.
+const RecapSystemHint = ({ label, value, system, detail, isCount, onReset }) => {
+  const format = (amount) => (isCount ? `${amount} nota` : formatCurrency(amount));
+  const difference = (Number(value) || 0) - system;
+
+  return (
+    <div className="mt-1 text-xs text-[#8a8a8a]">
+      <p>Sistem: {format(system)}</p>
+      {detail && <p>{detail}</p>}
+      {difference !== 0 && (
+        <p className="flex items-center gap-1 font-semibold text-amber-300">
+          Selisih {difference > 0 ? "+" : "-"}
+          {format(Math.abs(difference))}
+          <button
+            type="button"
+            onClick={onReset}
+            title="Pakai angka sistem"
+            aria-label={`Pakai angka sistem untuk ${label}`}
+            className="rounded px-1 text-sm leading-none text-[#d6c7ae] hover:bg-[#333]"
+          >
+            ↺
+          </button>
+        </p>
+      )}
+    </div>
+  );
 };
 
 const getOrdersInRange = (orders, startDate, endDate) => {
@@ -571,7 +601,6 @@ const renderDailyAmountCell = (value, tone = "default") => (
 const RecapManagement = () => {
   const queryClient = useQueryClient();
   const currentUser = useSelector((state) => state.user);
-  const isAdmin = currentUser.role?.toLowerCase() === "admin";
   const [recapVersion, setRecapVersion] = useState("old");
   const [activeTab, setActiveTab] = useState("daily");
   const summaryCardsRef = useRef(null);
@@ -585,6 +614,9 @@ const RecapManagement = () => {
   const [isRecapModalOpen, setIsRecapModalOpen] = useState(false);
   // The Rekap New row whose rincian HPP is open.
   const [costItem, setCostItem] = useState(null);
+  // The Riwayat (notas) of the day in the Rekap Harian form.
+  const [isRecapHistoryOpen, setIsRecapHistoryOpen] = useState(false);
+  const closeRecapHistory = useCallback(() => setIsRecapHistoryOpen(false), []);
   const [pendingDailyRecapPayload, setPendingDailyRecapPayload] = useState(null);
   const [recapForm, setRecapForm] = useState(createEmptyRecapForm);
   const [weeklyRecapForm, setWeeklyRecapForm] = useState(
@@ -651,23 +683,12 @@ const RecapManagement = () => {
   const dailySemiLeftovers = (semiItemsRes?.data?.data || []).filter(
     (item) => item.resetDaily && Number(item.stock) > 0
   );
-  const { data: usersRes } = useQuery({
-    queryKey: ["users"],
-    queryFn: getUsers,
-    placeholderData: keepPreviousData,
-    enabled: isAdmin,
-  });
   const { data: menuItemsRes } = useQuery({
     queryKey: ["menu-items", "recap-options"],
     queryFn: () => getMenuItems({ includeUnavailable: true }),
     placeholderData: keepPreviousData,
   });
 
-  const users = isAdmin
-    ? usersRes?.data?.data || []
-    : currentUser?._id
-      ? [currentUser]
-      : [];
   const menuItemsData = menuItemsRes?.data?.data;
   const menuItems = useMemo(() => menuItemsData || [], [menuItemsData]);
   // Menus of a Kategori Promo, marked in Rekap New.
@@ -679,15 +700,6 @@ const RecapManagement = () => {
           .map((item) => Number(item.id || item._id))
       ),
     [menuItems]
-  );
-  const userOptions = useMemo(
-    () =>
-      users.map((user) => ({
-        value: String(user.id || user._id),
-        label: user.name,
-        description: user.role || user.email || "",
-      })),
-    [users]
   );
   const menuOptions = useMemo(
     () =>
@@ -988,7 +1000,8 @@ const RecapManagement = () => {
       const cateringDetails = order.cateringDetails;
       const remainingBalance = Number(order.bills?.remainingBalance) || 0;
 
-      currentGroup.orderCount += 1;
+      // A Konsumsi Crew is no transaksi (no sale).
+      if (!isCrewOrder(order)) currentGroup.orderCount += 1;
       currentGroup.receivedRevenue += netRevenue;
       currentGroup.invoiceTotal += grossRevenue;
       currentGroup.subtotalTotal += subtotalAmount;
@@ -1409,14 +1422,10 @@ const RecapManagement = () => {
 
   const applyOrderSummaryToForm = (date) => {
     setRecapForm((current) => ({
+      // Another day: its own system amounts (cash, QRIS and online too).
       ...createRecapFormFromOrders(orders, menuItems, date),
-      shiftOfficerId: current.shiftOfficerId,
-      shiftOfficer: current.shiftOfficer,
       dailyExpense: current.dailyExpense,
-      cashIn: current.cashIn,
-      qrisIn: current.qrisIn,
       transferIn: current.transferIn,
-      onlineIn: current.onlineIn,
       bestMenuItemId: current.bestMenuItemId,
       bestMenu: current.bestMenu,
       leastMenuItemId: current.leastMenuItemId,
@@ -1426,18 +1435,13 @@ const RecapManagement = () => {
   };
 
   const buildDailyRecapPayload = () => {
-    const selectedDate = getLocalDate(recapForm.date);
-    const selectedDateKey = selectedDate ? getDateKey(selectedDate) : recapForm.date;
-    const dailyOrders = orders.filter((order) => {
-      const orderDate = getLocalDate(order.orderDate);
-
-      return orderDate && getDateKey(orderDate) === selectedDateKey;
-    });
+    const dailyOrders = getOrdersOfDate(orders, recapForm.date);
 
     return {
       date: recapForm.date,
-      userId: recapForm.shiftOfficerId || null,
-      shiftOfficer: recapForm.shiftOfficer,
+      // The petugas is the account logged in.
+      userId: currentUser?._id || null,
+      shiftOfficer: currentUser?.name || "",
       transactionTotal: normalizeNominalInput(recapForm.transactionTotal),
       offlineRevenue: normalizeNominalInput(recapForm.offlineRevenue),
       onlineRevenue: normalizeNominalInput(recapForm.onlineRevenue),
@@ -1615,8 +1619,8 @@ const RecapManagement = () => {
       return;
     }
 
-    if (!recapForm.shiftOfficerId && !recapForm.shiftOfficer) {
-      enqueueSnackbar("Shift / petugas wajib dipilih", {
+    if (!currentUser?._id && !currentUser?.name) {
+      enqueueSnackbar("Login dulu untuk menyimpan rekap", {
         variant: "warning",
       });
       return;
@@ -1635,6 +1639,12 @@ const RecapManagement = () => {
 
     setPendingDailyRecapPayload(buildDailyRecapPayload());
   };
+
+  // System amounts of the day in the open Rekap Harian form.
+  const recapSystem = isRecapModalOpen
+    ? getDailyRecapSystem(getOrdersOfDate(orders, recapForm.date), menuItems)
+    : null;
+  const recapSystemAmounts = recapSystem ? getRecapSystemAmounts(recapSystem) : {};
 
   return (
     <div className="container mx-auto rounded-lg bg-[#262626] p-4">
@@ -2413,6 +2423,17 @@ const RecapManagement = () => {
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
                 {visibleRecapFormFields.map((field) => (
                   <React.Fragment key={field.id}>
+                    <div className="relative">
+                    {field.id === "transactionTotal" && (
+                      // Every nota of the day (the omzet fields add them up).
+                      <button
+                        type="button"
+                        onClick={() => setIsRecapHistoryOpen(true)}
+                        className="absolute right-0 top-0 text-xs font-semibold text-[#d6c7ae] underline underline-offset-2 hover:text-white"
+                      >
+                        Riwayat
+                      </button>
+                    )}
                     <label className="block text-sm font-semibold text-[#ababab]">
                       {field.label}
                       <input
@@ -2436,32 +2457,40 @@ const RecapManagement = () => {
                         min={field.type === "number" ? "0" : undefined}
                         inputMode={field.currency ? "numeric" : undefined}
                         placeholder={field.placeholder || "0"}
-                        className={`mt-2 h-10 w-full rounded-lg border border-[#333] px-3 text-sm text-[#f5f5f5] outline-none placeholder:text-[#777] focus:border-[#025cca] ${
+                        className={`mt-2 h-10 w-full rounded-lg border px-3 text-sm outline-none placeholder:text-[#777] ${
                           field.id === "hppTotal"
-                            ? "bg-[#26210f] text-[#f6d365]"
-                            : "bg-[#1f1f1f]"
+                            ? "border-[#333] bg-[#26210f] text-[#f6d365] focus:border-[#025cca]"
+                            : field.id === "dailyExpense"
+                              ? // Money going out: danger.
+                                "border-red-500/40 bg-red-950/40 text-red-300 focus:border-red-400"
+                              : "border-[#333] bg-[#1f1f1f] text-[#f5f5f5] focus:border-[#025cca]"
                         }`}
                       />
                     </label>
+                    {recapSystemAmounts[field.id] && (
+                      <RecapSystemHint
+                        label={field.label}
+                        value={normalizeNominalInput(recapForm[field.id])}
+                        system={recapSystemAmounts[field.id].value}
+                        detail={recapSystemAmounts[field.id].detail}
+                        isCount={field.id === "transactionTotal"}
+                        onReset={() =>
+                          updateRecapForm(field.id, String(recapSystemAmounts[field.id].value))
+                        }
+                      />
+                    )}
+                    </div>
 
                     {field.id === "date" && (
-                      <SelectField
-                        label="Shift / petugas"
-                        value={recapForm.shiftOfficerId}
-                        onChange={(value) => {
-                          const selectedUser = userOptions.find(
-                            (option) => String(option.value) === String(value)
-                          );
-
-                          updateRecapFields({
-                            shiftOfficerId: value,
-                            shiftOfficer: selectedUser?.label || "",
-                          });
-                        }}
-                        options={userOptions}
-                        placeholder="Pilih petugas"
-                        isSearchable={false}
-                      />
+                      // The account logged in is the petugas of the recap.
+                      <label className="block text-sm font-semibold text-[#ababab]">
+                        Shift / petugas
+                        <input
+                          value={currentUser?.name || "-"}
+                          readOnly
+                          className="mt-2 h-10 w-full cursor-default rounded-lg border border-[#333] bg-[#1a1a1a] px-3 text-sm text-[#d6d6d6] outline-none"
+                        />
+                      </label>
                     )}
 
                     {field.id === "onlineIn" && (
@@ -2542,6 +2571,13 @@ const RecapManagement = () => {
             )}
           </div>
         </div>
+      )}
+      {isRecapModalOpen && isRecapHistoryOpen && recapSystem && (
+        <RecapOrderHistoryDialog
+          dateLabel={formatRecapDateLabel(recapForm.date)}
+          system={recapSystem}
+          onClose={closeRecapHistory}
+        />
       )}
       {pendingDailyRecapPayload && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/75 p-4">

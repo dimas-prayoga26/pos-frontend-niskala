@@ -21,6 +21,7 @@ import PurchaseNotaTable from "./shopping/PurchaseNotaTable";
 import PurchasePeriodBar from "./shopping/PurchasePeriodBar";
 import PurchaseSummaryCards from "./shopping/PurchaseSummaryCards";
 import PurchaseReceiptsDialog from "./shopping/PurchaseReceiptsDialog";
+import ShoppingActivityLogDialog from "./shopping/ShoppingActivityLogDialog";
 import { buttonClass, inputClass } from "./shopping/styles";
 
 const NO_SOURCES = [];
@@ -47,6 +48,9 @@ const toggleClass = (active) =>
 // a line for each.
 export default function ShoppingManagement({ stockItems, supplyItems = NO_ITEMS, isAdmin, restockItems }) {
   const [showForm, setShowForm] = useState(() => Boolean(restockItems?.length));
+  // History (admins): the activity log of every purchase line.
+  const [showActivityLog, setShowActivityLog] = useState(false);
+  const closeActivityLog = useCallback(() => setShowActivityLog(false), []);
   const [historyTab, setHistoryTab] = useState(HISTORY_TABS[0]);
   const [historyView, setHistoryView] = useState("nota");
   const historyKind = PURCHASE_KINDS[historyTab.kindKey];
@@ -256,6 +260,15 @@ export default function ShoppingManagement({ stockItems, supplyItems = NO_ITEMS,
           </p>
         </div>
         <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+          {isAdmin && (
+            <button
+              className="whitespace-nowrap rounded-lg border border-[#a79981]/60 px-4 py-2 font-semibold text-[#d6c7ae] hover:bg-[#a79981]/10"
+              onClick={() => setShowActivityLog(true)}
+              type="button"
+            >
+              History
+            </button>
+          )}
           <button
             className={`${buttonClass} whitespace-nowrap`}
             onClick={() => setShowForm(true)}
@@ -473,6 +486,7 @@ export default function ShoppingManagement({ stockItems, supplyItems = NO_ITEMS,
         />
       )}
 
+      {showActivityLog && isAdmin && <ShoppingActivityLogDialog onClose={closeActivityLog} />}
       {showForm && (
         <PurchaseFormDialog purchaseForm={purchaseForm} onClose={() => setShowForm(false)} />
       )}

@@ -24,6 +24,7 @@ export {
   getPurchases,
   getSemiItems,
   getSemiProductions,
+  getShoppingActivityLogs,
   getShoppingSummary,
   getShoppingSuppliers,
   getStockItems,

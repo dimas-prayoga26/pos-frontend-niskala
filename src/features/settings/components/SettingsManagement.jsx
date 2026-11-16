@@ -15,6 +15,8 @@ import {
 } from "../api";
 import { formatCurrency, formatNominalInput, normalizeNominalInput } from "../../../shared/lib/format";
 import CreatableSelect2 from "../../../shared/ui/CreatableSelect2";
+import { useSelector } from "react-redux";
+import AccountManagement from "./AccountManagement";
 import BestSellerSettings from "./BestSellerSettings";
 import PaymentSourceManagement from "./PaymentSourceManagement";
 
@@ -30,6 +32,15 @@ const statusOptions = [
 
 const SettingsManagement = () => {
   const [activeMenu, setActiveMenu] = useState("platform");
+  // Akun: only an admin manages the POS accounts.
+  const isAdmin = useSelector((state) => String(state.user?.role || "").toLowerCase() === "admin");
+  const menus = [
+    { id: "platform", label: "Platform" },
+    { id: "suplier", label: "Suplier" },
+    { id: "payment", label: "Sumber Pembayaran" },
+    { id: "best-seller", label: "Best Seller" },
+    ...(isAdmin ? [{ id: "akun", label: "Akun" }] : []),
+  ];
   const queryClient = useQueryClient();
   const [platformForm, setPlatformForm] = useState(emptyPlatformForm);
   const [editingPlatform, setEditingPlatform] = useState(null);
@@ -154,11 +165,11 @@ const SettingsManagement = () => {
         <div>
           <h2 className="text-xl font-semibold text-[#f5f5f5]">Pengaturan</h2>
           <p className="mt-1 text-sm text-[#ababab]">
-            Kelola platform online food, suplier, sumber pembayaran belanja, dan Best Seller.
+            Kelola platform online food, suplier, sumber pembayaran belanja, Best Seller{isAdmin ? ", dan akun" : ""}.
           </p>
         </div>
         <nav aria-label="Menu pengaturan" className="flex flex-wrap gap-1 self-start rounded-lg bg-[#1f1f1f] p-1">
-          {[{id:"platform",label:"Platform"},{id:"suplier",label:"Suplier"},{id:"payment",label:"Sumber Pembayaran"},{id:"best-seller",label:"Best Seller"}].map(menu => (
+          {menus.map(menu => (
             <button key={menu.id} type="button" aria-pressed={activeMenu===menu.id}
               onClick={()=>setActiveMenu(menu.id)}
               className={`rounded-md px-5 py-2 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#d6c7ae] ${activeMenu===menu.id ? "bg-[#a79981] text-[#101010]" : "text-[#ababab] hover:bg-[#333] hover:text-white"}`}>
@@ -168,7 +179,7 @@ const SettingsManagement = () => {
         </nav>
       </div>
 
-      {activeMenu === "best-seller" ? <BestSellerSettings /> : activeMenu === "payment" ? <PaymentSourceManagement /> : activeMenu === "suplier" ? <SupplierManagement /> : <div className="grid grid-cols-1 gap-4 xl:grid-cols-[360px_1fr]">
+      {activeMenu === "akun" && isAdmin ? <AccountManagement /> : activeMenu === "best-seller" ? <BestSellerSettings /> : activeMenu === "payment" ? <PaymentSourceManagement /> : activeMenu === "suplier" ? <SupplierManagement /> : <div className="grid grid-cols-1 gap-4 xl:grid-cols-[360px_1fr]">
         <form
           onSubmit={handleSubmitPlatform}
           className="rounded-lg bg-[#1f1f1f] p-4"

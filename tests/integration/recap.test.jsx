@@ -214,4 +214,78 @@ describe("Rekap Old", () => {
     expect(screen.getByText("Menu paling laku")).toBeInTheDocument();
     expect(screen.getByText("Menu kurang laku")).toBeInTheDocument();
   });
+
+  it("fills every amount from the day's notas (QRIS less MDR, online less platform), editable, with a Riwayat", async () => {
+    const nota = (id, time, fields) => ({
+      id,
+      orderId: `ORD-${id}`,
+      orderDate: `${today} ${time}`,
+      orderStatus: "Completed",
+      items: [],
+      ...fields,
+    });
+    api.getOrders.mockResolvedValue({
+      data: {
+        data: [
+          nota(1, "09:00:00", { orderType: "Offline", paymentMethod: "Tunai", bills: { total: 50000, tax: 0, totalWithTax: 50000 } }),
+          // Above Rp100.000: MDR 0,7%; up to it: no fee.
+          nota(2, "10:00:00", { orderType: "Offline", paymentMethod: "QRIS", bills: { total: 150000, tax: 0, totalWithTax: 150000 } }),
+          nota(3, "11:00:00", { orderType: "Offline", paymentMethod: "QRIS", bills: { total: 41000, tax: 0, totalWithTax: 41000 } }),
+          // GoFood paid 80.000 of 100.000 after its 20.000.
+          nota(4, "12:00:00", {
+            orderType: "Online",
+            orderPlatform: "GoFood",
+            paymentMethod: "GoFood",
+            platformTax: 20000,
+            bills: { total: 100000, tax: 0, totalWithTax: 80000 },
+          }),
+          // A crew meal is no transaksi.
+          nota(5, "13:00:00", { orderType: "Crew", paymentMethod: "Crew", bills: { total: 0, tax: 0, totalWithTax: 0 } }),
+        ],
+      },
+    });
+    renderWithProviders(<RecapManagement />, { preloadedState: asAdmin });
+    fireEvent.click(await screen.findByRole("button", { name: "Tambah Rekap" }));
+    await screen.findByText("Input Rekap Harian");
+
+    const inputOf = (label) => screen.getByText(label).closest("label").querySelector("input");
+    const hintOf = (label) => screen.getByText(label).closest("label").parentElement;
+    await waitFor(() => expect(inputOf("Total transaksi")).toHaveValue(4));
+    expect(inputOf("Omzet offline (Rp)")).toHaveValue("241.000");
+    expect(inputOf("Omzet online (Rp)")).toHaveValue("100.000");
+    expect(inputOf("Cash masuk (Rp)")).toHaveValue("50.000");
+    expect(inputOf("QRIS masuk (Rp)")).toHaveValue("189.950");
+    expect(hintOf("QRIS masuk (Rp)")).toHaveTextContent(/Sistem: Rp\s189\.950Rp\s191\.000 - MDR Rp\s1\.050/);
+    expect(inputOf("Saldo online masuk (Rp)")).toHaveValue("80.000");
+    expect(hintOf("Saldo online masuk (Rp)")).toHaveTextContent(/Rp\s100\.000 - Platform Rp\s20\.000/);
+    expect(hintOf("Total transaksi")).toHaveTextContent("Sistem: 4 nota");
+
+    // Still editable: the gap shows, and ↺ puts the system amount back.
+    fireEvent.change(inputOf("Cash masuk (Rp)"), { target: { value: "45000" } });
+    expect(hintOf("Cash masuk (Rp)")).toHaveTextContent(/Selisih -Rp\s5\.000/);
+    fireEvent.click(screen.getByRole("button", { name: "Pakai angka sistem untuk Cash masuk (Rp)" }));
+    expect(inputOf("Cash masuk (Rp)")).toHaveValue("50.000");
+    expect(hintOf("Cash masuk (Rp)")).not.toHaveTextContent("Selisih");
+
+    fireEvent.click(screen.getByRole("button", { name: "Riwayat" }));
+    const history = await screen.findByRole("dialog", { name: "Riwayat Pesanan" });
+    const rows = within(history).getAllByRole("row");
+    // Header, 5 notas (the crew meal too) and the total.
+    expect(rows).toHaveLength(7);
+    expect(rows[2]).toHaveTextContent(/ORD-2.*Offline.*QRIS.*Rp\s150\.000.*-Rp\s1\.050.*Rp\s148\.950/);
+    expect(rows[4]).toHaveTextContent(/ORD-4.*GoFood.*Rp\s100\.000.*-Rp\s20\.000.*Rp\s80\.000/);
+    expect(rows[5]).toHaveTextContent(/ORD-5.*Crew/);
+    expect(within(history).getByText("QRIS masuk").nextSibling).toHaveTextContent(/Rp\s189\.950/);
+    fireEvent.keyDown(window, { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Riwayat Pesanan" })).not.toBeInTheDocument());
+    expect(screen.getByText("Input Rekap Harian")).toBeInTheDocument();
+
+    // The petugas is the account logged in, not picked.
+    const officer = inputOf("Shift / petugas");
+    expect(officer).toHaveValue("Admin");
+    expect(officer).toHaveAttribute("readonly");
+    expect(screen.queryByText("Pilih petugas")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Simpan" }));
+    expect(await screen.findByText("Simpan Rekap Harian?")).toBeInTheDocument();
+  });
 });

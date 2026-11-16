@@ -9,6 +9,10 @@ import { renderWithProviders } from "../renderWithProviders";
 vi.mock("../../src/https/index", async (importOriginal) => ({
   ...(await importOriginal()),
   addPaymentSource: vi.fn(),
+  deleteUser: vi.fn(),
+  getUsers: vi.fn(),
+  register: vi.fn(),
+  updateUser: vi.fn(),
   addPaymentSourceMutation: vi.fn(),
   deleteSupplier: vi.fn(),
   getCategories: vi.fn(),
@@ -254,5 +258,65 @@ describe("settings: best seller", () => {
     fireEvent.click(screen.getByRole("button", { name: "Batal" }));
     expect(names("Snack")).toEqual(["RotiNonaktif×"]);
     expect(screen.getByRole("button", { name: "Simpan" })).toBeDisabled();
+  });
+});
+
+describe("settings: akun", () => {
+  const asRole = (role) => ({ user: { _id: 1, name: "Admin", email: "admin@niskala.id", phone: "1", role, isAuth: true } });
+  const users = [
+    { id: 1, name: "Admin", email: "admin@niskala.id", phone: "0811", role: "Admin" },
+    { id: 2, name: "Budi", email: "budi@niskala.id", phone: "0812", role: "Cashier" },
+  ];
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    api.getOrderPlatforms.mockResolvedValue({ data: { data: [] } });
+    api.getUsers.mockResolvedValue({ data: { data: users } });
+    api.register.mockResolvedValue({ data: { success: true } });
+    api.updateUser.mockResolvedValue({ data: { success: true } });
+    api.deleteUser.mockResolvedValue({ data: { success: true } });
+  });
+
+  it("is only for admins", () => {
+    renderWithProviders(<SettingsManagement />, { preloadedState: asRole("Cashier") });
+    expect(screen.queryByRole("button", { name: "Akun" })).not.toBeInTheDocument();
+  });
+
+  it("lists, adds, changes and deletes accounts, never the admin's own", async () => {
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    renderWithProviders(<SettingsManagement />, { preloadedState: asRole("Admin") });
+    fireEvent.click(screen.getByRole("button", { name: "Akun" }));
+
+    const row = async (name) => (await screen.findByText(name)).closest("tr");
+    expect(within(await row("Budi")).getByText("Kasir")).toBeInTheDocument();
+    // The admin's own account: no Hapus.
+    expect(screen.queryByRole("button", { name: "Hapus Admin" })).not.toBeInTheDocument();
+
+    const field = (placeholder) => screen.getByPlaceholderText(placeholder);
+    fireEvent.change(field("Nama staf"), { target: { value: "Sari" } });
+    fireEvent.change(field("nama@email.com"), { target: { value: "sari@niskala.id" } });
+    fireEvent.change(field("0812-xxxx-xxxx"), { target: { value: "0813" } });
+    fireEvent.change(field("Minimal 6 karakter"), { target: { value: "123" } });
+    fireEvent.click(screen.getByRole("button", { name: "Tambah" }));
+    expect(await screen.findByText("Password minimal 6 karakter.")).toBeInTheDocument();
+    fireEvent.change(field("Minimal 6 karakter"), { target: { value: "sari-pass" } });
+    fireEvent.click(screen.getByRole("button", { name: "Tambah" }));
+    await waitFor(() => expect(api.register).toHaveBeenCalled());
+    expect(api.register.mock.calls[0][0]).toEqual({
+      name: "Sari", email: "sari@niskala.id", phone: "0813", role: "Cashier", password: "sari-pass",
+    });
+
+    // Changing keeps the password when it is left blank.
+    fireEvent.click(screen.getByRole("button", { name: "Ubah Budi" }));
+    fireEvent.change(field("Nama staf"), { target: { value: "Budi Santoso" } });
+    fireEvent.click(screen.getByRole("button", { name: "Simpan" }));
+    await waitFor(() => expect(api.updateUser).toHaveBeenCalled());
+    expect(api.updateUser.mock.calls[0][0]).toEqual({
+      userId: 2, name: "Budi Santoso", email: "budi@niskala.id", phone: "0812", role: "Cashier", password: "",
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Hapus Budi" }));
+    expect(window.confirm).toHaveBeenCalledWith("Hapus akun Budi?");
+    await waitFor(() => expect(api.deleteUser.mock.calls[0][0]).toBe(2));
   });
 });
