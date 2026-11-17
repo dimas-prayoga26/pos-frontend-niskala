@@ -19,20 +19,22 @@ const SHOW_CHARTS = false;
 const isInRange = (dateKey, { from, to }) =>
   Boolean(dateKey) && (!from || dateKey >= from) && (!to || dateKey <= to);
 
+// Same look as the Metrik cards: one neutral surface, the brand accent on the
+// icon; the kind reads from its icon and title.
 const TopMenuCard = ({ group, dish, isLoading }) => {
-  const { Icon, card, icon } = GROUP_STYLES[group];
+  const { Icon } = GROUP_STYLES[group];
   const title = `${group} Terlaris`;
 
   return (
-    <section aria-label={title} className={`min-h-[148px] rounded-lg border p-4 shadow-sm ${card}`}>
+    <section aria-label={title} className="min-h-[148px] rounded-lg border border-[#333] bg-[#262626] p-4 shadow-sm">
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-md ${icon}`}>
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-[#a79981]/10 text-[#a79981]">
             <Icon className="text-lg" />
           </span>
           <p className="text-sm font-bold text-[#f5f5f5]">{title}</p>
         </div>
-        <span className="rounded-md bg-black/20 px-2 py-1 text-xs font-bold text-[#f5f5f5]">#1</span>
+        <span className="rounded-md bg-[#1f1f1f] px-2 py-1 text-xs font-bold text-[#ababab]">#1</span>
       </div>
 
       {isLoading ? (

@@ -164,47 +164,12 @@ const applyStyle = (worksheet, rowIndex, columnIndex, style) => {
   };
 };
 
-const cardToneStyles = {
-  sales: {
-    card: "border-blue-500/30 bg-blue-500/10",
-    icon: "bg-blue-500/15 text-blue-200",
-    value: "text-blue-50",
-  },
-  catering: {
-    card: "border-violet-500/30 bg-violet-500/10",
-    icon: "bg-violet-500/15 text-violet-200",
-    value: "text-violet-50",
-  },
-  offline: {
-    card: "border-emerald-500/30 bg-emerald-500/10",
-    icon: "bg-emerald-500/15 text-emerald-200",
-    value: "text-emerald-50",
-  },
-  online: {
-    card: "border-sky-500/30 bg-sky-500/10",
-    icon: "bg-sky-500/15 text-sky-200",
-    value: "text-sky-50",
-  },
-  cost: {
-    card: "border-amber-500/30 bg-amber-500/10",
-    icon: "bg-amber-500/15 text-amber-200",
-    value: "text-amber-50",
-  },
-  profit: {
-    card: "border-teal-500/30 bg-teal-500/10",
-    icon: "bg-teal-500/15 text-teal-200",
-    value: "text-teal-50",
-  },
-  warning: {
-    card: "border-orange-500/30 bg-orange-500/10",
-    icon: "bg-orange-500/15 text-orange-200",
-    value: "text-orange-50",
-  },
-  neutral: {
-    card: "border-[#3a3a3a] bg-[#232323]",
-    icon: "bg-[#333] text-[#d8d8d8]",
-    value: "text-[#f5f5f5]",
-  },
+// Every card looks the same: one surface, the brand accent on its icon. A
+// color only marks a status that needs action (tone "warning").
+const CARD_CLASS = "border-[#333] bg-[#262626]";
+const ICON_CLASSES = {
+  neutral: "bg-[#a79981]/10 text-[#a79981]",
+  warning: "bg-orange-500/15 text-orange-300",
 };
 
 const InfoTooltip = ({ label, text, size = 16 }) => (
@@ -227,17 +192,17 @@ const InfoTooltip = ({ label, text, size = 16 }) => (
 
 const MetricCard = ({ item, className = "" }) => {
   const Icon = item.icon;
-  const tone = cardToneStyles[item.tone] || cardToneStyles.neutral;
+  const iconClass = ICON_CLASSES[item.tone] || ICON_CLASSES.neutral;
 
   return (
     <div
-      className={`min-h-[124px] rounded-lg border p-4 shadow-sm ${tone.card} ${className}`}
+      className={`min-h-[124px] rounded-lg border p-4 shadow-sm ${CARD_CLASS} ${className}`}
     >
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
           {Icon && (
             <span
-              className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-md ${tone.icon}`}
+              className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-md ${iconClass}`}
             >
               <Icon className="text-lg" />
             </span>
@@ -251,11 +216,11 @@ const MetricCard = ({ item, className = "" }) => {
             )}
           </div>
         </div>
-        <span className="shrink-0 rounded-md bg-black/20 px-2 py-1 text-xs font-bold text-[#f5f5f5]">
+        <span className="shrink-0 rounded-md bg-[#1f1f1f] px-2 py-1 text-xs font-bold text-[#ababab]">
           {item.badge}
         </span>
       </div>
-      <p className={`mt-4 text-2xl font-bold ${tone.value}`}>
+      <p className="mt-4 text-2xl font-bold text-[#f5f5f5]">
         {item.value}
       </p>
     </div>
@@ -288,39 +253,33 @@ const ProfitFlow = ({ revenue, hpp, grossProfit, isLoading, pendingHppCount = 0 
     {
       label: "Penjualan Bersih",
       value: isLoading ? "..." : formatCurrency(revenue),
-      tone: "sales",
       description: "Penjualan dikurangi biaya platform dan QRIS 0,7% (QRIS di atas Rp100.000).",
     },
     {
       label: "HPP Standar",
       value: isLoading ? "..." : formatCurrency(hpp.standar),
-      tone: "cost",
       description: HPP_STANDAR_NOTE,
     },
     {
       label: "HPP Olahan",
       value: isLoading ? "..." : formatCurrency(hpp.olahan),
-      tone: "cost",
       description: `${HPP_OLAHAN_NOTE}${PENDING_HPP_NOTE}`,
       note: !isLoading && pendingHppCount > 0 ? `Sementara: ${pendingHppCount} nota HPP Pending` : "",
     },
     {
       label: "Untung Kotor",
       value: isLoading ? "..." : formatCurrency(grossProfit),
-      tone: "profit",
       description: "Penjualan Bersih dikurangi HPP Standar dan HPP Olahan.",
     },
   ];
 
   return (
-    <div className="mt-5 rounded-lg border border-[#333] bg-[#202020] p-4">
+    <div className={`mt-5 rounded-lg border p-4 ${CARD_CLASS}`}>
       <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
         {steps.map((step, index) => {
-          const tone = cardToneStyles[step.tone] || cardToneStyles.neutral;
-
           return (
             <div key={step.label} className="flex items-center gap-3">
-              <div className={`h-2 w-2 rounded-full ${tone.icon}`} />
+              <div className="h-2 w-2 rounded-full bg-[#a79981]" />
               <div className="min-w-0">
                 <div className="flex items-center gap-1">
                   <p className="text-xs font-semibold text-[#ababab]">
@@ -553,7 +512,6 @@ const Metrics = () => {
       badge: activePeriod.badge,
       description: "Sudah dipotong QRIS 0,7% (di atas Rp100.000) dan biaya platform.",
       icon: FiDollarSign,
-      tone: "sales",
     },
     {
       title: "Penjualan Catering",
@@ -561,7 +519,6 @@ const Metrics = () => {
       badge: activePeriod.badge,
       description: "Order paket dan acara. Sudah dipotong QRIS 0,7% jika bayar QRIS di atas Rp100.000.",
       icon: FiTruck,
-      tone: "catering",
     },
     {
       title: "Penjualan Offline",
@@ -569,7 +526,6 @@ const Metrics = () => {
       badge: activePeriod.badge,
       description: "Sudah dipotong QRIS 0,7% jika bayar QRIS di atas Rp100.000.",
       icon: FiShoppingBag,
-      tone: "offline",
     },
     {
       title: "Penjualan Online",
@@ -577,7 +533,6 @@ const Metrics = () => {
       badge: activePeriod.badge,
       description: "Sudah dipotong biaya platform.",
       icon: FiMonitor,
-      tone: "online",
     },
   ];
 
@@ -588,7 +543,8 @@ const Metrics = () => {
       badge: "Restock",
       description: "Bahan yang sudah di bawah batas aman.",
       icon: FiPackage,
-      tone: "warning",
+      // Orange only while some bahan is due; otherwise like every card.
+      tone: stockNeedsOrder > 0 ? "warning" : "neutral",
     },
     {
       title: "Jenis Bahan",
@@ -596,7 +552,6 @@ const Metrics = () => {
       badge: "Aktif",
       description: "Daftar bahan yang tercatat.",
       icon: FiArchive,
-      tone: "neutral",
     },
     {
       title: "Kategori Menu",
@@ -604,7 +559,6 @@ const Metrics = () => {
       badge: "Aktif",
       description: "Kelompok menu yang tersedia.",
       icon: FiGrid,
-      tone: "neutral",
     },
     {
       title: "Total Menu",
@@ -612,7 +566,6 @@ const Metrics = () => {
       badge: "Aktif",
       description: "Menu yang masuk master data.",
       icon: FiBookOpen,
-      tone: "offline",
     },
   ];
 
