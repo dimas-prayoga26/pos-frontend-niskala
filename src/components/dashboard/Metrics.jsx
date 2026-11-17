@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import {
   keepPreviousData,
   useMutation,
@@ -11,7 +11,6 @@ import {
   FiArchive,
   FiBookOpen,
   FiCalendar,
-  FiCreditCard,
   FiDollarSign,
   FiDownload,
   FiGrid,
@@ -19,8 +18,6 @@ import {
   FiPackage,
   FiPlus,
   FiShoppingBag,
-  FiTrash2,
-  FiTrendingUp,
   FiTruck,
 } from "react-icons/fi";
 import { MdErrorOutline } from "react-icons/md";
@@ -32,11 +29,9 @@ import {
   getOrders,
   getRecaps,
   getStockItems,
-  getStockWastes,
 } from "../../https";
 import {
   formatCurrency,
-  getDisplayOrderCode,
   getOrderGrossRevenue,
   getOrderIncomeDeduction,
   getOrderItemHpp,
@@ -89,73 +84,12 @@ const formatRangeBadge = (startKey, endKey) => {
   return `Sampai ${endKey}`;
 };
 
-const getMonthLabel = (value) => {
-  const dateKey = String(value || "").slice(0, 7);
-  if (!dateKey) return "-";
-
-  const date = new Date(`${dateKey}-01T00:00:00`);
-  return date.toLocaleDateString("id-ID", {
-    month: "long",
-    year: "numeric",
-  });
-};
-
-const getWeekRange = (date = new Date()) => {
-  const current = new Date(date);
-  current.setHours(0, 0, 0, 0);
-  const mondayOffset = (current.getDay() + 6) % 7;
-  const start = new Date(current);
-  start.setDate(current.getDate() - mondayOffset);
-  const end = new Date(start);
-  end.setDate(start.getDate() + 6);
-
-  return {
-    startKey: getDateKey(start),
-    endKey: getDateKey(end),
-  };
-};
-
 const isDateKeyInRange = (dateKey, startKey, endKey) => {
   if (!dateKey) return false;
   if (startKey && dateKey < startKey) return false;
   if (endKey && dateKey > endKey) return false;
   return true;
 };
-
-const formatDateTime = (value) => {
-  if (!value) return "-";
-
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "-";
-
-  return date.toLocaleString("id-ID", {
-    dateStyle: "medium",
-    timeStyle: "short",
-    timeZone: "Asia/Jakarta",
-  });
-};
-
-const getOrderCode = (order) => getDisplayOrderCode(order);
-
-const getOrderTypeLabel = (order) => {
-  const isCatering =
-    Boolean(order.cateringDetails) ||
-    order.orderType === "Catering" ||
-    order.items?.some((item) => item.categoryName === "Catering");
-
-  if (isCatering) return "Catering";
-  if (order.orderType === "Online") {
-    return order.orderPlatform ? `Online / ${order.orderPlatform}` : "Online";
-  }
-
-  return order.orderType || "Offline";
-};
-
-const getOrderItemCount = (order) =>
-  (order.items || []).reduce(
-    (total, item) => total + (Number(item.quantity) || 1),
-    0
-  );
 
 const getExportItemTotal = (item) => {
   const quantity = Math.max(Number(item.quantity) || 0, 0);
@@ -194,23 +128,11 @@ const PERIOD_OPTIONS = [
   { value: "custom", label: "Select Date", badge: "Select date" },
 ];
 
-const SHOW_HPP_FIELDS = true;
-const SHOW_NET_PROFIT = false;
-const SHOW_FINANCIAL_CARDS = false;
-
 const rupiahExcelFormat = '"Rp" #,##0;[Red]-"Rp" #,##0;"Rp" 0';
+const EXPORT_RIGHT_ALIGNED_COLUMNS = [0, 3, 4, 5, 8, 9, 10, 11];
+const EXPORT_CURRENCY_COLUMNS = [4, 5, 8, 9, 10, 11];
 
 const excelStyles = {
-  title: {
-    font: { bold: true, sz: 16, color: { rgb: "FFFFFF" } },
-    fill: { fgColor: { rgb: "1F4E3D" } },
-    alignment: { horizontal: "center", vertical: "center" },
-  },
-  subtitle: {
-    font: { bold: true, color: { rgb: "1F4E3D" } },
-    fill: { fgColor: { rgb: "E8F3ED" } },
-    alignment: { horizontal: "left", vertical: "center" },
-  },
   header: {
     font: { bold: true, color: { rgb: "101010" } },
     fill: { fgColor: { rgb: "A79981" } },
@@ -231,52 +153,6 @@ const excelStyles = {
       left: { style: "thin", color: { rgb: "D9D9D9" } },
     },
   },
-  label: {
-    font: { bold: true, color: { rgb: "1F1F1F" } },
-    fill: { fgColor: { rgb: "F7F3EC" } },
-    alignment: { vertical: "top", wrapText: true },
-    border: {
-      top: { style: "thin", color: { rgb: "D6C7AE" } },
-      right: { style: "thin", color: { rgb: "D6C7AE" } },
-      bottom: { style: "thin", color: { rgb: "D6C7AE" } },
-      left: { style: "thin", color: { rgb: "D6C7AE" } },
-    },
-  },
-};
-
-const getHeaderValueType = (header) => {
-  const normalizedHeader = String(header || "").toLowerCase();
-
-  if (
-    /(omzet|hpp|laba|total|offline|online|catering|harga|cash|qris|transfer|pengeluaran|selisih|saldo|diterima|dp|sisa)/i.test(
-      normalizedHeader
-    )
-  ) {
-    return "currency";
-  }
-
-  if (/(trans|items|order cat|stok|minimal|qty)/i.test(normalizedHeader)) {
-    return "number";
-  }
-
-  return "text";
-};
-
-const getSummaryValueType = (label) => {
-  const normalizedLabel = String(label || "").toLowerCase();
-
-  if (normalizedLabel.includes("stok harus order")) return "text";
-  if (normalizedLabel.includes("catering aktif")) return "number";
-
-  if (
-    /(omzet|laba|offline|online|catering|saldo|hpp|kas)/i.test(
-      normalizedLabel
-    )
-  ) {
-    return "currency";
-  }
-
-  return "text";
 };
 
 const applyStyle = (worksheet, rowIndex, columnIndex, style) => {
@@ -286,103 +162,6 @@ const applyStyle = (worksheet, rowIndex, columnIndex, style) => {
     ...(worksheet[address].s || {}),
     ...style,
   };
-};
-
-const applyValueFormat = (worksheet, address, valueType) => {
-  if (!worksheet[address]) return;
-
-  if (valueType === "currency") {
-    worksheet[address].z = rupiahExcelFormat;
-    worksheet[address].s = {
-      ...(worksheet[address].s || {}),
-      alignment: { horizontal: "right", vertical: "top", wrapText: true },
-    };
-  }
-
-  if (valueType === "number") {
-    worksheet[address].z = "#,##0";
-    worksheet[address].s = {
-      ...(worksheet[address].s || {}),
-      alignment: { horizontal: "right", vertical: "top", wrapText: true },
-    };
-  }
-};
-
-const appendSheet = (workbook, sheetName, rows, widths = [], options = {}) => {
-  const isSummarySheet = options.variant === "summary";
-  const tableRows = isSummarySheet ? [["Metrik", "Nilai"], ...rows] : rows;
-  const title = options.title || `NISKALA COFFEE & EATERY - ${sheetName.toUpperCase()}`;
-  const subtitle =
-    options.subtitle ||
-    (options.downloadedAt
-      ? `Laporan ${sheetName} | Diunduh ${options.downloadedAt}`
-      : `Laporan ${sheetName}`);
-  const exportedRows = [[title], [subtitle], [], ...tableRows];
-  const headerRowIndex = 3;
-  const maxColumnCount = Math.max(
-    widths.length,
-    ...exportedRows.map((row) => row.length),
-    2
-  );
-  const worksheet = XLSX.utils.aoa_to_sheet(exportedRows);
-  const lastRowIndex = exportedRows.length - 1;
-  const lastColumnIndex = maxColumnCount - 1;
-  const headerValues = exportedRows[headerRowIndex] || [];
-
-  worksheet["!cols"] = Array.from({ length: maxColumnCount }, (_, index) => ({
-    wch: widths[index] || 16,
-  }));
-  worksheet["!rows"] = exportedRows.map((_, index) => ({
-    hpt: index === 0 ? 26 : index === 1 ? 20 : 18,
-  }));
-  worksheet["!merges"] = [
-    {
-      s: { r: 0, c: 0 },
-      e: { r: 0, c: lastColumnIndex },
-    },
-    {
-      s: { r: 1, c: 0 },
-      e: { r: 1, c: lastColumnIndex },
-    },
-  ];
-  worksheet["!freeze"] = { xSplit: 0, ySplit: headerRowIndex + 1 };
-  worksheet["!views"] = [{ state: "frozen", xSplit: 0, ySplit: headerRowIndex + 1 }];
-  worksheet["!autofilter"] = {
-    ref: XLSX.utils.encode_range({
-      s: { r: headerRowIndex, c: 0 },
-      e: { r: lastRowIndex, c: lastColumnIndex },
-    }),
-  };
-
-  applyStyle(worksheet, 0, 0, excelStyles.title);
-  applyStyle(worksheet, 1, 0, excelStyles.subtitle);
-
-  for (let columnIndex = 0; columnIndex < maxColumnCount; columnIndex += 1) {
-    applyStyle(worksheet, headerRowIndex, columnIndex, excelStyles.header);
-  }
-
-  for (let rowIndex = headerRowIndex + 1; rowIndex <= lastRowIndex; rowIndex += 1) {
-    for (let columnIndex = 0; columnIndex < maxColumnCount; columnIndex += 1) {
-      const address = XLSX.utils.encode_cell({ r: rowIndex, c: columnIndex });
-      const row = exportedRows[rowIndex] || [];
-      const cellValue = row[columnIndex];
-
-      if (cellValue === undefined) continue;
-
-      worksheet[address] = worksheet[address] || { t: "s", v: cellValue };
-      worksheet[address].s = columnIndex === 0 ? excelStyles.label : excelStyles.cell;
-
-      const valueType = isSummarySheet
-        ? columnIndex === 1
-          ? getSummaryValueType(row[0])
-          : "text"
-        : getHeaderValueType(headerValues[columnIndex]);
-
-      applyValueFormat(worksheet, address, valueType);
-    }
-  }
-
-  XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
 };
 
 const cardToneStyles = {
@@ -406,11 +185,6 @@ const cardToneStyles = {
     icon: "bg-sky-500/15 text-sky-200",
     value: "text-sky-50",
   },
-  cash: {
-    card: "border-indigo-500/30 bg-indigo-500/10",
-    icon: "bg-indigo-500/15 text-indigo-200",
-    value: "text-indigo-50",
-  },
   cost: {
     card: "border-amber-500/30 bg-amber-500/10",
     icon: "bg-amber-500/15 text-amber-200",
@@ -420,11 +194,6 @@ const cardToneStyles = {
     card: "border-teal-500/30 bg-teal-500/10",
     icon: "bg-teal-500/15 text-teal-200",
     value: "text-teal-50",
-  },
-  net: {
-    card: "border-green-500/30 bg-green-500/10",
-    icon: "bg-green-500/15 text-green-200",
-    value: "text-green-50",
   },
   warning: {
     card: "border-orange-500/30 bg-orange-500/10",
@@ -493,27 +262,17 @@ const MetricCard = ({ item, className = "" }) => {
   );
 };
 
-const FinancialCard = ({ item, className = "" }) => {
-  return <MetricCard item={item} className={className} />;
-};
-
-const MetricCardSlider = ({ items, renderItem }) => {
-  return (
-    <div className="mt-6 flex snap-x snap-mandatory gap-4 overflow-x-auto pb-2 scrollbar-hide sm:grid sm:grid-cols-2 sm:overflow-visible sm:pb-0 xl:grid-cols-4">
-      {items.map((item, index) =>
-        renderItem ? (
-          renderItem(item, index)
-        ) : (
-          <MetricCard
-            key={index}
-            item={item}
-            className="min-w-full snap-start sm:min-w-0"
-          />
-        )
-      )}
-    </div>
-  );
-};
+const MetricCardSlider = ({ items }) => (
+  <div className="mt-6 flex snap-x snap-mandatory gap-4 overflow-x-auto pb-2 scrollbar-hide sm:grid sm:grid-cols-2 sm:overflow-visible sm:pb-0 xl:grid-cols-4">
+    {items.map((item) => (
+      <MetricCard
+        key={item.title}
+        item={item}
+        className="min-w-full snap-start sm:min-w-0"
+      />
+    ))}
+  </div>
+);
 
 // pendingHppCount: notas whose HPP is still pending (Modul 2): a bahan olahan
 // sold short of stock, settled by the next Catat Masak or when the day closes.
@@ -523,9 +282,8 @@ const PENDING_HPP_NOTE =
 const HPP_STANDAR_NOTE = "Modal bahan baku dari resep menu × jumlah menu yang terjual, tetap sejak penjualan.";
 const HPP_OLAHAN_NOTE = "Modal bahan olahan (Nasi, sambal, dll.) per porsi dari biaya masak hari itu × porsi yang terjual.";
 
-// hpp: { standar, olahan } (getOrdersHppSplit). wasteCost: Biaya Wastage
-// (Modul 3), bahan thrown away; it is not in HPP.
-const ProfitFlow = ({ revenue, hpp, grossProfit, wasteCost, netProfit, isLoading, pendingHppCount = 0 }) => {
+// hpp: { standar, olahan } (getOrdersHppSplit).
+const ProfitFlow = ({ revenue, hpp, grossProfit, isLoading, pendingHppCount = 0 }) => {
   const steps = [
     {
       label: "Penjualan Bersih",
@@ -533,55 +291,30 @@ const ProfitFlow = ({ revenue, hpp, grossProfit, wasteCost, netProfit, isLoading
       tone: "sales",
       description: "Penjualan dikurangi biaya platform dan QRIS 0,7% (QRIS di atas Rp100.000).",
     },
-    ...(SHOW_HPP_FIELDS
-      ? [
-          {
-            label: "HPP Standar",
-            value: isLoading ? "..." : formatCurrency(hpp.standar),
-            tone: "cost",
-            description: HPP_STANDAR_NOTE,
-          },
-          {
-            label: "HPP Olahan",
-            value: isLoading ? "..." : formatCurrency(hpp.olahan),
-            tone: "cost",
-            description: `${HPP_OLAHAN_NOTE}${PENDING_HPP_NOTE}`,
-            note: !isLoading && pendingHppCount > 0 ? `Sementara: ${pendingHppCount} nota HPP Pending` : "",
-          },
-          {
-            label: "Untung Kotor",
-            value: isLoading ? "..." : formatCurrency(grossProfit),
-            tone: "profit",
-            description: "Penjualan Bersih dikurangi HPP Standar dan HPP Olahan.",
-          },
-          {
-            label: "Biaya Wastage",
-            value: isLoading ? "..." : formatCurrency(wasteCost),
-            tone: "warning",
-            description: "Bahan baku dan bahan olahan yang dibuang. Tidak masuk HPP.",
-          },
-          ...(SHOW_NET_PROFIT
-            ? [
-                {
-                  label: "Untung Bersih",
-                  value: isLoading ? "..." : formatCurrency(netProfit),
-                  tone: "net",
-                  description:
-                    "Untung Kotor dikurangi pengeluaran harian di rekap, Biaya Wastage, dan Konsumsi Crew.",
-                },
-              ]
-            : []),
-        ]
-      : []),
+    {
+      label: "HPP Standar",
+      value: isLoading ? "..." : formatCurrency(hpp.standar),
+      tone: "cost",
+      description: HPP_STANDAR_NOTE,
+    },
+    {
+      label: "HPP Olahan",
+      value: isLoading ? "..." : formatCurrency(hpp.olahan),
+      tone: "cost",
+      description: `${HPP_OLAHAN_NOTE}${PENDING_HPP_NOTE}`,
+      note: !isLoading && pendingHppCount > 0 ? `Sementara: ${pendingHppCount} nota HPP Pending` : "",
+    },
+    {
+      label: "Untung Kotor",
+      value: isLoading ? "..." : formatCurrency(grossProfit),
+      tone: "profit",
+      description: "Penjualan Bersih dikurangi HPP Standar dan HPP Olahan.",
+    },
   ];
-  const gridColumnsClass =
-    { 1: "md:grid-cols-1", 3: "md:grid-cols-3", 4: "md:grid-cols-4", 5: "md:grid-cols-5", 6: "md:grid-cols-6" }[
-      steps.length
-    ] || "md:grid-cols-1";
 
   return (
     <div className="mt-5 rounded-lg border border-[#333] bg-[#202020] p-4">
-      <div className={`grid grid-cols-1 gap-3 ${gridColumnsClass}`}>
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
         {steps.map((step, index) => {
           const tone = cardToneStyles[step.tone] || cardToneStyles.neutral;
 
@@ -667,43 +400,10 @@ const Metrics = () => {
     placeholderData: keepPreviousData,
   });
 
-  const {
-    data: dailyRecapsRes,
-    isLoading: isDailyRecapsLoading,
-    isError: isDailyRecapsError,
-  } = useQuery({
+  // Daily recaps feed the Tambah Kas picker.
+  const { data: dailyRecapsRes, isError: isDailyRecapsError } = useQuery({
     queryKey: ["recaps", "daily"],
     queryFn: () => getRecaps("daily"),
-    placeholderData: keepPreviousData,
-  });
-
-  const {
-    data: weeklyRecapsRes,
-    isLoading: isWeeklyRecapsLoading,
-    isError: isWeeklyRecapsError,
-  } = useQuery({
-    queryKey: ["recaps", "weekly"],
-    queryFn: () => getRecaps("weekly"),
-    placeholderData: keepPreviousData,
-  });
-
-  const {
-    data: monthlyRecapsRes,
-    isLoading: isMonthlyRecapsLoading,
-    isError: isMonthlyRecapsError,
-  } = useQuery({
-    queryKey: ["recaps", "monthly"],
-    queryFn: () => getRecaps("monthly"),
-    placeholderData: keepPreviousData,
-  });
-
-  // Kerugian per business day (Riwayat Kerugian), for the Biaya Wastage.
-  const {
-    data: wastesRes,
-    isLoading: isWastesLoading,
-  } = useQuery({
-    queryKey: ["stock-wastes", "metrics"],
-    queryFn: () => getStockWastes(),
     placeholderData: keepPreviousData,
   });
 
@@ -755,11 +455,12 @@ const Metrics = () => {
   const totalCategories = categoriesRes?.data?.data?.length || 0;
   const menuItems = menuItemsRes?.data?.data || [];
   const totalDishes = menuItems.length;
-  const orders = ordersRes?.data?.data || [];
+  const orders = useMemo(() => ordersRes?.data?.data || [], [ordersRes]);
   const stockItems = stockItemsRes?.data?.data || [];
-  const dailyRecaps = dailyRecapsRes?.data?.data || [];
-  const weeklyRecaps = weeklyRecapsRes?.data?.data || [];
-  const monthlyRecaps = monthlyRecapsRes?.data?.data || [];
+  const dailyRecaps = useMemo(
+    () => dailyRecapsRes?.data?.data || [],
+    [dailyRecapsRes]
+  );
   const dailyRecapOptions = useMemo(
     () =>
       dailyRecaps.map((recap) => ({
@@ -786,17 +487,6 @@ const Metrics = () => {
       );
     },
   });
-  const filteredRecaps = useMemo(() => {
-    return dailyRecaps.filter((recap) => {
-      const recapDateKey = getDateKey(recap.recapDate);
-
-      return isDateKeyInRange(
-        recapDateKey,
-        periodRange.startKey,
-        periodRange.endKey
-      );
-    });
-  }, [dailyRecaps, periodRange]);
   const filteredOrders = useMemo(() => {
     return orders.filter((order) => {
       const orderDateKey = getDateKey(order.orderDate);
@@ -834,57 +524,27 @@ const Metrics = () => {
   const stockNeedsOrder = stockItems.filter(
     (item) => item.status === "HARUS ORDER"
   ).length;
-  const dailyExpenseTotal = filteredRecaps.reduce(
-    (total, recap) => total + (Number(recap.dailyExpense) || 0),
-    0
-  );
-  const cashRecordedTotal = filteredRecaps.reduce((total, recap) => {
-    const cashIn = Number(recap.cashIn) || 0;
-    const qrisIn = Number(recap.qrisIn) || 0;
-    const transferIn = Number(recap.transferIn) || 0;
-    const onlineIn = Number(recap.onlineIn) || 0;
-
-    return total + cashIn + qrisIn + transferIn + onlineIn;
-  }, 0);
   // Same source as Rekap New: every order in the period, recapped or not.
   // A Konsumsi Crew sells nothing: its HPP is a crew cost, not the sales'.
   const salesOrders = filteredOrders.filter((order) => !isCrewOrder(order));
-  const crewCostTotal = getOrdersHppTotal(filteredOrders.filter(isCrewOrder), menuItems);
   const netRevenueTotal = getOrdersNetRevenueTotal(salesOrders);
   const materialSpendTotal = getOrdersHppTotal(salesOrders, menuItems);
   const hppSplit = getOrdersHppSplit(salesOrders, menuItems);
   const pendingHppCount = salesOrders.filter((order) => order.hppStatus === "pending").length;
   const grossProfitTotal = netRevenueTotal - materialSpendTotal;
-  const wasteCostTotal = (wastesRes?.data?.data?.dailyTotals || []).reduce(
-    (total, day) =>
-      isDateKeyInRange(String(day.date).slice(0, 10), periodRange.startKey, periodRange.endKey)
-        ? total + (Number(day.cost) || 0)
-        : total,
-    0
-  );
-  const netProfitTotal = grossProfitTotal - dailyExpenseTotal - wasteCostTotal - crewCostTotal;
-  const netCashTotal = cashRecordedTotal - dailyExpenseTotal;
-
   const isLoading =
     isOrdersLoading ||
     isCategoriesLoading ||
     isMenuItemsLoading ||
     isStockItemsLoading;
-  const isFinancialLoading =
-    isDailyRecapsLoading || isOrdersLoading || isMenuItemsLoading || isWastesLoading;
-  const isExportDisabled =
-    isLoading ||
-    isFinancialLoading ||
-    isWeeklyRecapsLoading ||
-    isMonthlyRecapsLoading;
+  const isProfitLoading = isOrdersLoading || isMenuItemsLoading;
+  const isExportDisabled = isOrdersLoading || isMenuItemsLoading;
   const hasError =
     isOrdersError ||
     isCategoriesError ||
     isMenuItemsError ||
     isStockItemsError ||
-    isDailyRecapsError ||
-    isWeeklyRecapsError ||
-    isMonthlyRecapsError;
+    isDailyRecapsError;
 
   const transactionMetrics = [
     {
@@ -956,92 +616,6 @@ const Metrics = () => {
     },
   ];
 
-  const financialMetrics = SHOW_HPP_FIELDS
-    ? [
-        {
-          title: "Uang Masuk Tercatat",
-          value: isFinancialLoading ? "..." : formatCurrency(cashRecordedTotal),
-          badge: activePeriod.badge,
-          description: "Cash, QRIS, dan transfer dari rekap harian.",
-          icon: FiCreditCard,
-          tone: "cash",
-        },
-        {
-          title: "HPP Standar",
-          value: isFinancialLoading ? "..." : formatCurrency(hppSplit.standar),
-          badge: activePeriod.badge,
-          description: HPP_STANDAR_NOTE,
-          icon: FiPackage,
-          tone: "cost",
-        },
-        {
-          title: "HPP Olahan",
-          value: isFinancialLoading ? "..." : formatCurrency(hppSplit.olahan),
-          badge: activePeriod.badge,
-          description: `${HPP_OLAHAN_NOTE}${pendingHppCount ? PENDING_HPP_NOTE : ""}`,
-          icon: FiPackage,
-          tone: "cost",
-        },
-        {
-          title: "Untung Kotor",
-          value: isFinancialLoading ? "..." : formatCurrency(grossProfitTotal),
-          badge: activePeriod.badge,
-          description: "Penjualan bersih dikurangi HPP.",
-          icon: FiTrendingUp,
-          tone: "profit",
-        },
-        {
-          title: "Biaya Wastage",
-          value: isFinancialLoading ? "..." : formatCurrency(wasteCostTotal),
-          badge: activePeriod.badge,
-          description: "Bahan yang dibuang, di luar HPP.",
-          icon: FiTrash2,
-          tone: "warning",
-        },
-        {
-          title: "Konsumsi Crew",
-          value: isFinancialLoading ? "..." : formatCurrency(crewCostTotal),
-          badge: activePeriod.badge,
-          description: "HPP menu yang dimakan crew saat istirahat, di luar HPP penjualan.",
-          icon: FiPackage,
-          tone: "warning",
-        },
-        {
-          title: "Untung Bersih",
-          value: isFinancialLoading ? "..." : formatCurrency(netProfitTotal),
-          badge: activePeriod.badge,
-          description: "Untung setelah pengeluaran harian, biaya wastage, dan konsumsi crew.",
-          icon: FiDollarSign,
-          tone: "net",
-        },
-      ]
-    : [
-        {
-          title: "Uang Masuk Tercatat",
-          value: isFinancialLoading ? "..." : formatCurrency(cashRecordedTotal),
-          badge: activePeriod.badge,
-          description: "Cash, QRIS, dan transfer dari rekap harian.",
-          icon: FiCreditCard,
-          tone: "cash",
-        },
-        {
-          title: "Pengeluaran",
-          value: isFinancialLoading ? "..." : formatCurrency(dailyExpenseTotal),
-          badge: activePeriod.badge,
-          description: "Pengeluaran dari rekap harian.",
-          icon: FiShoppingBag,
-          tone: "cost",
-        },
-        {
-          title: "Kas Bersih",
-          value: isFinancialLoading ? "..." : formatCurrency(netCashTotal),
-          badge: activePeriod.badge,
-          description: "Uang masuk tercatat dikurangi pengeluaran.",
-          icon: FiDollarSign,
-          tone: netCashTotal < 0 ? "cost" : "net",
-        },
-      ];
-
   const openKasModal = () => {
     if (!dailyRecapOptions.length) {
       enqueueSnackbar("Belum ada rekap harian untuk ditambahkan kas.", {
@@ -1104,7 +678,8 @@ const Metrics = () => {
       " Platform ",
       " Potongan Pendapatan ",
       " Pendapatan Bersih ",
-      ...(SHOW_HPP_FIELDS ? [" HPP ", " Keuntungan "] : []),
+      " HPP ",
+      " Keuntungan ",
     ];
     const sortedOrders = [...filteredOrders].sort(
       (firstOrder, secondOrder) =>
@@ -1138,9 +713,7 @@ const Metrics = () => {
             ? getOrderNetRevenue(order, grossRevenue) *
               (totalPrice / orderItemsTotal)
             : 0;
-        const hpp = SHOW_HPP_FIELDS
-          ? getOrderItemHpp(item, menuItems) * quantity
-          : 0;
+        const hpp = getOrderItemHpp(item, menuItems) * quantity;
 
         reportRows.push([
           rowNumber,
@@ -1153,7 +726,8 @@ const Metrics = () => {
           platformName,
           platformFee,
           netRevenue,
-          ...(SHOW_HPP_FIELDS ? [hpp, netRevenue - hpp] : []),
+          hpp,
+          netRevenue - hpp,
         ]);
         rowNumber += 1;
       });
@@ -1167,12 +741,14 @@ const Metrics = () => {
       (total, row) => total + toNumber(row[8]),
       0
     );
-    const totalHpp = SHOW_HPP_FIELDS
-      ? reportRows.reduce((total, row) => total + toNumber(row[10]), 0)
-      : 0;
-    const totalProfit = SHOW_HPP_FIELDS
-      ? reportRows.reduce((total, row) => total + toNumber(row[11]), 0)
-      : 0;
+    const totalHpp = reportRows.reduce(
+      (total, row) => total + toNumber(row[10]),
+      0
+    );
+    const totalProfit = reportRows.reduce(
+      (total, row) => total + toNumber(row[11]),
+      0
+    );
 
     reportRows.push([
       "",
@@ -1184,7 +760,8 @@ const Metrics = () => {
       "TOTAL",
       totalPlatformFee,
       totalNetRevenue,
-      ...(SHOW_HPP_FIELDS ? [totalHpp, totalProfit] : []),
+      totalHpp,
+      totalProfit,
     ]);
 
     const periodLabel =
@@ -1213,7 +790,8 @@ const Metrics = () => {
       { wch: 16 },
       { wch: 18 },
       { wch: 20 },
-      ...(SHOW_HPP_FIELDS ? [{ wch: 14 }, { wch: 16 }] : []),
+      { wch: 14 },
+      { wch: 16 },
     ];
     worksheet["!rows"] = worksheetRows.map((_, rowIndex) => ({
       hpt: rowIndex === 0 ? 28 : rowIndex === 1 ? 24 : 21,
@@ -1276,14 +854,7 @@ const Metrics = () => {
           isTotalRow ? totalRowStyle : baseDataStyle
         );
 
-        const rightAlignedColumns = SHOW_HPP_FIELDS
-          ? [0, 3, 4, 5, 8, 9, 10, 11]
-          : [0, 3, 4, 5, 8, 9];
-        const currencyColumns = SHOW_HPP_FIELDS
-          ? [4, 5, 8, 9, 10, 11]
-          : [4, 5, 8, 9];
-
-        if (rightAlignedColumns.includes(columnIndex)) {
+        if (EXPORT_RIGHT_ALIGNED_COLUMNS.includes(columnIndex)) {
           worksheet[address].s = {
             ...(worksheet[address].s || {}),
             alignment: {
@@ -1309,7 +880,7 @@ const Metrics = () => {
           worksheet[address].z = "#,##0";
         }
 
-        if (currencyColumns.includes(columnIndex)) {
+        if (EXPORT_CURRENCY_COLUMNS.includes(columnIndex)) {
           worksheet[address].z = rupiahExcelFormat;
         }
       }
@@ -1442,38 +1013,19 @@ const Metrics = () => {
 
       <div className="flex flex-col justify-between mt-12">
         <div>
-          <h2 className="font-semibold text-[#f5f5f5] text-xl">
-            {SHOW_HPP_FIELDS ? "Keuntungan" : "Kas & Operasional"}
-          </h2>
+          <h2 className="font-semibold text-[#f5f5f5] text-xl">Keuntungan</h2>
           <p className="text-sm text-[#ababab]">
             Dihitung dari semua pesanan di periode ini, sama seperti Rekap New.
           </p>
         </div>
 
-        {SHOW_HPP_FIELDS && (
-          <ProfitFlow
-            revenue={netRevenueTotal}
-            hpp={hppSplit}
-            grossProfit={grossProfitTotal}
-            wasteCost={wasteCostTotal}
-            netProfit={netProfitTotal}
-            isLoading={isLoading || isFinancialLoading}
-            pendingHppCount={pendingHppCount}
-          />
-        )}
-
-        {SHOW_FINANCIAL_CARDS && (
-          <MetricCardSlider
-            items={financialMetrics}
-            renderItem={(item, index) => (
-              <FinancialCard
-                key={index}
-                item={item}
-                className="min-w-full snap-start sm:min-w-0"
-              />
-            )}
-          />
-        )}
+        <ProfitFlow
+          revenue={netRevenueTotal}
+          hpp={hppSplit}
+          grossProfit={grossProfitTotal}
+          isLoading={isProfitLoading}
+          pendingHppCount={pendingHppCount}
+        />
       </div>
 
       <div className="flex flex-col justify-between mt-12">

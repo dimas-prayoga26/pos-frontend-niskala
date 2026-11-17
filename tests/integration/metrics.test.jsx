@@ -60,24 +60,12 @@ describe("dashboard metrics", () => {
     api.getStockWastes.mockResolvedValue({ data: { data: { wastes: [], dailyTotals: [] } } });
   });
 
-  it("shows the Biaya Wastage of the period apart from HPP", async () => {
-    api.getStockWastes.mockResolvedValue({
-      data: {
-        data: {
-          wastes: [],
-          dailyTotals: [
-            { date: today, cost: 6180, entries: 1 },
-            // Outside this month: not counted.
-            { date: "2025-01-15", cost: 9270, entries: 1 },
-          ],
-        },
-      },
-    });
+  it("leaves Biaya Wastage out of Keuntungan", async () => {
     renderWithProviders(<Metrics />, { route: "/dashboard" });
 
-    await waitFor(() =>
-      expect(screen.getByText("Biaya Wastage").closest(".min-w-0")).toHaveTextContent(/Rp\s6\.180$/)
-    );
+    expect(await screen.findByText("Untung Kotor")).toBeInTheDocument();
+    expect(screen.queryByText("Biaya Wastage")).not.toBeInTheDocument();
+    expect(api.getStockWastes).not.toHaveBeenCalled();
   });
 
   it("shows sales after QRIS 0.7% (above Rp100.000) and platform fee deductions", async () => {
