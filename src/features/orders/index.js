@@ -7,5 +7,6 @@ export {
   getOrderReceivedAmount,
   getOrdersHppTotal,
   getOrdersItemCount,
+  isCrewOrder,
 } from "./utils/orderMetrics";
 export { default as OrdersPage } from "./pages/OrdersPage";

@@ -1,23 +1,18 @@
-import React, { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import Metrics from "../../../components/dashboard/Metrics";
-import RecentOrders from "../components/RecentOrders";
+import MenuPerformance from "../components/MenuPerformance";
 import { ShoppingPage, StockManagement, usePurchaseDraftCount } from "../../inventory";
 import MenuManagement from "../../../components/dashboard/MenuManagement";
 import RecapManagement from "../../../components/dashboard/RecapManagement";
 import { SettingsManagement } from "../../settings";
 import { useSelector } from "react-redux";
-import { getOrders, getStockItems } from "../api";
-
-const getOrderNumericId = (order) => Number(order?.id || order?._id || 0) || 0;
+import { getStockItems } from "../api";
 
 const Dashboard = () => {
   const user = useSelector((state) => state.user);
   const userRole = user.role;
   const isAdmin = userRole?.toLowerCase() === "admin";
-  const orderBadgeStorageKey = `dashboard:last-seen-order:${
-    user._id || user.email || userRole || "guest"
-  }`;
   const [activeTab, setActiveTab] = useState("metrics");
   // Bahan baku a Catat Masak is short of ({ stockItemId, unit }): Belanja
   // Bahan opens Tambah Belanja with them. Any tab click drops them.
@@ -25,16 +20,6 @@ const Dashboard = () => {
   // A recipe bahan the menu form did not find ({ kind, name }): Stok Bahan
   // opens its Tambah form. Any tab click drops it.
   const [createStockItem, setCreateStockItem] = useState(null);
-  const [lastSeenOrderId, setLastSeenOrderId] = useState(() => {
-    const storedValue = localStorage.getItem(orderBadgeStorageKey);
-    return storedValue === null ? null : Number(storedValue) || 0;
-  });
-
-  const { data: ordersRes } = useQuery({
-    queryKey: ["orders"],
-    queryFn: getOrders,
-    placeholderData: keepPreviousData,
-  });
 
   const { data: stockItemsRes } = useQuery({
     queryKey: ["stock-items"],
@@ -42,35 +27,19 @@ const Dashboard = () => {
     placeholderData: keepPreviousData,
   });
 
-  const orders = ordersRes?.data?.data || [];
-  const stockItems = stockItemsRes?.data?.data || [];
-
-  const latestOrderId = useMemo(() => {
-    return orders.reduce(
-      (latestId, order) => Math.max(latestId, getOrderNumericId(order)),
-      0
-    );
-  }, [orders]);
-
-  const newOrderCount = useMemo(() => {
-    if (lastSeenOrderId === null) return 0;
-
-    return orders.filter((order) => getOrderNumericId(order) > lastSeenOrderId)
-      .length;
-  }, [lastSeenOrderId, orders]);
-
   // Draft nota waiting for an admin to post them.
   const draftCount = usePurchaseDraftCount();
 
   // Bahan baku to restock: running low or already at/below the minimum.
   const lowStockCount = useMemo(() => {
+    const stockItems = stockItemsRes?.data?.data || [];
     return stockItems.filter((item) => item.status === "HAMPIR HABIS" || item.status === "HARUS ORDER").length;
-  }, [stockItems]);
+  }, [stockItemsRes]);
 
   const tabs = isAdmin
     ? [
         { key: "metrics", label: "Metrik" },
-        { key: "orders", label: "Pesanan", badge: newOrderCount },
+        { key: "menu-performance", label: "Menu Terlaris" },
         { key: "stock", label: "Stok Bahan", badge: lowStockCount },
         { key: "shopping", label: "Belanja", badge: draftCount },
         { key: "menu", label: "Menu" },
@@ -79,7 +48,7 @@ const Dashboard = () => {
       ]
     : [
         { key: "metrics", label: "Metrik" },
-        { key: "orders", label: "Pesanan", badge: newOrderCount },
+        { key: "menu-performance", label: "Menu Terlaris" },
         { key: "stock", label: "Stok Bahan", badge: lowStockCount },
         { key: "shopping", label: "Belanja", badge: draftCount },
         { key: "recap", label: "Rekap" },
@@ -89,35 +58,10 @@ const Dashboard = () => {
     document.title = "POS | Admin Dashboard"
   }, [])
 
-  useEffect(() => {
-    const storedValue = localStorage.getItem(orderBadgeStorageKey);
-    setLastSeenOrderId(storedValue === null ? null : Number(storedValue) || 0);
-  }, [orderBadgeStorageKey]);
-
-  useEffect(() => {
-    if (!latestOrderId) return;
-
-    if (lastSeenOrderId === null) {
-      localStorage.setItem(orderBadgeStorageKey, String(latestOrderId));
-      setLastSeenOrderId(latestOrderId);
-      return;
-    }
-
-    if (activeTab === "orders" && latestOrderId > lastSeenOrderId) {
-      localStorage.setItem(orderBadgeStorageKey, String(latestOrderId));
-      setLastSeenOrderId(latestOrderId);
-    }
-  }, [activeTab, lastSeenOrderId, latestOrderId, orderBadgeStorageKey]);
-
   const handleTabClick = (tabKey) => {
     setActiveTab(tabKey);
     setRestockItems(null);
     setCreateStockItem(null);
-
-    if (tabKey === "orders") {
-      localStorage.setItem(orderBadgeStorageKey, String(latestOrderId));
-      setLastSeenOrderId(latestOrderId);
-    }
   };
 
   return (
@@ -157,7 +101,7 @@ const Dashboard = () => {
       </div>
 
       {activeTab === "metrics" && <Metrics />}
-      {activeTab === "orders" && <RecentOrders />}
+      {activeTab === "menu-performance" && <MenuPerformance />}
       {activeTab === "stock" && (
         <StockManagement
           createItem={createStockItem}

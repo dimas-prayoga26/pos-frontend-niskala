@@ -3,17 +3,9 @@ import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { getMenuItems, getOrders } from "../api";
 import { formatCurrency } from "../../../shared/lib/format";
 import noImage from "../../../assets/no-image.svg";
-import { backendBaseUrl } from "../../../shared/api/backendUrl";
-import { BEST_SELLER_GROUPS, rankBestSellers } from "../utils/bestSeller";
+import { BEST_SELLER_GROUPS, rankBestSellers, resolveMenuImage } from "../utils/bestSeller";
 
 const normalizeName = (value) => String(value || "").trim().toLowerCase();
-
-const resolveMenuImage = (imagePath) => {
-  if (!imagePath) return noImage;
-  if (imagePath.startsWith("/uploads/")) return `${backendBaseUrl}${imagePath}`;
-
-  return imagePath;
-};
 
 const PopularDishes = () => {
   const [selectedBestSellerType, setSelectedBestSellerType] =

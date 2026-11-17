@@ -45,7 +45,7 @@ const menuNames = () =>
   screen
     .getAllByRole("button")
     .map((button) => button.textContent.replace(/\d+$/, ""))
-    .filter((name) => ["Metrik", "Pesanan", "Stok Bahan", "Belanja", "Menu", "Rekap", "Pengaturan"].includes(name));
+    .filter((name) => ["Metrik", "Menu Terlaris", "Stok Bahan", "Belanja", "Menu", "Rekap", "Pengaturan"].includes(name));
 
 describe("dashboard menus: Stok Bahan holds what is on hand, Belanja the purchases", () => {
   beforeEach(() => {
@@ -65,7 +65,7 @@ describe("dashboard menus: Stok Bahan holds what is on hand, Belanja the purchas
 
   it("puts Belanja right after Stok Bahan with the number of draft nota", async () => {
     renderWithProviders(<Dashboard />, { preloadedState: user("Admin") });
-    expect(menuNames()).toEqual(["Metrik", "Pesanan", "Stok Bahan", "Belanja", "Menu", "Rekap", "Pengaturan"]);
+    expect(menuNames()).toEqual(["Metrik", "Menu Terlaris", "Stok Bahan", "Belanja", "Menu", "Rekap", "Pengaturan"]);
     expect(await screen.findByRole("button", { name: "Belanja 2" })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Belanja 2" }));
@@ -191,7 +191,7 @@ describe("dashboard menus: Stok Bahan holds what is on hand, Belanja the purchas
 
   it("shows Belanja to kasir, who write draft nota", async () => {
     renderWithProviders(<Dashboard />, { preloadedState: user("Cashier") });
-    expect(menuNames()).toEqual(["Metrik", "Pesanan", "Stok Bahan", "Belanja", "Rekap"]);
+    expect(menuNames()).toEqual(["Metrik", "Menu Terlaris", "Stok Bahan", "Belanja", "Rekap"]);
     fireEvent.click(await screen.findByRole("button", { name: "Belanja 2" }));
     expect(screen.getByRole("button", { name: "Tambah Belanja" })).toBeInTheDocument();
   });

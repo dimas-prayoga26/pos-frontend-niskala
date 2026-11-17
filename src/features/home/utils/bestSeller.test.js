@@ -27,4 +27,14 @@ describe("rankBestSellers", () => {
     ]);
     expect(rankBestSellers(orders, menuItems)[0]).toMatchObject({ image: "/uploads/menu/latte.png" });
   });
+
+  it("sums what each menu brought in and takes another grouping", () => {
+    const sold = [{ items: [{ menuItemId: 2, name: "Rice Bowl Ayam", quantity: 2, pricePerQuantity: 25000 }, { menuItemId: 4, name: "Paket 20K / Box", quantity: 3, price: 20000 }] }];
+    const byCategoryName = (menuItem) => menuItem.category.name;
+
+    expect(rankBestSellers(sold, menuItems, byCategoryName).map((dish) => [dish.name, dish.group, dish.revenue])).toEqual([
+      ["Paket 20K / Box", "Catering", 60000],
+      ["Rice Bowl Ayam", "Rice Bowl", 50000],
+    ]);
+  });
 });
