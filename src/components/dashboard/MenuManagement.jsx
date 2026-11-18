@@ -342,6 +342,7 @@ const MenuManagement = ({ onCreateIngredient }) => {
   const [isCategoryFormOpen, setIsCategoryFormOpen] = useState(false);
   const [isMenuFormOpen, setIsMenuFormOpen] = useState(false);
   const [categoryPendingDelete, setCategoryPendingDelete] = useState(null);
+  const [menuPendingDelete, setMenuPendingDelete] = useState(null);
   const [categorySearch, setCategorySearch] = useState("");
   const [menuSearch, setMenuSearch] = useState("");
   const [menuCategoryFilter, setMenuCategoryFilter] = useState("");
@@ -673,6 +674,7 @@ const MenuManagement = ({ onCreateIngredient }) => {
     onSuccess: () => {
       refreshMenuData();
       enqueueSnackbar("Menu berhasil dihapus.", { variant: "success" });
+      setMenuPendingDelete(null);
     },
     onError: (error) => {
       enqueueSnackbar(error?.response?.data?.message || "Gagal menghapus menu.", {
@@ -1277,6 +1279,12 @@ const MenuManagement = ({ onCreateIngredient }) => {
     categoryDeleteMutation.mutate(
       categoryPendingDelete.id || categoryPendingDelete._id
     );
+  };
+
+  const confirmDeleteMenuItem = () => {
+    if (!menuPendingDelete) return;
+
+    menuDeleteMutation.mutate(menuPendingDelete.id || menuPendingDelete._id);
   };
 
   return (
@@ -2275,9 +2283,7 @@ const MenuManagement = ({ onCreateIngredient }) => {
                           </button>
                           <button
                             type="button"
-                            onClick={() =>
-                              menuDeleteMutation.mutate(item.id || item._id)
-                            }
+                            onClick={() => setMenuPendingDelete(item)}
                             className="text-red-400 hover:text-red-300"
                           >
                             Hapus
@@ -2367,6 +2373,43 @@ const MenuManagement = ({ onCreateIngredient }) => {
                 className="rounded-lg bg-red-500 px-4 py-2 text-sm font-bold text-white disabled:opacity-60"
               >
                 {categoryDeleteMutation.isPending ? "Menghapus..." : "Hapus"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {menuPendingDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="menu-delete-title"
+            className="w-full max-w-md rounded-lg bg-[#262626] p-5 shadow-2xl"
+          >
+            <h3 id="menu-delete-title" className="text-xl font-bold text-[#f5f5f5]">
+              Hapus menu?
+            </h3>
+            <p className="mt-3 text-sm leading-6 text-[#ababab]">
+              <span className="font-bold text-[#f5f5f5]">{menuPendingDelete.name}</span> akan
+              dihapus permanen.
+            </p>
+            <div className="mt-5 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setMenuPendingDelete(null)}
+                disabled={menuDeleteMutation.isPending}
+                className="rounded-lg bg-[#333] px-4 py-2 text-sm font-bold text-[#f5f5f5] disabled:opacity-60"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={confirmDeleteMenuItem}
+                disabled={menuDeleteMutation.isPending}
+                className="rounded-lg bg-red-500 px-4 py-2 text-sm font-bold text-white disabled:opacity-60"
+              >
+                {menuDeleteMutation.isPending ? "Menghapus..." : "Hapus"}
               </button>
             </div>
           </div>

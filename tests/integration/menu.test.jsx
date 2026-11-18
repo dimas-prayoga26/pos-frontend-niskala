@@ -8,6 +8,7 @@ import { renderWithProviders } from "../renderWithProviders";
 vi.mock("../../src/https/index", async (importOriginal) => ({
   ...(await importOriginal()),
   addCategory: vi.fn(),
+  deleteMenuItem: vi.fn(),
   getCategories: vi.fn(),
   getMenuItems: vi.fn(),
   getSemiItems: vi.fn(),
@@ -136,6 +137,38 @@ describe("menu recipe editor", () => {
     searchIn(picker(), "Sambal");
     fireEvent.click(await screen.findByRole("button", { name: "Buat Bahan Olahan" }));
     expect(onCreateIngredient).toHaveBeenLastCalledWith("semi", "Sambal");
+  });
+});
+
+describe("menu delete", () => {
+  beforeEach(() => {
+    api.getCategories.mockResolvedValue({ data: { data: [{ id: 1, name: "Kopi", isActive: true }] } });
+    api.getMenuItems.mockResolvedValue({
+      data: { data: [{ id: 7, name: "Kopi Susu", categoryId: 1, regularPrice: 18000, isAvailable: true }] },
+    });
+    api.getSemiItems.mockResolvedValue({ data: { data: [] } });
+    api.getStockItems.mockResolvedValue({ data: { data: [] } });
+    api.deleteMenuItem.mockResolvedValue({ data: { success: true } });
+  });
+
+  it("asks before deleting a menu", async () => {
+    renderWithProviders(<MenuManagement />, { preloadedState: asAdmin });
+
+    fireEvent.click(await screen.findByRole("button", { name: "Menu Items" }));
+    const row = (await screen.findByText("Kopi Susu")).closest("tr");
+
+    fireEvent.click(within(row).getByRole("button", { name: "Hapus" }));
+    const dialog = screen.getByRole("dialog", { name: "Hapus menu?" });
+    expect(dialog).toHaveTextContent("Kopi Susu akan dihapus permanen.");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Batal" }));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(api.deleteMenuItem).not.toHaveBeenCalled();
+
+    fireEvent.click(within(row).getByRole("button", { name: "Hapus" }));
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Hapus" }));
+    await waitFor(() => expect(api.deleteMenuItem).toHaveBeenCalled());
+    expect(api.deleteMenuItem.mock.calls[0][0]).toBe(7);
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
   });
 });
 
