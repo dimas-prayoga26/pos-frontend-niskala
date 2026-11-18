@@ -8,13 +8,15 @@ import OrderDateRangeFilter from "../../orders/components/OrderDateRangeFilter";
 import { rankBestSellers, resolveMenuImage } from "../../home/utils/bestSeller";
 import { DEFAULT_PERIOD, PERIOD_OPTIONS, periodRange, rangeLabel } from "../../inventory/utils/periods";
 import { getMenuItems, getOrders } from "../api";
+import { previousRange } from "../utils/menuTable";
 import CategoryRevenueDonut from "./CategoryRevenueDonut";
+import MenuDetailTable from "./MenuDetailTable";
 import TopMenusBarChart from "./TopMenusBarChart";
 import { GROUP_STYLES, MENU_GROUPS, menuGroupOf } from "./menuGroups";
 
-// The Top 10 bar chart and the omzet donut are built but hidden for now, at the
-// user's request (2026-11-17); set to true to show them again.
-const SHOW_CHARTS = false;
+// The Top 10 bar chart and the omzet donut: hidden 2026-11-17, shown again
+// 2026-11-18 at the user's request; set to false to hide them.
+const SHOW_CHARTS = true;
 
 const isInRange = (dateKey, { from, to }) =>
   Boolean(dateKey) && (!from || dateKey >= from) && (!to || dateKey <= to);
@@ -66,8 +68,10 @@ const TopMenuCard = ({ group, dish, isLoading }) => {
 };
 
 // Menu Terlaris tab, for the chosen period: the most sold menu (Top 1) of
-// Makanan, Minuman, Snack and Bundling, the Top 10 menus, and each kind's
-// share of the omzet (charts behind SHOW_CHARTS). A Konsumsi Crew is not a sale.
+// Makanan, Minuman, Snack and Bundling, the Top 10 menus and each kind's share
+// of the omzet (charts behind SHOW_CHARTS), and every menu sold in the Rincian
+// Menu table, with its trend over the period before. A Konsumsi Crew is not a
+// sale.
 const MenuPerformance = ({ showCharts = SHOW_CHARTS }) => {
   const [period, setPeriod] = useState(DEFAULT_PERIOD);
   const [customRange, setCustomRange] = useState({});
@@ -84,13 +88,20 @@ const MenuPerformance = ({ showCharts = SHOW_CHARTS }) => {
   });
 
   const range = useMemo(() => periodRange(period, customRange), [period, customRange]);
-  // Menus sold in the period, most sold first, each with its kind and omzet.
-  const rankedMenus = useMemo(() => {
-    const salesOrders = (ordersRes?.data?.data || []).filter(
-      (order) => !isCrewOrder(order) && isInRange(getJakartaDateKey(order.orderDate), range)
-    );
-    return rankBestSellers(salesOrders, menuItemsRes?.data?.data || [], menuGroupOf);
-  }, [menuItemsRes, ordersRes, range]);
+  const previous = useMemo(() => previousRange(period, range), [period, range]);
+  // Menus sold in some days, most sold first, each with its kind and omzet.
+  const rankMenusIn = useMemo(() => {
+    const salesOrders = (ordersRes?.data?.data || []).filter((order) => !isCrewOrder(order));
+    const menuItems = menuItemsRes?.data?.data || [];
+    return (days) =>
+      rankBestSellers(
+        salesOrders.filter((order) => isInRange(getJakartaDateKey(order.orderDate), days)),
+        menuItems,
+        menuGroupOf
+      );
+  }, [menuItemsRes, ordersRes]);
+  const rankedMenus = useMemo(() => rankMenusIn(range), [rankMenusIn, range]);
+  const previousMenus = useMemo(() => previous && rankMenusIn(previous), [previous, rankMenusIn]);
   const topByGroup = useMemo(
     () => new Map(MENU_GROUPS.map((group) => [group, rankedMenus.find((dish) => dish.group === group)])),
     [rankedMenus]
@@ -153,6 +164,13 @@ const MenuPerformance = ({ showCharts = SHOW_CHARTS }) => {
           </div>
         </div>
       )}
+
+      <MenuDetailTable
+        menus={rankedMenus}
+        previousMenus={previousMenus}
+        previousLabel={previous && rangeLabel(previous)}
+        isLoading={isLoading}
+      />
     </div>
   );
 };

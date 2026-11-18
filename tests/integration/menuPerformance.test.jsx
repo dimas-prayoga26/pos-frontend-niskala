@@ -12,6 +12,9 @@ vi.mock("../../src/https/index", async (importOriginal) => ({
 }));
 
 const today = getJakartaDateKey();
+// The 1st of last month: inside the days Bulan Ini compares with.
+const [thisYear, thisMonth] = today.split("-").map(Number);
+const lastMonth = new Date(Date.UTC(thisYear, thisMonth - 2, 1)).toISOString().slice(0, 10);
 const category = (name, bestSellerGroup, isBundle = false) => ({ name, bestSellerGroup, isBundle });
 const menuItems = [
   { id: 1, name: "Nasi Goreng", category: category("Main Course", "Makanan") },
@@ -32,9 +35,22 @@ const orders = [
   { id: 2, orderDate: `${today} 12:30:00`, orderType: "Crew", items: [line(2, "Mie Goreng", 10, 0)] },
   // Outside this month.
   { id: 3, orderDate: "2025-01-15 09:00:00", orderType: "Offline", items: [line(4, "Roti Kukus", 50, 12000)] },
+  // Last month, for the trend.
+  {
+    id: 4,
+    orderDate: `${lastMonth} 11:00:00`,
+    orderType: "Offline",
+    items: [line(1, "Nasi Goreng", 2, 25000), line(3, "Es Teh", 10, 8000), line(5, "Paket Hemat", 2, 30000)],
+  },
 ];
 
 const card = (group) => screen.getByRole("region", { name: `${group} Terlaris` });
+// Each body row of the Rincian Menu table, as its cells' text.
+const tableRows = () =>
+  within(screen.getByRole("table", { name: "Rincian Menu" }))
+    .getAllByRole("row")
+    .slice(1)
+    .map((row) => within(row).getAllByRole("cell").map((cell) => cell.textContent.replace(/\s/g, " ")));
 
 describe("Menu Terlaris tab", () => {
   beforeEach(() => {
@@ -53,16 +69,22 @@ describe("Menu Terlaris tab", () => {
     expect(within(card("Snack")).getByText("Belum ada penjualan di periode ini.")).toBeInTheDocument();
   });
 
-  it("keeps the charts hidden for now", async () => {
-    renderWithProviders(<MenuPerformance />);
+  it("shows the charts under the Top 1 cards, and hides them on request", async () => {
+    const { unmount } = renderWithProviders(<MenuPerformance />);
 
+    expect(await within(card("Makanan")).findByText("Nasi Goreng")).toBeInTheDocument();
+    expect(screen.getByText("Top 10 Menu Terlaris")).toBeInTheDocument();
+    expect(screen.getByText("Komposisi Omzet per Kategori")).toBeInTheDocument();
+    unmount();
+
+    renderWithProviders(<MenuPerformance showCharts={false} />);
     expect(await within(card("Makanan")).findByText("Nasi Goreng")).toBeInTheDocument();
     expect(screen.queryByText("Top 10 Menu Terlaris")).not.toBeInTheDocument();
     expect(screen.queryByText("Komposisi Omzet per Kategori")).not.toBeInTheDocument();
   });
 
   it("charts the Top 10 menus by qty sold, menus sold equally sharing a rank", async () => {
-    renderWithProviders(<MenuPerformance showCharts />);
+    renderWithProviders(<MenuPerformance />);
 
     const list = await screen.findByRole("list", { name: "Top 10 Menu Terlaris" });
     const rows = within(list).getAllByRole("listitem");
@@ -77,7 +99,7 @@ describe("Menu Terlaris tab", () => {
   });
 
   it("splits the omzet per kind in the donut and its legend", async () => {
-    renderWithProviders(<MenuPerformance showCharts />);
+    renderWithProviders(<MenuPerformance />);
 
     // Makanan 119.000 (Nasi + Mie), Minuman 40.000, Bundling 60.000 of 219.000.
     expect(
@@ -101,5 +123,56 @@ describe("Menu Terlaris tab", () => {
     fireEvent.change(screen.getByRole("combobox", { name: "Periode" }), { target: { value: "all" } });
     expect(within(card("Snack")).getByText("Roti Kukus")).toBeInTheDocument();
     expect(within(card("Snack")).getByText(/50 terjual/)).toBeInTheDocument();
+  });
+
+  it("lists every menu sold in the Rincian Menu table, by omzet first", async () => {
+    renderWithProviders(<MenuPerformance />);
+    await within(card("Makanan")).findByText("Nasi Goreng");
+
+    // Shares of 219.000; trends against last month's 1st (the same days).
+    expect(tableRows()).toEqual([
+      ["1", "Nasi Goreng", "Makanan", "3", "Rp 75.000", "34,2%", "+50%"],
+      ["2", "Paket Hemat", "Bundling", "2", "Rp 60.000", "27,4%", "0%"],
+      ["3", "Mie Goreng", "Makanan", "2", "Rp 44.000", "20,1%", "Baru"],
+      ["4", "Es Teh", "Minuman", "5", "Rp 40.000", "18,3%", "-50%"],
+    ]);
+    expect(screen.getByText(/^Tren omzet dibanding /)).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "Total Omzet" })).toHaveAttribute("aria-sort", "descending");
+  });
+
+  it("orders the table by qty and filters it by kind", async () => {
+    renderWithProviders(<MenuPerformance />);
+    await within(card("Makanan")).findByText("Nasi Goreng");
+
+    fireEvent.click(screen.getByRole("button", { name: "Terjual" }));
+    expect(screen.getByRole("columnheader", { name: "Terjual" })).toHaveAttribute("aria-sort", "descending");
+    // Menus sold equally share a rank; the omzet orders them.
+    expect(tableRows().map((row) => [row[0], row[1]])).toEqual([
+      ["1", "Es Teh"],
+      ["2", "Nasi Goreng"],
+      ["3", "Paket Hemat"],
+      ["3", "Mie Goreng"],
+    ]);
+
+    const filter = screen.getByRole("group", { name: "Filter kategori" });
+    fireEvent.click(within(filter).getByRole("button", { name: "Makanan" }));
+    expect(within(filter).getByRole("button", { name: "Makanan" })).toHaveAttribute("aria-pressed", "true");
+    // Ranked within the kind; the share stays of the whole omzet.
+    expect(tableRows().map((row) => [row[0], row[1], row[5]])).toEqual([
+      ["1", "Nasi Goreng", "34,2%"],
+      ["2", "Mie Goreng", "20,1%"],
+    ]);
+
+    fireEvent.click(within(filter).getByRole("button", { name: "Snack" }));
+    expect(tableRows()).toEqual([["Belum ada penjualan di periode ini."]]);
+  });
+
+  it("shows no trend for all time", async () => {
+    renderWithProviders(<MenuPerformance />);
+    await within(card("Makanan")).findByText("Nasi Goreng");
+
+    fireEvent.change(screen.getByRole("combobox", { name: "Periode" }), { target: { value: "all" } });
+    expect(tableRows().map((row) => row[6])).toEqual(["—", "—", "—", "—", "—"]);
+    expect(screen.queryByText(/^Tren omzet dibanding /)).not.toBeInTheDocument();
   });
 });
