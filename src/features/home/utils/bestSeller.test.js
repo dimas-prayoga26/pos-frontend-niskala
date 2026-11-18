@@ -28,6 +28,15 @@ describe("rankBestSellers", () => {
     expect(rankBestSellers(orders, menuItems)[0]).toMatchObject({ image: "/uploads/menu/latte.png" });
   });
 
+  it("names the menu categories a menu was sold from", () => {
+    expect(rankBestSellers(orders, menuItems).map((dish) => [dish.name, dish.categories])).toEqual([
+      ["Butterscotch Latte", ["White Coffee", "Hot White Coffee"]],
+      ["Rice Bowl Ayam", ["Rice Bowl"]],
+      ["Matcha Latte", ["Matcha Series"]],
+      ["Roti Kukus Coklat", ["Roti"]],
+    ]);
+  });
+
   it("sums what each menu brought in and takes another grouping", () => {
     const sold = [{ items: [{ menuItemId: 2, name: "Rice Bowl Ayam", quantity: 2, pricePerQuantity: 25000 }, { menuItemId: 4, name: "Paket 20K / Box", quantity: 3, price: 20000 }] }];
     const byCategoryName = (menuItem) => menuItem.category.name;

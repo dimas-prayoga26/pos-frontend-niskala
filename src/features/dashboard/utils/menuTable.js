@@ -17,24 +17,25 @@ const addMonths = (key, months) => {
 };
 const daysBetween = (from, to) => Math.round((toDate(to) - toDate(from)) / 86_400_000);
 
-// The days a period's Tren compares with: the same stretch one period back,
-// up to today (Bulan Ini on the 18th → the 1st–18th of last month). Hari Ini
+// The days a period's Tren covers (current: the period up to today) and the
+// days it compares with (previous: the same stretch one period back). Bulan
+// Ini on the 18th → the 1st–18th against the 1st–18th of last month. Hari Ini
 // → yesterday, Minggu Ini → last week, Tahun Ini → last year, a custom range →
 // as many days right before it. None for Semua Waktu, an open or a future
 // range.
-export const previousRange = (period, range = {}, today = new Date()) => {
+export const trendRanges = (period, range = {}, today = new Date()) => {
   const todayKey = getJakartaDateKey(today);
   if (!range.from || !range.to || range.from > todayKey) return null;
 
-  const to = range.to < todayKey ? range.to : todayKey;
+  const current = { from: range.from, to: range.to < todayKey ? range.to : todayKey };
   const shifts = {
     today: (key) => addDays(key, -1),
     week: (key) => addDays(key, -7),
     month: (key) => addMonths(key, -1),
     year: (key) => addMonths(key, -12),
   };
-  const shift = shifts[period] || ((key) => addDays(key, -(daysBetween(range.from, to) + 1)));
-  return { from: shift(range.from), to: shift(to) };
+  const shift = shifts[period] || ((key) => addDays(key, -(daysBetween(current.from, current.to) + 1)));
+  return { current, previous: { from: shift(current.from), to: shift(current.to) } };
 };
 
 const menuKey = (menu) => menu.name.trim().toLowerCase();

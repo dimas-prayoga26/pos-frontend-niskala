@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import * as api from "../../src/https/index";
 import MenuPerformance from "../../src/features/dashboard/components/MenuPerformance";
 import { getJakartaDateKey } from "../../src/shared/lib/dates";
+import { rangeLabel } from "../../src/features/inventory/utils/periods";
 import { renderWithProviders } from "../renderWithProviders";
 
 vi.mock("../../src/https/index", async (importOriginal) => ({
@@ -50,7 +51,13 @@ const tableRows = () =>
   within(screen.getByRole("table", { name: "Rincian Menu" }))
     .getAllByRole("row")
     .slice(1)
-    .map((row) => within(row).getAllByRole("cell").map((cell) => cell.textContent.replace(/\s/g, " ")));
+    .map((row) =>
+      within(row)
+        .getAllByRole("cell")
+        // The menu cell: its name, then its menu categories.
+        .map((cell) => (cell.children.length > 1 ? [...cell.children].map((part) => part.textContent).join(" · ") : cell.textContent))
+        .map((text) => text.replace(/\s/g, " "))
+    );
 
 describe("Menu Terlaris tab", () => {
   beforeEach(() => {
@@ -89,13 +96,13 @@ describe("Menu Terlaris tab", () => {
     const list = await screen.findByRole("list", { name: "Top 10 Menu Terlaris" });
     const rows = within(list).getAllByRole("listitem");
     expect(rows.map((row) => row.getAttribute("aria-label"))).toEqual([
-      "1. Es Teh, Minuman: 5 terjual, Rp 40.000",
-      "2. Nasi Goreng, Makanan: 3 terjual, Rp 75.000",
-      "3. Mie Goreng, Makanan: 2 terjual, Rp 44.000",
-      "3. Paket Hemat, Bundling: 2 terjual, Rp 60.000",
+      "1. Es Teh (Tea), Minuman: 5 terjual, Rp 40.000",
+      "2. Nasi Goreng (Main Course), Makanan: 3 terjual, Rp 75.000",
+      "3. Mie Goreng (Main Course), Makanan: 2 terjual, Rp 44.000",
+      "3. Paket Hemat (PROMO), Bundling: 2 terjual, Rp 60.000",
     ]);
-    // Each row names its kind, not only its bar color.
-    expect(within(rows[3]).getByText("Bundling")).toBeInTheDocument();
+    // Each row names its kind, not only its bar color, and its menu category.
+    expect(within(rows[3]).getByText("Bundling · PROMO")).toBeInTheDocument();
   });
 
   it("splits the omzet per kind in the donut and its legend", async () => {
@@ -131,12 +138,15 @@ describe("Menu Terlaris tab", () => {
 
     // Shares of 219.000; trends against last month's 1st (the same days).
     expect(tableRows()).toEqual([
-      ["1", "Nasi Goreng", "Makanan", "3", "Rp 75.000", "34,2%", "+50%"],
-      ["2", "Paket Hemat", "Bundling", "2", "Rp 60.000", "27,4%", "0%"],
-      ["3", "Mie Goreng", "Makanan", "2", "Rp 44.000", "20,1%", "Baru"],
-      ["4", "Es Teh", "Minuman", "5", "Rp 40.000", "18,3%", "-50%"],
+      ["1", "Nasi Goreng · Main Course", "Makanan", "3", "Rp 75.000", "34,2%", "+50%"],
+      ["2", "Paket Hemat · PROMO", "Bundling", "2", "Rp 60.000", "27,4%", "0%"],
+      ["3", "Mie Goreng · Main Course", "Makanan", "2", "Rp 44.000", "20,1%", "Baru"],
+      ["4", "Es Teh · Tea", "Minuman", "5", "Rp 40.000", "18,3%", "-50%"],
     ]);
-    expect(screen.getByText(/^Tren omzet dibanding /)).toBeInTheDocument();
+    // This month up to today, against the same days of last month.
+    expect(
+      screen.getByText(`Tren omzet ${rangeLabel({ from: `${today.slice(0, 8)}01`, to: today })} dibanding`, { exact: false })
+    ).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: "Total Omzet" })).toHaveAttribute("aria-sort", "descending");
   });
 
@@ -148,10 +158,10 @@ describe("Menu Terlaris tab", () => {
     expect(screen.getByRole("columnheader", { name: "Terjual" })).toHaveAttribute("aria-sort", "descending");
     // Menus sold equally share a rank; the omzet orders them.
     expect(tableRows().map((row) => [row[0], row[1]])).toEqual([
-      ["1", "Es Teh"],
-      ["2", "Nasi Goreng"],
-      ["3", "Paket Hemat"],
-      ["3", "Mie Goreng"],
+      ["1", "Es Teh · Tea"],
+      ["2", "Nasi Goreng · Main Course"],
+      ["3", "Paket Hemat · PROMO"],
+      ["3", "Mie Goreng · Main Course"],
     ]);
 
     const filter = screen.getByRole("group", { name: "Filter kategori" });
@@ -159,8 +169,8 @@ describe("Menu Terlaris tab", () => {
     expect(within(filter).getByRole("button", { name: "Makanan" })).toHaveAttribute("aria-pressed", "true");
     // Ranked within the kind; the share stays of the whole omzet.
     expect(tableRows().map((row) => [row[0], row[1], row[5]])).toEqual([
-      ["1", "Nasi Goreng", "34,2%"],
-      ["2", "Mie Goreng", "20,1%"],
+      ["1", "Nasi Goreng · Main Course", "34,2%"],
+      ["2", "Mie Goreng · Main Course", "20,1%"],
     ]);
 
     fireEvent.click(within(filter).getByRole("button", { name: "Snack" }));
@@ -173,6 +183,6 @@ describe("Menu Terlaris tab", () => {
 
     fireEvent.change(screen.getByRole("combobox", { name: "Periode" }), { target: { value: "all" } });
     expect(tableRows().map((row) => row[6])).toEqual(["—", "—", "—", "—", "—"]);
-    expect(screen.queryByText(/^Tren omzet dibanding /)).not.toBeInTheDocument();
+    expect(screen.queryByText(/^Tren omzet /)).not.toBeInTheDocument();
   });
 });

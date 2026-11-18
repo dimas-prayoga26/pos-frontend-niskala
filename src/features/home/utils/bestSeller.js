@@ -17,8 +17,9 @@ export const resolveMenuImage = (imagePath) => {
   return imagePath;
 };
 
-// Menus sold across orders, most sold first, each with its tab (group) and
-// what it brought in (revenue: the unit price charged × qty). An order line
+// Menus sold across orders, most sold first, each with its tab (group), its
+// menu categories (categories: the Ice and Hot copy can sit in two) and what
+// it brought in (revenue: the unit price charged × qty). An order line
 // counts for the menu it was sold as (menuItemId), so a renamed menu keeps its
 // sales; lines without one are matched by name. Lines are summed per current
 // menu name (the Ice and Hot copy of a menu together). A line without a menu,
@@ -43,7 +44,10 @@ export const rankBestSellers = (orders, menuItems, groupOf = categoryGroup) => {
         numberOfOrders: 0,
         revenue: 0,
         group,
+        categories: [],
       };
+      const categoryName = menuItem.category?.name;
+      if (categoryName && !current.categories.includes(categoryName)) current.categories.push(categoryName);
       const quantity = Number(item.quantity) || 0;
       current.numberOfOrders += quantity;
       current.revenue += (Number(item.pricePerQuantity ?? item.price) || 0) * quantity;

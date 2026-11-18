@@ -45,7 +45,7 @@ const SortHeader = ({ label, column, sortKey, onSort }) => {
 
 // Rincian Menu: every menu sold in the period, filtered by kind and ordered by
 // omzet or by qty.
-const MenuDetailTable = ({ menus, previousMenus, previousLabel, isLoading }) => {
+const MenuDetailTable = ({ menus, previousMenus, trendLabel, isLoading }) => {
   const titleId = useId();
   const [group, setGroup] = useState("");
   const [sortKey, setSortKey] = useState("revenue");
@@ -65,7 +65,7 @@ const MenuDetailTable = ({ menus, previousMenus, previousLabel, isLoading }) => 
           <h3 id={titleId} className="text-base font-bold text-[#f5f5f5]">
             Rincian Menu
           </h3>
-          {previousLabel && <p className="text-xs text-[#ababab]">Tren omzet dibanding {previousLabel}</p>}
+          {trendLabel && <p className="text-xs text-[#ababab]">Tren omzet {trendLabel}</p>}
         </div>
         <div role="group" aria-label="Filter kategori" className="flex flex-wrap gap-1 rounded-lg bg-[#1f1f1f] p-1">
           {FILTERS.map((filter) => (
@@ -118,7 +118,10 @@ const MenuDetailTable = ({ menus, previousMenus, previousLabel, isLoading }) => 
               rows.map((row) => (
                 <tr key={row.id} className="border-t border-[#333] hover:bg-[#2c2c2c]">
                   <td className="p-3 text-center font-bold text-[#f5f5f5]">{row.rank}</td>
-                  <td className="p-3 font-semibold text-[#f5f5f5]">{row.name}</td>
+                  <td className="p-3">
+                    <span className="block font-semibold text-[#f5f5f5]">{row.name}</span>
+                    <span className="block text-xs text-[#8a8a8a]">{row.categories.join(", ")}</span>
+                  </td>
                   <td className="p-3 text-[#d8d8d8]">{row.group}</td>
                   <td className="p-3 text-right text-[#f5f5f5]">{numberFormatter.format(row.numberOfOrders)}</td>
                   <td className="p-3 text-right font-semibold text-[#f5f5f5]">{formatCurrency(row.revenue)}</td>

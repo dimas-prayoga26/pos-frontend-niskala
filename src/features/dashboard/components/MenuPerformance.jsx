@@ -8,7 +8,7 @@ import OrderDateRangeFilter from "../../orders/components/OrderDateRangeFilter";
 import { rankBestSellers, resolveMenuImage } from "../../home/utils/bestSeller";
 import { DEFAULT_PERIOD, PERIOD_OPTIONS, periodRange, rangeLabel } from "../../inventory/utils/periods";
 import { getMenuItems, getOrders } from "../api";
-import { previousRange } from "../utils/menuTable";
+import { trendRanges } from "../utils/menuTable";
 import CategoryRevenueDonut from "./CategoryRevenueDonut";
 import MenuDetailTable from "./MenuDetailTable";
 import TopMenusBarChart from "./TopMenusBarChart";
@@ -88,7 +88,7 @@ const MenuPerformance = ({ showCharts = SHOW_CHARTS }) => {
   });
 
   const range = useMemo(() => periodRange(period, customRange), [period, customRange]);
-  const previous = useMemo(() => previousRange(period, range), [period, range]);
+  const trend = useMemo(() => trendRanges(period, range), [period, range]);
   // Menus sold in some days, most sold first, each with its kind and omzet.
   const rankMenusIn = useMemo(() => {
     const salesOrders = (ordersRes?.data?.data || []).filter((order) => !isCrewOrder(order));
@@ -101,7 +101,7 @@ const MenuPerformance = ({ showCharts = SHOW_CHARTS }) => {
       );
   }, [menuItemsRes, ordersRes]);
   const rankedMenus = useMemo(() => rankMenusIn(range), [rankMenusIn, range]);
-  const previousMenus = useMemo(() => previous && rankMenusIn(previous), [previous, rankMenusIn]);
+  const previousMenus = useMemo(() => trend && rankMenusIn(trend.previous), [trend, rankMenusIn]);
   const topByGroup = useMemo(
     () => new Map(MENU_GROUPS.map((group) => [group, rankedMenus.find((dish) => dish.group === group)])),
     [rankedMenus]
@@ -168,7 +168,7 @@ const MenuPerformance = ({ showCharts = SHOW_CHARTS }) => {
       <MenuDetailTable
         menus={rankedMenus}
         previousMenus={previousMenus}
-        previousLabel={previous && rangeLabel(previous)}
+        trendLabel={trend && `${rangeLabel(trend.current)} dibanding ${rangeLabel(trend.previous)}`}
         isLoading={isLoading}
       />
     </div>

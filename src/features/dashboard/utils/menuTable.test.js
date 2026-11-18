@@ -1,10 +1,23 @@
 import { describe, expect, it } from "vitest";
-import { buildMenuRows, previousRange } from "./menuTable";
+import { buildMenuRows, trendRanges } from "./menuTable";
+
+const previousRange = (...args) => trendRanges(...args)?.previous ?? null;
 
 // Noon in Jakarta.
 const on = (key) => new Date(`${key}T05:00:00Z`);
 
-describe("previousRange", () => {
+describe("trendRanges", () => {
+  it("covers the period up to today", () => {
+    expect(trendRanges("week", { from: "2026-11-16", to: "2026-11-22" }, on("2026-11-18"))).toEqual({
+      current: { from: "2026-11-16", to: "2026-11-18" },
+      previous: { from: "2026-11-09", to: "2026-11-11" },
+    });
+    expect(trendRanges("custom", { from: "2026-11-10", to: "2026-11-14" }, on("2026-11-18")).current).toEqual({
+      from: "2026-11-10",
+      to: "2026-11-14",
+    });
+  });
+
   it("compares a calendar period with the same days one period back, up to today", () => {
     expect(previousRange("today", { from: "2026-11-18", to: "2026-11-18" }, on("2026-11-18"))).toEqual({
       from: "2026-11-17",

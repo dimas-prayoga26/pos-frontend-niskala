@@ -49,7 +49,7 @@ const TopMenusBarChart = ({ menus, isLoading }) => {
               <li
                 key={menu.id}
                 tabIndex={0}
-                aria-label={`${rank}. ${menu.name}, ${menu.group}: ${menu.numberOfOrders} terjual, ${formatCurrency(menu.revenue)}`}
+                aria-label={`${rank}. ${menu.name} (${menu.categories.join(", ")}), ${menu.group}: ${menu.numberOfOrders} terjual, ${formatCurrency(menu.revenue)}`}
                 className="group relative grid grid-cols-[minmax(0,2fr)_minmax(0,3fr)] items-center gap-3 rounded-md px-2 py-1.5 outline-none transition-colors hover:bg-white/5 focus-visible:bg-white/5"
               >
                 <span className="flex min-w-0 items-center gap-2.5">
@@ -63,8 +63,11 @@ const TopMenusBarChart = ({ menus, isLoading }) => {
                   <span className="min-w-0">
                     <span className="block text-sm leading-tight text-[#e5e5e5] break-words">{menu.name}</span>
                     {/* Any two kinds can sit next to each other here, and Minuman and
-                        Bundling are close in hue, so each row names its kind. */}
-                    <span className="block text-[11px] leading-tight text-[#8a8a8a]">{menu.group}</span>
+                        Bundling are close in hue, so each row names its kind (and its
+                        menu categories, as two menus can share a name). */}
+                    <span className="block text-[11px] leading-tight text-[#8a8a8a]">
+                      {[menu.group, ...menu.categories].join(" · ")}
+                    </span>
                   </span>
                 </span>
                 <span className="flex min-w-0 items-center gap-2">
@@ -87,7 +90,7 @@ const TopMenusBarChart = ({ menus, isLoading }) => {
                   </span>
                   <span className="flex items-center gap-1.5 text-[#ababab]">
                     <span aria-hidden="true" className="h-0.5 w-3 rounded-full" style={{ backgroundColor: GROUP_STYLES[menu.group].chart }} />
-                    {menu.name} · {menu.group}
+                    {[menu.name, menu.group, ...menu.categories].join(" · ")}
                   </span>
                 </span>
               </li>
