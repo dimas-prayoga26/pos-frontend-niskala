@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildMenuRows, trendRanges } from "./menuTable";
+import { buildMenuRows, trendRanges, unsoldMenus } from "./menuTable";
 
 const previousRange = (...args) => trendRanges(...args)?.previous ?? null;
 
@@ -105,5 +105,60 @@ describe("buildMenuRows", () => {
     const before = [menu("nasi goreng", "Makanan", 2, 50000), menu("Es Teh", "Minuman", 10, 80000)];
     const trends = Object.fromEntries(buildMenuRows(menus, before).map((row) => [row.name, row.trend]));
     expect(trends).toEqual({ "Nasi Goreng": 0.5, "Es Teh": -0.5, "Mie Goreng": "new" });
+  });
+
+  it("puts the least sold first for Kurang Laku, ranks counted from the bottom", () => {
+    const withUnsold = [...menus, menu("Kopi Susu", "Minuman", 0, 0)];
+    expect(buildMenuRows(withUnsold, null, { least: true }).map((row) => [row.rank, row.name])).toEqual([
+      [1, "Kopi Susu"],
+      [2, "Es Teh"],
+      [3, "Mie Goreng"],
+      [4, "Nasi Goreng"],
+    ]);
+    expect(
+      buildMenuRows(withUnsold, null, { least: true, sortKey: "numberOfOrders", group: "Makanan" }).map((row) => row.name)
+    ).toEqual(["Mie Goreng", "Nasi Goreng"]);
+  });
+});
+
+describe("unsoldMenus", () => {
+  const item = (id, name, categoryName, group, imagePath = null) => ({
+    id,
+    name,
+    imagePath,
+    category: { name: categoryName, group },
+  });
+  const groupOf = (menuItem) => menuItem.category.group;
+
+  it("lists the menus on sale that sold nothing, Ice and Hot as one, menus in no kind left out", () => {
+    const items = [
+      item(1, "Americano", "Black Coffee", "Minuman", "/uploads/menu/americano.jpg"),
+      item(2, "Matcha", "Matcha Series", "Minuman"),
+      item(3, "Matcha", "Hot Matcha", "Minuman"),
+      item(4, "Extra Shot", "Add Ons", null),
+      item(5, "Nasi Goreng", "Main Course", "Makanan"),
+    ];
+    const sold = [{ name: "americano ", numberOfOrders: 4, revenue: 60000 }];
+
+    expect(unsoldMenus(items, sold, groupOf)).toEqual([
+      {
+        id: 2,
+        image: null,
+        name: "Matcha",
+        numberOfOrders: 0,
+        revenue: 0,
+        group: "Minuman",
+        categories: ["Matcha Series", "Hot Matcha"],
+      },
+      {
+        id: 5,
+        image: null,
+        name: "Nasi Goreng",
+        numberOfOrders: 0,
+        revenue: 0,
+        group: "Makanan",
+        categories: ["Main Course"],
+      },
+    ]);
   });
 });

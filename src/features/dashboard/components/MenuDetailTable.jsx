@@ -1,5 +1,5 @@
 import { useId, useMemo, useState } from "react";
-import { MdArrowDownward } from "react-icons/md";
+import { MdArrowDownward, MdArrowUpward } from "react-icons/md";
 import { formatCurrency } from "../../../shared/lib/format";
 import { buildMenuRows } from "../utils/menuTable";
 import { MENU_GROUPS } from "./menuGroups";
@@ -29,38 +29,40 @@ const TrendValue = ({ trend }) => {
   );
 };
 
-// A column the table can be ordered by (most first).
-const SortHeader = ({ label, column, sortKey, onSort }) => {
+// A column the table can be ordered by (most first, or least first).
+const SortHeader = ({ label, column, sortKey, least, onSort }) => {
   const isActive = sortKey === column;
+  const Arrow = least ? MdArrowUpward : MdArrowDownward;
 
   return (
-    <th scope="col" aria-sort={isActive ? "descending" : "none"} className="p-3 text-right">
+    <th scope="col" aria-sort={isActive ? (least ? "ascending" : "descending") : "none"} className="p-3 text-right">
       <button
         type="button"
         onClick={() => onSort(column)}
         className={`inline-flex items-center gap-1 uppercase ${isActive ? "text-[#f5f5f5]" : "hover:text-[#f5f5f5]"}`}
       >
         {label}
-        {isActive && <MdArrowDownward aria-hidden="true" />}
+        {isActive && <Arrow aria-hidden="true" />}
       </button>
     </th>
   );
 };
 
 // Rincian Menu: every menu sold in the period, filtered by kind and ordered by
-// omzet or by qty.
-const MenuDetailTable = ({ menus, previousMenus, trendLabel, isLoading }) => {
+// omzet or by qty; least (Kurang Laku, chosen at the top of the tab) turns
+// the order round and adds the menus not sold at all (unsoldMenus).
+const MenuDetailTable = ({ menus, unsoldMenus = [], least = false, previousMenus, trendLabel, isLoading }) => {
   const titleId = useId();
   const [group, setGroup] = useState("");
   const [sortKey, setSortKey] = useState("revenue");
   const rows = useMemo(
-    () => buildMenuRows(menus, previousMenus, { group, sortKey }),
-    [group, menus, previousMenus, sortKey]
+    () => buildMenuRows(least ? [...menus, ...unsoldMenus] : menus, previousMenus, { group, sortKey, least }),
+    [group, least, menus, previousMenus, sortKey, unsoldMenus]
   );
 
   let emptyText = "";
   if (isLoading) emptyText = "...";
-  else if (rows.length === 0) emptyText = "Belum ada penjualan di periode ini.";
+  else if (rows.length === 0) emptyText = least ? "Belum ada menu." : "Belum ada penjualan di periode ini.";
 
   return (
     <section aria-labelledby={titleId} className="mt-4 rounded-lg border border-[#333] bg-[#262626] p-4 shadow-sm">
@@ -101,8 +103,8 @@ const MenuDetailTable = ({ menus, previousMenus, trendLabel, isLoading }) => {
               <th scope="col" className="p-3">
                 Kategori
               </th>
-              <SortHeader label="Terjual" column="numberOfOrders" sortKey={sortKey} onSort={setSortKey} />
-              <SortHeader label="Total Omzet" column="revenue" sortKey={sortKey} onSort={setSortKey} />
+              <SortHeader label="Terjual" column="numberOfOrders" sortKey={sortKey} least={least} onSort={setSortKey} />
+              <SortHeader label="Total Omzet" column="revenue" sortKey={sortKey} least={least} onSort={setSortKey} />
               <th scope="col" className="p-3 text-right">
                 Kontribusi
               </th>

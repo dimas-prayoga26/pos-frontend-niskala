@@ -6,9 +6,10 @@ import { enqueueSnackbar } from "notistack";
 import { useMutation } from "@tanstack/react-query";
 import { removeAllItems } from "../../redux/slices/cartSlice";
 import { removeCustomer, setCustomer } from "../../redux/slices/customerSlice";
-import Invoice, { printOrderReceipt } from "../invoice/Invoice";
+import Invoice from "../invoice/Invoice";
+import { printOrderReceipt } from "../invoice/printOrderReceipt";
 import NonCashPaymentModal from "./NonCashPaymentModal";
-import { useReceiptPaperDialog } from "../invoice/ReceiptPaperDialog";
+import { useReceiptPaperDialog } from "../invoice/useReceiptPaperDialog";
 import { hasMissingBundlePicks } from "../../features/pos/utils/bundleChoices";
 import { MdWarningAmber } from "react-icons/md";
 import {

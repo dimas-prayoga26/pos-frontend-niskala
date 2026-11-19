@@ -39,7 +39,7 @@ const Dashboard = () => {
   const tabs = isAdmin
     ? [
         { key: "metrics", label: "Metrik" },
-        { key: "menu-performance", label: "Menu Terlaris" },
+        { key: "menu-performance", label: "Menu Paling Laku" },
         { key: "stock", label: "Stok Bahan", badge: lowStockCount },
         { key: "shopping", label: "Belanja", badge: draftCount },
         { key: "menu", label: "Menu" },
@@ -48,7 +48,7 @@ const Dashboard = () => {
       ]
     : [
         { key: "metrics", label: "Metrik" },
-        { key: "menu-performance", label: "Menu Terlaris" },
+        { key: "menu-performance", label: "Menu Paling Laku" },
         { key: "stock", label: "Stok Bahan", badge: lowStockCount },
         { key: "shopping", label: "Belanja", badge: draftCount },
         { key: "recap", label: "Rekap" },

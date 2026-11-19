@@ -8,7 +8,7 @@ import OrderDateRangeFilter from "../../orders/components/OrderDateRangeFilter";
 import { rankBestSellers, resolveMenuImage } from "../../home/utils/bestSeller";
 import { DEFAULT_PERIOD, PERIOD_OPTIONS, periodRange, rangeLabel } from "../../inventory/utils/periods";
 import { getMenuItems, getOrders } from "../api";
-import { trendRanges } from "../utils/menuTable";
+import { buildMenuRows, trendRanges, unsoldMenus } from "../utils/menuTable";
 import CategoryRevenueDonut from "./CategoryRevenueDonut";
 import MenuDetailTable from "./MenuDetailTable";
 import TopMenusBarChart from "./TopMenusBarChart";
@@ -21,11 +21,18 @@ const SHOW_CHARTS = true;
 const isInRange = (dateKey, { from, to }) =>
   Boolean(dateKey) && (!from || dateKey >= from) && (!to || dateKey <= to);
 
+// The whole tab follows this order: most sold first (Paling Laku), or Kurang Laku
+// (least first, menus not sold at all included).
+const ORDERS = [
+  { key: "top", label: "Paling Laku" },
+  { key: "least", label: "Kurang Laku" },
+];
+
 // Same look as the Metrik cards: one neutral surface, the brand accent on the
 // icon; the kind reads from its icon and title.
-const TopMenuCard = ({ group, dish, isLoading }) => {
+const TopMenuCard = ({ group, dish, least, isLoading }) => {
   const { Icon } = GROUP_STYLES[group];
-  const title = `${group} Terlaris`;
+  const title = `${group} ${least ? "Kurang Laku" : "Paling Laku"}`;
 
   return (
     <section aria-label={title} className="min-h-[148px] rounded-lg border border-[#333] bg-[#262626] p-4 shadow-sm">
@@ -61,20 +68,26 @@ const TopMenuCard = ({ group, dish, isLoading }) => {
           </div>
         </div>
       ) : (
-        <p className="mt-4 text-sm font-semibold text-[#ababab]">Belum ada penjualan di periode ini.</p>
+        <p className="mt-4 text-sm font-semibold text-[#ababab]">
+          {least ? "Belum ada menu." : "Belum ada penjualan di periode ini."}
+        </p>
       )}
     </section>
   );
 };
 
-// Menu Terlaris tab, for the chosen period: the most sold menu (Top 1) of
+// Menu Paling Laku tab, for the chosen period: the most sold menu (Top 1) of
 // Makanan, Minuman, Snack and Bundling, the Top 10 menus and each kind's share
 // of the omzet (charts behind SHOW_CHARTS), and every menu sold in the Rincian
-// Menu table, with its trend over the period before. A Konsumsi Crew is not a
+// Menu table, with its trend over the period before. Kurang Laku turns the
+// cards, the Top 10 and the table round (least first, menus not sold at all
+// included); the omzet share per kind stays as it is. A Konsumsi Crew is not a
 // sale.
 const MenuPerformance = ({ showCharts = SHOW_CHARTS }) => {
   const [period, setPeriod] = useState(DEFAULT_PERIOD);
   const [customRange, setCustomRange] = useState({});
+  const [order, setOrder] = useState("top");
+  const least = order === "least";
 
   const { data: ordersRes, isLoading: isOrdersLoading } = useQuery({
     queryKey: ["orders"],
@@ -102,9 +115,23 @@ const MenuPerformance = ({ showCharts = SHOW_CHARTS }) => {
   }, [menuItemsRes, ordersRes]);
   const rankedMenus = useMemo(() => rankMenusIn(range), [rankMenusIn, range]);
   const previousMenus = useMemo(() => trend && rankMenusIn(trend.previous), [trend, rankMenusIn]);
+  // On sale but not sold once in the period: the bottom of Kurang Laku.
+  const notSoldMenus = useMemo(
+    () => unsoldMenus(menuItemsRes?.data?.data || [], rankedMenus, menuGroupOf),
+    [menuItemsRes, rankedMenus]
+  );
+  // What the cards and the Top 10 show: most sold first, or least sold first
+  // (qty, then omzet) with the menus not sold at all.
+  const shownMenus = useMemo(
+    () =>
+      least
+        ? buildMenuRows([...rankedMenus, ...notSoldMenus], null, { sortKey: "numberOfOrders", least: true })
+        : rankedMenus,
+    [least, notSoldMenus, rankedMenus]
+  );
   const topByGroup = useMemo(
-    () => new Map(MENU_GROUPS.map((group) => [group, rankedMenus.find((dish) => dish.group === group)])),
-    [rankedMenus]
+    () => new Map(MENU_GROUPS.map((group) => [group, shownMenus.find((dish) => dish.group === group)])),
+    [shownMenus]
   );
   const revenueSlices = useMemo(
     () =>
@@ -120,10 +147,25 @@ const MenuPerformance = ({ showCharts = SHOW_CHARTS }) => {
     <div className="container mx-auto py-2 px-4 md:px-6">
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
-          <h2 className="text-xl font-semibold text-[#f5f5f5]">Menu Terlaris</h2>
-          <p className="text-sm text-[#ababab]">Menu paling laku per jenis.</p>
+          <h2 className="text-xl font-semibold text-[#f5f5f5]">{least ? "Menu Kurang Laku" : "Menu Paling Laku"}</h2>
+          <p className="text-sm text-[#ababab]">{least ? "Menu paling sepi per jenis." : "Menu paling ramai per jenis."}</p>
         </div>
         <div role="group" aria-label="Filter periode" className="flex flex-wrap items-center gap-2 text-sm">
+          <div role="group" aria-label="Urutan" className="flex gap-1 rounded-lg bg-[#1f1f1f] p-1">
+            {ORDERS.map((option) => (
+              <button
+                key={option.key}
+                type="button"
+                aria-pressed={order === option.key}
+                onClick={() => setOrder(option.key)}
+                className={`rounded-md px-3 py-1.5 text-sm font-bold transition ${
+                  order === option.key ? "bg-[#a79981] text-[#101010]" : "text-[#ababab] hover:text-[#f5f5f5]"
+                }`}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
           <select
             aria-label="Periode"
             value={period}
@@ -150,14 +192,14 @@ const MenuPerformance = ({ showCharts = SHOW_CHARTS }) => {
 
       <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {MENU_GROUPS.map((group) => (
-          <TopMenuCard key={group} group={group} dish={topByGroup.get(group)} isLoading={isLoading} />
+          <TopMenuCard key={group} group={group} dish={topByGroup.get(group)} least={least} isLoading={isLoading} />
         ))}
       </div>
 
       {showCharts && (
         <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-5">
           <div className="lg:col-span-3">
-            <TopMenusBarChart menus={rankedMenus.slice(0, 10)} isLoading={isLoading} />
+            <TopMenusBarChart menus={shownMenus.slice(0, 10)} least={least} isLoading={isLoading} />
           </div>
           <div className="lg:col-span-2">
             <CategoryRevenueDonut slices={revenueSlices} isLoading={isLoading} />
@@ -167,6 +209,8 @@ const MenuPerformance = ({ showCharts = SHOW_CHARTS }) => {
 
       <MenuDetailTable
         menus={rankedMenus}
+        unsoldMenus={notSoldMenus}
+        least={least}
         previousMenus={previousMenus}
         trendLabel={trend && `${rangeLabel(trend.current)} dibanding ${rangeLabel(trend.previous)}`}
         isLoading={isLoading}

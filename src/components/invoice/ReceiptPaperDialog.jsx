@@ -1,15 +1,10 @@
-/* eslint-disable react/prop-types */
-import { useCallback, useEffect, useRef, useState } from "react";
-import {
-  RECEIPT_PAPER_SIZES,
-  getReceiptPaperWidth,
-  setReceiptPaperWidth,
-} from "../../utils/thermerReceipt";
+import { useEffect } from "react";
+import { RECEIPT_PAPER_SIZES } from "../../utils/thermerReceipt";
 
 const PAPER_WIDTHS = Object.keys(RECEIPT_PAPER_SIZES).map(Number);
 
 // Asked on every Print: the paper in the printer (58 or 80 mm). The last one
-// used on this device is highlighted.
+// used on this device is highlighted. Opened by useReceiptPaperDialog.
 const ReceiptPaperDialog = ({ lastWidth, onChoose, onCancel }) => {
   useEffect(() => {
     const handleKeyDown = (event) => {
@@ -64,34 +59,4 @@ const ReceiptPaperDialog = ({ lastWidth, onChoose, onCancel }) => {
   );
 };
 
-// const { choosePaperWidth, paperDialog } = useReceiptPaperDialog();
-// const paperWidth = await choosePaperWidth(); // 58, 80, or null when cancelled
-// ...and render {paperDialog}.
-export const useReceiptPaperDialog = () => {
-  const [lastWidth, setLastWidth] = useState(null);
-  const resolveRef = useRef(null);
-
-  const choosePaperWidth = useCallback(() => {
-    resolveRef.current?.(null);
-
-    return new Promise((resolve) => {
-      resolveRef.current = resolve;
-      setLastWidth(getReceiptPaperWidth());
-    });
-  }, []);
-
-  const close = useCallback((width) => {
-    if (width) setReceiptPaperWidth(width);
-    resolveRef.current?.(width || null);
-    resolveRef.current = null;
-    setLastWidth(null);
-  }, []);
-
-  const cancel = useCallback(() => close(null), [close]);
-
-  const paperDialog = lastWidth ? (
-    <ReceiptPaperDialog lastWidth={lastWidth} onChoose={close} onCancel={cancel} />
-  ) : null;
-
-  return { choosePaperWidth, paperDialog };
-};
+export default ReceiptPaperDialog;

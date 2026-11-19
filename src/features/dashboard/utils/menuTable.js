@@ -40,15 +40,46 @@ export const trendRanges = (period, range = {}, today = new Date()) => {
 
 const menuKey = (menu) => menu.name.trim().toLowerCase();
 
+// Menus on sale that sold nothing in the period, shaped like rankBestSellers'
+// rows (0 sold, Rp 0): the least wanted of all, for Kurang Laku. The Ice
+// and Hot copy of a menu are one row; a menu in no kind (groupOf) is left out.
+export const unsoldMenus = (menuItems, soldMenus, groupOf) => {
+  const sold = new Set(soldMenus.map(menuKey));
+  const byName = new Map();
+
+  menuItems.forEach((item) => {
+    const group = groupOf(item);
+    const key = menuKey(item);
+    if (!group || sold.has(key)) return;
+
+    const row = byName.get(key) || {
+      id: item.id,
+      image: item.imagePath,
+      name: item.name,
+      numberOfOrders: 0,
+      revenue: 0,
+      group,
+      categories: [],
+    };
+    const categoryName = item.category?.name;
+    if (categoryName && !row.categories.includes(categoryName)) row.categories.push(categoryName);
+    byName.set(key, row);
+  });
+
+  return [...byName.values()];
+};
+
 // The Rincian Menu rows: the menus sold (rankBestSellers), of one kind or all
-// (group ""), most first by sortKey ("revenue" or "numberOfOrders"); equal
-// menus share a rank. share: of the whole period's omzet, whatever the filter.
-// trend: the omzet change from previousMenus (0.14 = +14%), "new" when it sold
-// nothing then, null without a previous period.
-export const buildMenuRows = (menus, previousMenus, { group = "", sortKey = "revenue" } = {}) => {
+// (group ""), most first by sortKey ("revenue" or "numberOfOrders"), or least
+// first with least (Kurang Laku); equal menus share a rank. share: of the
+// whole period's omzet, whatever the filter. trend: the omzet change from
+// previousMenus (0.14 = +14%), "new" when it sold nothing then, null without a
+// previous period.
+export const buildMenuRows = (menus, previousMenus, { group = "", sortKey = "revenue", least = false } = {}) => {
   const totalRevenue = menus.reduce((sum, menu) => sum + menu.revenue, 0);
   const previousRevenue = previousMenus && new Map(previousMenus.map((menu) => [menuKey(menu), menu.revenue]));
   const otherKey = sortKey === "revenue" ? "numberOfOrders" : "revenue";
+  const direction = least ? -1 : 1;
 
   const trendOf = (menu) => {
     if (!previousRevenue) return null;
@@ -62,8 +93,8 @@ export const buildMenuRows = (menus, previousMenus, { group = "", sortKey = "rev
     .map((menu) => ({ ...menu, share: totalRevenue ? menu.revenue / totalRevenue : 0, trend: trendOf(menu) }))
     .sort(
       (first, second) =>
-        second[sortKey] - first[sortKey] ||
-        second[otherKey] - first[otherKey] ||
+        direction * (second[sortKey] - first[sortKey]) ||
+        direction * (second[otherKey] - first[otherKey]) ||
         first.name.localeCompare(second.name, "id")
     );
 
