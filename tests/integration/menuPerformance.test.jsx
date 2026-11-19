@@ -138,10 +138,10 @@ describe("Menu Terlaris tab", () => {
 
     // Shares of 219.000; trends against last month's 1st (the same days).
     expect(tableRows()).toEqual([
-      ["1", "Nasi Goreng · Main Course", "Makanan", "3", "Rp 75.000", "34,2%", "+50%"],
-      ["2", "Paket Hemat · PROMO", "Bundling", "2", "Rp 60.000", "27,4%", "0%"],
-      ["3", "Mie Goreng · Main Course", "Makanan", "2", "Rp 44.000", "20,1%", "Baru"],
-      ["4", "Es Teh · Tea", "Minuman", "5", "Rp 40.000", "18,3%", "-50%"],
+      ["1", "Nasi Goreng · Main Course", "Makanan", "3", "Rp 75.000", "34,247%", "+50%"],
+      ["2", "Paket Hemat · PROMO", "Bundling", "2", "Rp 60.000", "27,397%", "0%"],
+      ["3", "Mie Goreng · Main Course", "Makanan", "2", "Rp 44.000", "20,091%", "Baru"],
+      ["4", "Es Teh · Tea", "Minuman", "5", "Rp 40.000", "18,265%", "-50%"],
     ]);
     // This month up to today, against the same days of last month.
     expect(
@@ -169,8 +169,8 @@ describe("Menu Terlaris tab", () => {
     expect(within(filter).getByRole("button", { name: "Makanan" })).toHaveAttribute("aria-pressed", "true");
     // Ranked within the kind; the share stays of the whole omzet.
     expect(tableRows().map((row) => [row[0], row[1], row[5]])).toEqual([
-      ["1", "Nasi Goreng · Main Course", "34,2%"],
-      ["2", "Mie Goreng · Main Course", "20,1%"],
+      ["1", "Nasi Goreng · Main Course", "34,247%"],
+      ["2", "Mie Goreng · Main Course", "20,091%"],
     ]);
 
     fireEvent.click(within(filter).getByRole("button", { name: "Snack" }));
