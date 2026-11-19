@@ -177,6 +177,54 @@ describe("Menu Terlaris tab", () => {
     expect(tableRows()).toEqual([["Belum ada penjualan di periode ini."]]);
   });
 
+  it("turns the whole tab round under Kurang Diminati: cards, Top 10 and table, the donut as it is", async () => {
+    renderWithProviders(<MenuPerformance />);
+    await within(card("Makanan")).findByText("Nasi Goreng");
+    const donut = screen.getByRole("img", { name: /^Komposisi omzet:/ }).getAttribute("aria-label");
+
+    const order = screen.getByRole("group", { name: "Urutan" });
+    fireEvent.click(within(order).getByRole("button", { name: "Kurang Diminati" }));
+    expect(within(order).getByRole("button", { name: "Kurang Diminati" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByText("Menu paling sepi per jenis.")).toBeInTheDocument();
+
+    // The least sold of each kind; Roti Kukus is on sale but sold nothing.
+    const leastCard = (group) => screen.getByRole("region", { name: `${group} Kurang Diminati` });
+    expect(within(leastCard("Makanan")).getByText("Mie Goreng")).toBeInTheDocument();
+    expect(within(leastCard("Minuman")).getByText("Es Teh")).toBeInTheDocument();
+    expect(within(leastCard("Snack")).getByText("Roti Kukus")).toBeInTheDocument();
+    expect(within(leastCard("Snack")).getByText("0 terjual · Rp 0", { normalizer: (text) => text.replace(/\s/g, " ") })).toBeInTheDocument();
+    expect(within(leastCard("Bundling")).getByText("Paket Hemat")).toBeInTheDocument();
+
+    // Least sold first (qty, then omzet), sharing a rank when sold equally.
+    const list = screen.getByRole("list", { name: "10 Menu Kurang Diminati" });
+    expect(within(list).getAllByRole("listitem").map((row) => row.getAttribute("aria-label").split(":")[0])).toEqual([
+      "1. Roti Kukus (Roti), Snack",
+      "2. Mie Goreng (Main Course), Makanan",
+      "2. Paket Hemat (PROMO), Bundling",
+      "4. Nasi Goreng (Main Course), Makanan",
+      "5. Es Teh (Tea), Minuman",
+    ]);
+
+    // The omzet share per kind does not depend on the order.
+    expect(screen.getByRole("img", { name: /^Komposisi omzet:/ })).toHaveAttribute("aria-label", donut);
+
+    expect(screen.getByRole("columnheader", { name: "Total Omzet" })).toHaveAttribute("aria-sort", "ascending");
+    // Roti Kukus is on sale but sold nothing this month.
+    expect(tableRows()).toEqual([
+      ["1", "Roti Kukus · Roti", "Snack", "0", "Rp 0", "0,000%", "—"],
+      ["2", "Es Teh · Tea", "Minuman", "5", "Rp 40.000", "18,265%", "-50%"],
+      ["3", "Mie Goreng · Main Course", "Makanan", "2", "Rp 44.000", "20,091%", "Baru"],
+      ["4", "Paket Hemat · PROMO", "Bundling", "2", "Rp 60.000", "27,397%", "0%"],
+      ["5", "Nasi Goreng · Main Course", "Makanan", "3", "Rp 75.000", "34,247%", "+50%"],
+    ]);
+
+    fireEvent.click(within(screen.getByRole("group", { name: "Filter kategori" })).getByRole("button", { name: "Snack" }));
+    expect(tableRows().map((row) => row[1])).toEqual(["Roti Kukus · Roti"]);
+
+    fireEvent.click(within(order).getByRole("button", { name: "Terlaris" }));
+    expect(tableRows()).toEqual([["Belum ada penjualan di periode ini."]]);
+  });
+
   it("shows no trend for all time", async () => {
     renderWithProviders(<MenuPerformance />);
     await within(card("Makanan")).findByText("Nasi Goreng");
