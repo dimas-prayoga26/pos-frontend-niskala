@@ -85,8 +85,5 @@ export const buildDynamicQRIS = (amount) => {
 };
 
 export const paymentConfig = {
-  mandiriAccountNumber: viteEnv.VITE_MANDIRI_ACCOUNT_NUMBER || "1570014339999",
-  mandiriAccountName:
-    viteEnv.VITE_MANDIRI_ACCOUNT_NAME || "FUAD MUHAMAD FAHRUDI",
   qrisMerchantName: "Niskala Coffee",
 };
