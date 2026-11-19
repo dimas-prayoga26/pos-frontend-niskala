@@ -71,6 +71,12 @@ export const updateOrderPlatform = ({ platformId, ...platformData }) =>
 export const deleteOrderPlatform = (platformId) =>
   axiosWrapper.delete(`/api/order-platform/${platformId}`);
 
+// Loyalty stamp (pos-backend forwards to the loyalty app).
+export const getLoyaltyCustomer = (phone) =>
+  axiosWrapper.get(`/api/loyalty/customers/${encodeURIComponent(phone)}`);
+export const redeemLoyaltyReward = ({ phone, rewardStamps }) =>
+  axiosWrapper.post("/api/loyalty/redemptions", { phone, rewardStamps });
+
 // Recap Endpoints
 export const getRecapMeta = (params = {}) =>
   axiosWrapper.get("/api/recap/meta", { params });

@@ -7,7 +7,11 @@ import { MENU_GROUPS } from "./menuGroups";
 const FILTERS = [{ key: "", label: "Semua" }, ...MENU_GROUPS.map((group) => ({ key: group, label: group }))];
 
 const numberFormatter = new Intl.NumberFormat("id-ID");
-const shareFormatter = new Intl.NumberFormat("id-ID", { maximumFractionDigits: 1 });
+// Kontribusi in full (0,044%): with one decimal, small sellers showed 0%.
+const shareFormatter = new Intl.NumberFormat("id-ID", {
+  minimumFractionDigits: 3,
+  maximumFractionDigits: 3,
+});
 
 // "+14%", "-3%", "0%"; "Baru" for a menu that sold nothing before, "—" when
 // there is nothing to compare with. Up and down also show by their sign.

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { setCustomer } from "../../redux/slices/customerSlice";
 import {
@@ -12,6 +12,7 @@ import {
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { getOrderPlatforms } from "../../https";
 import { MdKeyboardArrowDown } from "react-icons/md";
+import LoyaltyStatus from "./LoyaltyStatus";
 
 const CustomerInfo = () => {
   const [isPlatformOpen, setIsPlatformOpen] = useState(false);
@@ -157,6 +158,7 @@ const CustomerInfo = () => {
               placeholder="0812-xxxx-xxxx"
               className="w-full rounded-lg bg-[#1f1f1f] px-4 py-3 text-sm text-white outline-none"
             />
+            <LoyaltyStatus phone={customerData.customerPhone} />
           </div>
         )}
 
