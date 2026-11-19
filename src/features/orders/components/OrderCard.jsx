@@ -6,8 +6,8 @@ import {
   MdPrint,
 } from "react-icons/md";
 import { enqueueSnackbar } from "notistack";
-import { printOrderReceipt } from "../../../components/invoice/Invoice";
-import { useReceiptPaperDialog } from "../../../components/invoice/ReceiptPaperDialog";
+import { printOrderReceipt } from "../../../components/invoice/printOrderReceipt";
+import { useReceiptPaperDialog } from "../../../components/invoice/useReceiptPaperDialog";
 import { formatCurrency } from "../../../shared/lib/format";
 import { formatDateAndTime, formatJakartaReceiptDate } from "../../../shared/lib/dates";
 import { getDisplayOrderCode, getOrderItemCount } from "../utils/orderMetrics";

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import * as api from "../../src/https/index";
-import { printOrderReceipt } from "../../src/components/invoice/Invoice";
+import { printOrderReceipt } from "../../src/components/invoice/printOrderReceipt";
 import { isAndroidDevice } from "../../src/utils/printReceipt";
 import {
   DEFAULT_RECEIPT_PAPER_WIDTH,
