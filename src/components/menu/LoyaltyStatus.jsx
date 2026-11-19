@@ -21,6 +21,11 @@ const useDebounced = (value, delay) => {
 
 const errorMessage = (error) => error?.response?.data?.message || "Loyalty tidak tersedia.";
 
+// Text only, on the same box: green for a new number, the Niskala logo
+// color (#AFA087) for a registered one.
+const NEW_NUMBER_TEXT = "text-green-400";
+const REGISTERED_TEXT = "text-[#AFA087]";
+
 const LoyaltyStatus = ({ phone }) => {
   const queryClient = useQueryClient();
   const trimmed = String(phone || "").trim();
@@ -65,7 +70,7 @@ const LoyaltyStatus = ({ phone }) => {
 
   if (!loyalty.registered) {
     return (
-      <p className={`${box} text-[#ababab]`}>
+      <p className={`${box} ${NEW_NUMBER_TEXT}`}>
         Nomor baru{minimumNote ? ` · ${minimumNote}` : ""}
       </p>
     );
@@ -80,21 +85,26 @@ const LoyaltyStatus = ({ phone }) => {
   };
 
   return (
-    <div className={box}>
+    <div className={`${box} ${REGISTERED_TEXT}`}>
       <div className="flex items-center justify-between gap-2">
-        <span className="font-semibold text-[#f5f5f5]">{customer.code}</span>
+        <span className="font-semibold">{customer.code}</span>
         {card && (
-          <span className="font-semibold text-[#a79981]">
+          <span className="font-semibold">
             {card.stamps}/{card.slots} stamp
           </span>
         )}
       </div>
       {nextReward && (
-        <p className="mt-1 text-[#ababab]">
+        <p className="mt-1">
           {nextReward.remaining} stamp lagi · {nextReward.label}
         </p>
       )}
-      {minimumNote && <p className="mt-1 text-[#ababab]">{minimumNote}</p>}
+      {/* One stamp a number a day: no promise of another one today. */}
+      {loyalty.daily_limit_reached ? (
+        <p className="mt-1">Sudah dapat stamp hari ini</p>
+      ) : (
+        minimumNote && <p className="mt-1">{minimumNote}</p>
+      )}
       {readyRewards.length > 0 && (
         <div className="mt-2 flex flex-wrap gap-2">
           {readyRewards.map((reward) => (
