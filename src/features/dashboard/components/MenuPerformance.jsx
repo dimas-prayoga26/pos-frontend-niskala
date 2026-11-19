@@ -21,18 +21,18 @@ const SHOW_CHARTS = true;
 const isInRange = (dateKey, { from, to }) =>
   Boolean(dateKey) && (!from || dateKey >= from) && (!to || dateKey <= to);
 
-// The whole tab follows this order: most sold first, or Kurang Diminati
+// The whole tab follows this order: most sold first (Paling Laku), or Kurang Laku
 // (least first, menus not sold at all included).
 const ORDERS = [
-  { key: "top", label: "Terlaris" },
-  { key: "least", label: "Kurang Diminati" },
+  { key: "top", label: "Paling Laku" },
+  { key: "least", label: "Kurang Laku" },
 ];
 
 // Same look as the Metrik cards: one neutral surface, the brand accent on the
 // icon; the kind reads from its icon and title.
 const TopMenuCard = ({ group, dish, least, isLoading }) => {
   const { Icon } = GROUP_STYLES[group];
-  const title = `${group} ${least ? "Kurang Diminati" : "Terlaris"}`;
+  const title = `${group} ${least ? "Kurang Laku" : "Paling Laku"}`;
 
   return (
     <section aria-label={title} className="min-h-[148px] rounded-lg border border-[#333] bg-[#262626] p-4 shadow-sm">
@@ -76,10 +76,10 @@ const TopMenuCard = ({ group, dish, least, isLoading }) => {
   );
 };
 
-// Menu Terlaris tab, for the chosen period: the most sold menu (Top 1) of
+// Menu Paling Laku tab, for the chosen period: the most sold menu (Top 1) of
 // Makanan, Minuman, Snack and Bundling, the Top 10 menus and each kind's share
 // of the omzet (charts behind SHOW_CHARTS), and every menu sold in the Rincian
-// Menu table, with its trend over the period before. Kurang Diminati turns the
+// Menu table, with its trend over the period before. Kurang Laku turns the
 // cards, the Top 10 and the table round (least first, menus not sold at all
 // included); the omzet share per kind stays as it is. A Konsumsi Crew is not a
 // sale.
@@ -115,7 +115,7 @@ const MenuPerformance = ({ showCharts = SHOW_CHARTS }) => {
   }, [menuItemsRes, ordersRes]);
   const rankedMenus = useMemo(() => rankMenusIn(range), [rankMenusIn, range]);
   const previousMenus = useMemo(() => trend && rankMenusIn(trend.previous), [trend, rankMenusIn]);
-  // On sale but not sold once in the period: the bottom of Kurang Diminati.
+  // On sale but not sold once in the period: the bottom of Kurang Laku.
   const notSoldMenus = useMemo(
     () => unsoldMenus(menuItemsRes?.data?.data || [], rankedMenus, menuGroupOf),
     [menuItemsRes, rankedMenus]
@@ -147,8 +147,8 @@ const MenuPerformance = ({ showCharts = SHOW_CHARTS }) => {
     <div className="container mx-auto py-2 px-4 md:px-6">
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
-          <h2 className="text-xl font-semibold text-[#f5f5f5]">Menu Terlaris</h2>
-          <p className="text-sm text-[#ababab]">{least ? "Menu paling sepi per jenis." : "Menu paling laku per jenis."}</p>
+          <h2 className="text-xl font-semibold text-[#f5f5f5]">{least ? "Menu Kurang Laku" : "Menu Paling Laku"}</h2>
+          <p className="text-sm text-[#ababab]">{least ? "Menu paling sepi per jenis." : "Menu paling ramai per jenis."}</p>
         </div>
         <div role="group" aria-label="Filter periode" className="flex flex-wrap items-center gap-2 text-sm">
           <div role="group" aria-label="Urutan" className="flex gap-1 rounded-lg bg-[#1f1f1f] p-1">

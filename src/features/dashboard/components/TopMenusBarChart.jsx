@@ -6,13 +6,13 @@ import { GROUP_STYLES, MENU_GROUPS } from "./menuGroups";
 const rankOf = (menus, index) =>
   menus.findIndex((menu) => menu.numberOfOrders === menus[index].numberOfOrders) + 1;
 
-// Top 10 Menu Terlaris: one row per menu, most sold first, its bar as long as
+// 10 Menu Paling Laku: one row per menu, most sold first, its bar as long as
 // its qty against the best seller's and colored by its kind (legend above).
 // The qty sits at the bar tip; hovering or focusing a row adds its omzet.
 // least: the 10 least wanted instead (menus given least sold first).
 const TopMenusBarChart = ({ menus, least = false, isLoading }) => {
   const isDrawn = useDrawIn();
-  const title = least ? "10 Menu Kurang Diminati" : "Top 10 Menu Terlaris";
+  const title = least ? "10 Menu Kurang Laku" : "10 Menu Paling Laku";
   const maxQuantity = Math.max(0, ...menus.map((menu) => menu.numberOfOrders));
   const shownGroups = MENU_GROUPS.filter((group) => menus.some((menu) => menu.group === group));
 

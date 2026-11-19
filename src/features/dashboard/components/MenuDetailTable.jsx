@@ -49,7 +49,7 @@ const SortHeader = ({ label, column, sortKey, least, onSort }) => {
 };
 
 // Rincian Menu: every menu sold in the period, filtered by kind and ordered by
-// omzet or by qty; least (Kurang Diminati, chosen at the top of the tab) turns
+// omzet or by qty; least (Kurang Laku, chosen at the top of the tab) turns
 // the order round and adds the menus not sold at all (unsoldMenus).
 const MenuDetailTable = ({ menus, unsoldMenus = [], least = false, previousMenus, trendLabel, isLoading }) => {
   const titleId = useId();

@@ -45,7 +45,7 @@ const orders = [
   },
 ];
 
-const card = (group) => screen.getByRole("region", { name: `${group} Terlaris` });
+const card = (group) => screen.getByRole("region", { name: `${group} Paling Laku` });
 // Each body row of the Rincian Menu table, as its cells' text.
 const tableRows = () =>
   within(screen.getByRole("table", { name: "Rincian Menu" }))
@@ -59,7 +59,7 @@ const tableRows = () =>
         .map((text) => text.replace(/\s/g, " "))
     );
 
-describe("Menu Terlaris tab", () => {
+describe("Menu Paling Laku tab", () => {
   beforeEach(() => {
     api.getMenuItems.mockResolvedValue({ data: { data: menuItems } });
     api.getOrders.mockResolvedValue({ data: { data: orders } });
@@ -80,20 +80,20 @@ describe("Menu Terlaris tab", () => {
     const { unmount } = renderWithProviders(<MenuPerformance />);
 
     expect(await within(card("Makanan")).findByText("Nasi Goreng")).toBeInTheDocument();
-    expect(screen.getByText("Top 10 Menu Terlaris")).toBeInTheDocument();
+    expect(screen.getByText("10 Menu Paling Laku")).toBeInTheDocument();
     expect(screen.getByText("Komposisi Omzet per Kategori")).toBeInTheDocument();
     unmount();
 
     renderWithProviders(<MenuPerformance showCharts={false} />);
     expect(await within(card("Makanan")).findByText("Nasi Goreng")).toBeInTheDocument();
-    expect(screen.queryByText("Top 10 Menu Terlaris")).not.toBeInTheDocument();
+    expect(screen.queryByText("10 Menu Paling Laku")).not.toBeInTheDocument();
     expect(screen.queryByText("Komposisi Omzet per Kategori")).not.toBeInTheDocument();
   });
 
   it("charts the Top 10 menus by qty sold, menus sold equally sharing a rank", async () => {
     renderWithProviders(<MenuPerformance />);
 
-    const list = await screen.findByRole("list", { name: "Top 10 Menu Terlaris" });
+    const list = await screen.findByRole("list", { name: "10 Menu Paling Laku" });
     const rows = within(list).getAllByRole("listitem");
     expect(rows.map((row) => row.getAttribute("aria-label"))).toEqual([
       "1. Es Teh (Tea), Minuman: 5 terjual, Rp 40.000",
@@ -177,18 +177,19 @@ describe("Menu Terlaris tab", () => {
     expect(tableRows()).toEqual([["Belum ada penjualan di periode ini."]]);
   });
 
-  it("turns the whole tab round under Kurang Diminati: cards, Top 10 and table, the donut as it is", async () => {
+  it("turns the whole tab round under Kurang Laku: cards, Top 10 and table, the donut as it is", async () => {
     renderWithProviders(<MenuPerformance />);
     await within(card("Makanan")).findByText("Nasi Goreng");
     const donut = screen.getByRole("img", { name: /^Komposisi omzet:/ }).getAttribute("aria-label");
 
     const order = screen.getByRole("group", { name: "Urutan" });
-    fireEvent.click(within(order).getByRole("button", { name: "Kurang Diminati" }));
-    expect(within(order).getByRole("button", { name: "Kurang Diminati" })).toHaveAttribute("aria-pressed", "true");
+    fireEvent.click(within(order).getByRole("button", { name: "Kurang Laku" }));
+    expect(within(order).getByRole("button", { name: "Kurang Laku" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("heading", { name: "Menu Kurang Laku" })).toBeInTheDocument();
     expect(screen.getByText("Menu paling sepi per jenis.")).toBeInTheDocument();
 
     // The least sold of each kind; Roti Kukus is on sale but sold nothing.
-    const leastCard = (group) => screen.getByRole("region", { name: `${group} Kurang Diminati` });
+    const leastCard = (group) => screen.getByRole("region", { name: `${group} Kurang Laku` });
     expect(within(leastCard("Makanan")).getByText("Mie Goreng")).toBeInTheDocument();
     expect(within(leastCard("Minuman")).getByText("Es Teh")).toBeInTheDocument();
     expect(within(leastCard("Snack")).getByText("Roti Kukus")).toBeInTheDocument();
@@ -196,7 +197,7 @@ describe("Menu Terlaris tab", () => {
     expect(within(leastCard("Bundling")).getByText("Paket Hemat")).toBeInTheDocument();
 
     // Least sold first (qty, then omzet), sharing a rank when sold equally.
-    const list = screen.getByRole("list", { name: "10 Menu Kurang Diminati" });
+    const list = screen.getByRole("list", { name: "10 Menu Kurang Laku" });
     expect(within(list).getAllByRole("listitem").map((row) => row.getAttribute("aria-label").split(":")[0])).toEqual([
       "1. Roti Kukus (Roti), Snack",
       "2. Mie Goreng (Main Course), Makanan",
@@ -221,7 +222,8 @@ describe("Menu Terlaris tab", () => {
     fireEvent.click(within(screen.getByRole("group", { name: "Filter kategori" })).getByRole("button", { name: "Snack" }));
     expect(tableRows().map((row) => row[1])).toEqual(["Roti Kukus · Roti"]);
 
-    fireEvent.click(within(order).getByRole("button", { name: "Terlaris" }));
+    fireEvent.click(within(order).getByRole("button", { name: "Paling Laku" }));
+    expect(screen.getByRole("heading", { name: "Menu Paling Laku" })).toBeInTheDocument();
     expect(tableRows()).toEqual([["Belum ada penjualan di periode ini."]]);
   });
 

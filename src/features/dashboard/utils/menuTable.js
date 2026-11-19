@@ -41,7 +41,7 @@ export const trendRanges = (period, range = {}, today = new Date()) => {
 const menuKey = (menu) => menu.name.trim().toLowerCase();
 
 // Menus on sale that sold nothing in the period, shaped like rankBestSellers'
-// rows (0 sold, Rp 0): the least wanted of all, for Kurang Diminati. The Ice
+// rows (0 sold, Rp 0): the least wanted of all, for Kurang Laku. The Ice
 // and Hot copy of a menu are one row; a menu in no kind (groupOf) is left out.
 export const unsoldMenus = (menuItems, soldMenus, groupOf) => {
   const sold = new Set(soldMenus.map(menuKey));
@@ -71,7 +71,7 @@ export const unsoldMenus = (menuItems, soldMenus, groupOf) => {
 
 // The Rincian Menu rows: the menus sold (rankBestSellers), of one kind or all
 // (group ""), most first by sortKey ("revenue" or "numberOfOrders"), or least
-// first with least (Kurang Diminati); equal menus share a rank. share: of the
+// first with least (Kurang Laku); equal menus share a rank. share: of the
 // whole period's omzet, whatever the filter. trend: the omzet change from
 // previousMenus (0.14 = +14%), "new" when it sold nothing then, null without a
 // previous period.

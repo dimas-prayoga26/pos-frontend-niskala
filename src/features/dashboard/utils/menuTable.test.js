@@ -107,7 +107,7 @@ describe("buildMenuRows", () => {
     expect(trends).toEqual({ "Nasi Goreng": 0.5, "Es Teh": -0.5, "Mie Goreng": "new" });
   });
 
-  it("puts the least sold first for Kurang Diminati, ranks counted from the bottom", () => {
+  it("puts the least sold first for Kurang Laku, ranks counted from the bottom", () => {
     const withUnsold = [...menus, menu("Kopi Susu", "Minuman", 0, 0)];
     expect(buildMenuRows(withUnsold, null, { least: true }).map((row) => [row.rank, row.name])).toEqual([
       [1, "Kopi Susu"],

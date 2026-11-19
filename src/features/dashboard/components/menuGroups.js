@@ -1,7 +1,7 @@
 import { MdBakeryDining, MdLocalCafe, MdRedeem, MdRestaurant } from "react-icons/md";
 import { BEST_SELLER_GROUPS } from "../../home/utils/bestSeller";
 
-// The kinds of menu on the Menu Terlaris tab: the Best Seller tabs plus Bundling.
+// The kinds of menu on the Menu Paling Laku tab: the Best Seller tabs plus Bundling.
 export const BUNDLING = "Bundling";
 export const MENU_GROUPS = [...BEST_SELLER_GROUPS, BUNDLING];
 
