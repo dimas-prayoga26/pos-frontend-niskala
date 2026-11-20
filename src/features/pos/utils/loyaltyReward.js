@@ -1,22 +1,20 @@
-// Loyalty rewards claimed in the cart. Each reward is a Kategori Promo menu
-// marked for its stamp (loyaltyRewardStamps: 5 Minuman gratis, 10 Makanan
-// gratis): a free promo (Harga 0, Diskon 100%) whose choice the cashier picks
-// like any promo package. It never shows in the menu grid; Tukar puts it in
-// the order and the reward is redeemed when the order is saved.
+// Loyalty rewards claimed in the cart. A reward is given as a Kategori Promo
+// menu set as Promo loyalty (isLoyaltyPromo): a free promo (Harga 0, Diskon
+// 100%) whose choice the cashier picks like any promo package. Which reward
+// gives which menu is set in Program Promo (the reward's
+// promo_menu_item_id). It never shows in the menu grid; Tukar puts it in the
+// order and the reward is redeemed when the order is saved.
 import { buildBundleSlots, pickedBundleChoices } from "./bundleChoices";
 import { buildCartItem } from "./menuPricing";
 
 export const LOYALTY_LINE_PREFIX = "loyalty-";
 
-// The rewards a promo menu can be marked for (the loyalty app's rewards).
-export const LOYALTY_REWARD_OPTIONS = [
-  { stamps: 5, label: "Minuman gratis" },
-  { stamps: 10, label: "Makanan gratis" },
-];
-
-export const loyaltyRewardOptionLabel = (stamps) => {
-  const option = LOYALTY_REWARD_OPTIONS.find((candidate) => candidate.stamps === Number(stamps));
-  return option ? `Stamp ke-${option.stamps} · ${option.label}` : `Stamp ke-${stamps}`;
+// "Stamp ke-5 · Minuman gratis": a reward of the stamp card, as set in
+// Program Promo (rewards: the program's, { stamps, label, active }).
+export const loyaltyRewardOptionLabel = (stamps, rewards = []) => {
+  const reward = rewards.find((candidate) => Number(candidate.stamps) === Number(stamps));
+  if (!reward) return `Stamp ke-${stamps}`;
+  return `Stamp ke-${reward.stamps} · ${reward.label}${reward.active === false ? " (nonaktif)" : ""}`;
 };
 
 // Order lines given as a reward: in the cart (loyaltyReward) or as saved
@@ -28,17 +26,19 @@ export const isLoyaltyLine = (item) =>
 export const loyaltyLinesOf = (cart, stamps) =>
   cart.filter((item) => Number(item.loyaltyReward?.stamps) === Number(stamps));
 
-// The catalog the menu grid shows: without the reward promos.
+// The catalog the menu grid shows: without the Promo loyalty menus.
 export const hideLoyaltyRewardMenus = (catalog) =>
   catalog.map((category) => ({
     ...category,
-    items: category.items.filter((menu) => !menu.loyaltyRewardStamps),
+    items: category.items.filter((menu) => !menu.isLoyaltyPromo),
   }));
 
-// The promo menu given for a reward, with its category, or null.
-export const findLoyaltyRewardMenu = (catalog, stamps) => {
+// The Promo loyalty menu a reward gives (its promo_menu_item_id, set in
+// Program Promo), with its category, or null (none linked, or not on sale).
+export const findLoyaltyRewardMenu = (catalog, menuItemId) => {
+  if (!menuItemId) return null;
   for (const category of catalog) {
-    const menu = category.items.find((item) => Number(item.loyaltyRewardStamps) === Number(stamps));
+    const menu = category.items.find((item) => item.isLoyaltyPromo && Number(item.id) === Number(menuItemId));
     if (menu) return { menu, category };
   }
   return null;

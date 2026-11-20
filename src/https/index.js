@@ -75,6 +75,14 @@ export const deleteOrderPlatform = (platformId) =>
 // redeemed with the order they go out in (addOrder), not on their own.
 export const getLoyaltyCustomer = (phone) =>
   axiosWrapper.get(`/api/loyalty/customers/${encodeURIComponent(phone)}`);
+// Program Promo: the stamp card (on/off, rules, rewards).
+// Changes are admin only; each answers with the whole program.
+export const getLoyaltyProgram = () => axiosWrapper.get("/api/loyalty/program");
+export const updateLoyaltyProgram = ({ active }) => axiosWrapper.put("/api/loyalty/program", { active });
+export const updateLoyaltyReward = ({ id, ...patch }) => axiosWrapper.put(`/api/loyalty/rewards/${id}`, patch);
+// Program Promo → Riwayat: the rewards handed over, newest first (admin).
+export const getLoyaltyRedemptions = ({ page = 1, perPage = 20, q = "" } = {}) =>
+  axiosWrapper.get("/api/loyalty/redemptions", { params: { page, perPage, ...(q ? { q } : {}) } });
 
 // Recap Endpoints
 export const getRecapMeta = (params = {}) =>

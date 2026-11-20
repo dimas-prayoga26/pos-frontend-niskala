@@ -3,7 +3,7 @@ import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { enqueueSnackbar } from "notistack";
 import { MdRedeem } from "react-icons/md";
 import { useDispatch, useSelector } from "react-redux";
-import { getCategories, getLoyaltyCustomer, getMenuItems } from "../../https";
+import { getCategories, getLoyaltyCustomer, getLoyaltyProgram, getMenuItems } from "../../https";
 import { formatCurrency } from "../../utils";
 import { addItems, removeLoyaltyItemsNotFor } from "../../features/pos/cartSlice";
 import { buildMenuCatalog } from "../../features/pos/utils/menuCatalog";
@@ -43,10 +43,19 @@ const LoyaltyStatus = ({ phone }) => {
   const debouncedPhone = useDebounced(trimmed, DEBOUNCE_MS);
   const enabled = debouncedPhone.replace(/\D/g, "").length >= MIN_DIGITS;
 
+  // Program Promo: with the stamp card off the number is not
+  // looked up at all.
+  const programQuery = useQuery({
+    queryKey: ["loyalty-program"],
+    queryFn: getLoyaltyProgram,
+    retry: false,
+  });
+  const programActive = programQuery.data?.data?.data?.active === true;
+
   const { data, error, isFetching } = useQuery({
     queryKey: ["loyalty-customer", debouncedPhone],
     queryFn: () => getLoyaltyCustomer(debouncedPhone),
-    enabled,
+    enabled: enabled && programActive,
     retry: false,
     staleTime: 0,
   });
@@ -66,25 +75,28 @@ const LoyaltyStatus = ({ phone }) => {
     [categoriesRes, menuItemsRes]
   );
 
-  // A reward belongs to the number it was claimed for.
+  // A reward belongs to the number it was claimed for, and goes when the
+  // stamp card is switched off.
+  const programOff = programQuery.isSuccess && !programActive;
   useEffect(() => {
-    dispatch(removeLoyaltyItemsNotFor(trimmed));
-  }, [dispatch, trimmed]);
+    dispatch(removeLoyaltyItemsNotFor(programOff ? "" : trimmed));
+  }, [dispatch, trimmed, programOff]);
 
-  if (!enabled || trimmed !== debouncedPhone) return null;
+  if (!enabled || trimmed !== debouncedPhone || programOff) return null;
 
   const box = "mt-2 rounded-lg bg-[#1a1a1a] px-3 py-2 text-xs";
 
-  if (isFetching && !data) {
+  if (programQuery.isError || error) {
+    return <p className={`${box} text-[#ababab]`}>{errorMessage(programQuery.error || error)}</p>;
+  }
+
+  if (programQuery.isPending || (isFetching && !data)) {
     return <p className={`${box} text-[#ababab]`}>Mengecek loyalty…</p>;
   }
 
-  if (error) {
-    return <p className={`${box} text-[#ababab]`}>{errorMessage(error)}</p>;
-  }
-
   const loyalty = data?.data?.data;
-  if (!loyalty) return null;
+  // Switched off between the two answers: nothing to show either.
+  if (!loyalty || loyalty.program_active === false) return null;
 
   const minimum = Number(loyalty.stamp_min_order_total) || 0;
   const minimumNote = minimum > 1 ? `Stamp untuk order min. ${formatCurrency(minimum)}` : "";
@@ -138,9 +150,9 @@ const LoyaltyStatus = ({ phone }) => {
         <div className="mt-2 flex flex-wrap gap-2">
           {readyRewards.map((reward) => {
             const left = (Number(reward.count) || 0) - loyaltyLinesOf(cart, reward.stamps).length;
-            const rewardMenu = findLoyaltyRewardMenu(catalog, reward.stamps);
+            const rewardMenu = findLoyaltyRewardMenu(catalog, reward.promo_menu_item_id);
 
-            // No promo menu marked for this reward yet (Menu → Kategori Promo).
+            // No Promo loyalty menu linked to it yet (Program Promo).
             if (!rewardMenu) {
               return (
                 <span

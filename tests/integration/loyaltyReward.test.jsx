@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import * as api from "../../src/https/index";
 import MenuPage from "../../src/features/pos/pages/MenuPage";
@@ -11,6 +11,7 @@ vi.mock("../../src/https/index", async (importOriginal) => ({
   getMenuItems: vi.fn(),
   getOrderPlatforms: vi.fn(),
   getLoyaltyCustomer: vi.fn(),
+  getLoyaltyProgram: vi.fn(),
 }));
 
 const CATEGORIES = [
@@ -19,7 +20,8 @@ const CATEGORIES = [
   { id: 9, name: "PROMO", isBundle: true },
 ];
 const PAKET = { id: 40, categoryId: 9, name: "Paket Hemat", price: 30000, bundleItems: [{ menuItemId: 11, name: "Americano", quantity: 1 }] };
-// The Kategori Promo menu marked as the stamp-5 reward: free, one coffee to pick.
+// A Kategori Promo menu set as Promo loyalty: free, one coffee to pick.
+// Program Promo links the stamp-5 reward to it (promo_menu_item_id 50).
 const REWARD_PROMO = {
   id: 50,
   categoryId: 9,
@@ -27,7 +29,7 @@ const REWARD_PROMO = {
   price: 0,
   regularPrice: 0,
   discountPercent: 100,
-  loyaltyRewardStamps: 5,
+  isLoyaltyPromo: true,
   bundleChoices: [{ id: 1, categoryId: null, categoryName: "Pilihan Coffee", quantity: 1, menuItemIds: [11, 12] }],
 };
 const MENUS = [
@@ -42,7 +44,7 @@ const customer = {
   customer: { code: "NSK-000002" },
   card: { stamps: 5, slots: 10 },
   next_reward: { remaining: 5, label: "Makanan gratis" },
-  ready_rewards: [{ stamps: 5, label: "Minuman gratis", count: 1 }],
+  ready_rewards: [{ stamps: 5, label: "Minuman gratis", count: 1, promo_menu_item_id: 50 }],
   daily_limit_reached: false,
 };
 
@@ -58,6 +60,7 @@ describe("Loyalty reward as a Kategori Promo menu", () => {
     api.getMenuItems.mockResolvedValue({ data: { data: MENUS } });
     api.getOrderPlatforms.mockResolvedValue({ data: { data: [] } });
     api.getLoyaltyCustomer.mockResolvedValue({ data: { data: customer } });
+    api.getLoyaltyProgram.mockResolvedValue({ data: { success: true, data: { code: "stamp_card", active: true } } });
     api.addOrder.mockReset();
   });
 
@@ -159,8 +162,23 @@ describe("Loyalty reward as a Kategori Promo menu", () => {
     await waitFor(() => expect(store.getState().cart).toEqual([]));
   });
 
-  it("says when no promo menu is marked for a ready reward yet", async () => {
-    api.getMenuItems.mockResolvedValue({ data: { data: MENUS.filter((menu) => menu !== REWARD_PROMO) } });
+  it("takes the reward out when the stamp card is switched off", async () => {
+    const { store, queryClient } = renderWithProviders(<MenuPage />, { route: "/menu" });
+    await screen.findAllByText("Americano");
+    typePhone("1234567890");
+    fireEvent.click(await tukar());
+    expect(store.getState().cart).toHaveLength(1);
+
+    act(() => queryClient.setQueryData(["loyalty-program"], { data: { success: true, data: { active: false } } }));
+
+    await waitFor(() => expect(store.getState().cart).toEqual([]));
+    expect(screen.queryByRole("button", { name: /Tukar Minuman gratis/ })).not.toBeInTheDocument();
+  });
+
+  it("says when no Promo loyalty menu is linked to a ready reward yet", async () => {
+    api.getLoyaltyCustomer.mockResolvedValue({
+      data: { data: { ...customer, ready_rewards: [{ ...customer.ready_rewards[0], promo_menu_item_id: null }] } },
+    });
     renderWithProviders(<MenuPage />, { route: "/menu" });
     await screen.findAllByText("Americano");
     typePhone("1234567890");

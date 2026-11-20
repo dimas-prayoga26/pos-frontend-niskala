@@ -12,6 +12,7 @@ import {
   deleteCategory,
   deleteMenuItem,
   getCategories,
+  getLoyaltyProgram,
   getMenuItems,
   getSemiItems,
   getStockItems,
@@ -25,7 +26,7 @@ import { backendBaseUrl } from "../../https/backendUrl";
 import CreatableSelect2 from "../shared/CreatableSelect2";
 import MultiSelect2 from "../../shared/ui/MultiSelect2";
 import { bundleContentsText } from "../../features/pos/utils/bundleChoices";
-import { LOYALTY_REWARD_OPTIONS, loyaltyRewardOptionLabel } from "../../features/pos/utils/loyaltyReward";
+import { loyaltyRewardOptionLabel } from "../../features/pos/utils/loyaltyReward";
 import { MdErrorOutline } from "react-icons/md";
 
 const iconOptions = [
@@ -120,8 +121,8 @@ const emptyMenuForm = {
   ingredients: [],
   bundleItems: [],
   discountPercent: "",
-  // Hadiah loyalty: the reward's stamp this promo is given for ("" none).
-  loyaltyRewardStamps: "",
+  // Jenis promo: Promo loyalty (given by Tukar, never sold) or Promo biasa.
+  isLoyaltyPromo: false,
   imageFile: null,
   imagePath: "",
 };
@@ -403,6 +404,18 @@ const MenuManagement = ({ onCreateIngredient }) => {
     categories.find((category) => getCategoryId(category) === String(menuForm.categoryId))
       ?.isBundle
   );
+  // Promo loyalty menus show which reward gives them, as linked in
+  // Program Promo (the stamp card's rewards).
+  const { data: loyaltyProgramRes } = useQuery({
+    queryKey: ["loyalty-program"],
+    queryFn: getLoyaltyProgram,
+    retry: false,
+  });
+  const loyaltyRewards = loyaltyProgramRes?.data?.data?.rewards || [];
+  // Stamp Card off (or loyalty unreachable): no Jenis promo switch.
+  const isLoyaltyProgramActive = Boolean(loyaltyProgramRes?.data?.data?.active);
+  const linkedRewardsOf = (menuItemId) =>
+    loyaltyRewards.filter((reward) => Number(reward.promo_menu_item_id) === Number(menuItemId));
   // A promo sells at its price less its discount percent (e.g. 100% for a
   // Google Maps review).
   const discountText = String(menuForm.discountPercent ?? "").trim().replace(",", ".");
@@ -760,17 +773,20 @@ const MenuManagement = ({ onCreateIngredient }) => {
   );
   // A promo package has no HPP of its own (each sale counts the HPP of its
   // menus). With a discount its gross profit is the price less the discount
-  // less its menus' HPP; without one it is entered by hand.
+  // less its menus' HPP; without one it is entered by hand. A Promo loyalty
+  // reward is given away: 0 (each Tukar still records the HPP of its pick).
   const autoHppCost = isBundleForm ? 0 : roundMoney(autoIngredientCostTotal);
   const autoGrossProfit = !isBundleForm
     ? roundMoney(parseMoneyInput(menuForm.regularPrice) - autoHppCost)
-    : isDiscountPromo
-      ? roundMoney(
-          Math.round(
-            (parseMoneyInput(menuForm.regularPrice) * (100 - Math.min(promoDiscount, 100))) / 100
-          ) - bundleHpp
-        )
-      : roundMoney(parseMoneyInput(menuForm.grossProfit));
+    : menuForm.isLoyaltyPromo
+      ? 0
+      : isDiscountPromo
+        ? roundMoney(
+            Math.round(
+              (parseMoneyInput(menuForm.regularPrice) * (100 - Math.min(promoDiscount, 100))) / 100
+            ) - bundleHpp
+          )
+        : roundMoney(parseMoneyInput(menuForm.grossProfit));
   const isGrossProfitAuto = !isBundleForm || isDiscountPromo;
 
   useEffect(() => {
@@ -797,12 +813,12 @@ const MenuManagement = ({ onCreateIngredient }) => {
     setCategoryForm((current) => ({ ...current, [field]: value }));
   };
 
-  // A loyalty reward is a free promo: picking one sets Harga 0 and Diskon 100%.
-  const updateLoyaltyReward = (stamps) =>
+  // Promo loyalty is a free promo: switching to it sets Harga 0 and Diskon 100%.
+  const updateLoyaltyPromo = (isLoyaltyPromo) =>
     setMenuForm((current) => ({
       ...current,
-      loyaltyRewardStamps: stamps,
-      ...(stamps ? { regularPrice: "0", discountPercent: "100" } : {}),
+      isLoyaltyPromo,
+      ...(isLoyaltyPromo ? { regularPrice: "0", discountPercent: "100" } : {}),
     }));
 
   const updateMenuForm = (field, value) => {
@@ -1093,9 +1109,9 @@ const MenuManagement = ({ onCreateIngredient }) => {
       return;
     }
 
-    const loyaltyRewardStamps = isBundleForm ? Number(menuForm.loyaltyRewardStamps) || null : null;
-    if (loyaltyRewardStamps && (parseMoneyInput(menuForm.regularPrice) !== 0 || promoDiscount !== 100)) {
-      enqueueSnackbar("Menu hadiah loyalty harus Harga 0 dan Diskon 100%.", { variant: "warning" });
+    const isLoyaltyPromo = isBundleForm && Boolean(menuForm.isLoyaltyPromo);
+    if (isLoyaltyPromo && (parseMoneyInput(menuForm.regularPrice) !== 0 || promoDiscount !== 100)) {
+      enqueueSnackbar("Promo loyalty harus Harga 0 dan Diskon 100%.", { variant: "warning" });
       return;
     }
 
@@ -1140,7 +1156,7 @@ const MenuManagement = ({ onCreateIngredient }) => {
       bundleItems,
       bundleChoices,
       discountPercent: isBundleForm ? promoDiscount : 0,
-      loyaltyRewardStamps,
+      isLoyaltyPromo,
       imageFile: menuForm.imageFile,
       imagePath: menuForm.imagePath.trim(),
       isAvailable: Boolean(menuForm.isAvailable),
@@ -1205,7 +1221,7 @@ const MenuManagement = ({ onCreateIngredient }) => {
       name: item.name,
       regularPrice: String(item.regularPrice ?? item.price ?? ""),
       discountPercent: Number(item.discountPercent) > 0 ? String(item.discountPercent) : "",
-      loyaltyRewardStamps: item.loyaltyRewardStamps ? String(item.loyaltyRewardStamps) : "",
+      isLoyaltyPromo: Boolean(item.isLoyaltyPromo),
       includeOnlinePlatform: Boolean(item.includeOnlinePlatform),
       onlinePrice:
         item.onlinePrice === null || item.onlinePrice === undefined
@@ -1710,6 +1726,34 @@ const MenuManagement = ({ onCreateIngredient }) => {
                 />
               </div>
             </label>
+            {/* Promo loyalty: given by Tukar for a reward (which one: Program
+                Promo), never sold from the grid. Only while the stamp
+                card is on there; the menu keeps its kind while it is off. */}
+            {isBundleForm && isLoyaltyProgramActive && (
+              <div className="mt-4 block text-sm font-semibold text-[#ababab]">
+                Jenis promo
+                <div role="group" aria-label="Jenis promo" className="mt-2 flex gap-1 rounded-lg bg-[#262626] p-1">
+                  {[
+                    { value: false, label: "Promo biasa" },
+                    { value: true, label: "Promo loyalty" },
+                  ].map((option) => (
+                    <button
+                      key={option.label}
+                      type="button"
+                      aria-pressed={Boolean(menuForm.isLoyaltyPromo) === option.value}
+                      onClick={() => updateLoyaltyPromo(option.value)}
+                      className={`flex-1 rounded-md px-3 py-2 text-sm font-bold transition ${
+                        Boolean(menuForm.isLoyaltyPromo) === option.value
+                          ? "bg-[#a79981] text-[#101010]"
+                          : "text-[#ababab] hover:text-[#f5f5f5]"
+                      }`}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
             <label className="mt-4 block text-sm font-semibold text-[#ababab]">
               Nama Menu
               <input
@@ -2027,25 +2071,6 @@ const MenuManagement = ({ onCreateIngredient }) => {
                     </div>
                   </label>
                 )}
-                {/* A promo given by Tukar for a loyalty reward, not sold from the grid. */}
-                {isBundleForm && (
-                  <label className="block text-sm font-semibold text-[#ababab]">
-                    Hadiah loyalty
-                    <select
-                      value={menuForm.loyaltyRewardStamps}
-                      onChange={(event) => updateLoyaltyReward(event.target.value)}
-                      aria-label="Hadiah loyalty"
-                      className="mt-2 w-full rounded-lg bg-[#262626] px-4 py-3 text-sm text-[#f5f5f5] outline-none"
-                    >
-                      <option value="">Bukan hadiah loyalty</option>
-                      {LOYALTY_REWARD_OPTIONS.map((option) => (
-                        <option key={option.stamps} value={String(option.stamps)}>
-                          {loyaltyRewardOptionLabel(option.stamps)}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                )}
                 {menuForm.includeOnlinePlatform && (
                   <label className="block text-sm font-semibold text-sky-200">
                     Harga Online
@@ -2244,9 +2269,14 @@ const MenuManagement = ({ onCreateIngredient }) => {
                             {bundleContentsText(item)}
                           </p>
                         )}
-                        {item.loyaltyRewardStamps && (
+                        {item.isLoyaltyPromo && (
                           <p className="mt-1 text-xs font-semibold text-[#AFA087]">
-                            🎁 Hadiah loyalty · {loyaltyRewardOptionLabel(item.loyaltyRewardStamps)}
+                            🎁 Promo loyalty ·{" "}
+                            {linkedRewardsOf(item.id).length
+                              ? linkedRewardsOf(item.id)
+                                  .map((reward) => loyaltyRewardOptionLabel(reward.stamps, loyaltyRewards))
+                                  .join(", ")
+                              : "belum dihubungkan di Program Promo"}
                           </p>
                         )}
                       </td>
@@ -2291,7 +2321,8 @@ const MenuManagement = ({ onCreateIngredient }) => {
                         )}
                       </td>
                       <td className="p-4 text-sm font-semibold text-emerald-200">
-                        {formatCurrency(item.grossProfit || item.profit || 0)}
+                        {/* A Promo loyalty reward is given away: 0. */}
+                        {formatCurrency(item.isLoyaltyPromo ? 0 : item.grossProfit || item.profit || 0)}
                       </td>
                       <td className="p-4 text-sm font-semibold">
                         {(() => {

@@ -51,7 +51,7 @@ export const unsoldMenus = (menuItems, soldMenus, groupOf) => {
   menuItems.forEach((item) => {
     const group = groupOf(item);
     const key = menuKey(item);
-    if (!group || sold.has(key) || item.loyaltyRewardStamps) return;
+    if (!group || sold.has(key) || item.isLoyaltyPromo) return;
 
     const row = byName.get(key) || {
       id: item.id,

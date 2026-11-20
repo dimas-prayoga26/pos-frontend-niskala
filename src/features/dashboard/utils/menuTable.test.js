@@ -131,7 +131,7 @@ describe("unsoldMenus", () => {
   const groupOf = (menuItem) => menuItem.category.group;
 
   it("leaves out a loyalty reward promo: given, never sold", () => {
-    const reward = { ...item(9, "Loyalty Minuman Gratis", "PROMO", "Bundling"), loyaltyRewardStamps: 5 };
+    const reward = { ...item(9, "Loyalty Minuman Gratis", "PROMO", "Bundling"), isLoyaltyPromo: true };
 
     expect(unsoldMenus([reward, item(5, "Nasi Goreng", "Main Course", "Makanan")], [], groupOf).map((row) => row.name)).toEqual([
       "Nasi Goreng",
