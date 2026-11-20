@@ -1265,7 +1265,7 @@ const RecapManagement = () => {
                 color: "#be3e3f",
               },
               {
-                title: "Kas bersih",
+                title: "Untung bersih",
                 value: formatCurrency(netCashTotal),
                 color: netCashTotal < 0 ? "#be3e3f" : "#7f167f",
               },
@@ -1297,7 +1297,7 @@ const RecapManagement = () => {
             color: "#b58105",
           },
           {
-            title: "Kas bersih",
+            title: "Untung bersih",
             value: formatCurrency(netCashTotal),
             color: netCashTotal < 0 ? "#be3e3f" : "#7f167f",
           },
@@ -1799,8 +1799,10 @@ const RecapManagement = () => {
                 )}
                 <th className={`${dailyHeadClass} text-right`}>Pengeluaran</th>
                 <th className={`${dailyHeadClass} text-right`}>Kerugian bahan</th>
-                <th className={`${dailyHeadClass} text-right`}>Kas bersih</th>
-                <th className={`${dailyHeadClass} text-right`}>Selisih kas</th>
+                {/* Kas masuk − omzet: what Biaya Platform and MDR QRIS took off. */}
+                <th className={`${dailyHeadClass} text-right`}>Potongan Platform &amp; QRIS</th>
+                {/* Kas masuk − pengeluaran (named by the user; HPP not taken off). */}
+                <th className={`${dailyHeadClass} text-right`}>Untung bersih</th>
                 <th className={`${dailyHeadClass} text-left`}>Menu laku</th>
                 <th className={`${dailyHeadClass} text-center`}>Aksi</th>
               </tr>
@@ -1998,12 +2000,12 @@ const RecapManagement = () => {
                     {renderDailyAmountCell(row.dailyExpense, "danger")}
                     {renderDailyAmountCell(row.wasteTotal, "danger")}
                     {renderDailyAmountCell(
-                      row.netCash,
-                      Number(row.netCash) < 0 ? "danger" : "profit"
-                    )}
-                    {renderDailyAmountCell(
                       row.cashDifference,
                       Number(row.cashDifference) < 0 ? "danger" : "muted"
+                    )}
+                    {renderDailyAmountCell(
+                      row.netCash,
+                      Number(row.netCash) < 0 ? "danger" : "profit"
                     )}
                     <td className="min-w-[180px] px-4 py-4 align-middle">
                       {row.bestMenu ? (
