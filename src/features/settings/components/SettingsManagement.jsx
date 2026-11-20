@@ -13,17 +13,16 @@ import {
   getOrderPlatforms,
   updateOrderPlatform,
 } from "../api";
-import { formatCurrency, formatNominalInput, normalizeNominalInput } from "../../../shared/lib/format";
 import CreatableSelect2 from "../../../shared/ui/CreatableSelect2";
 import { useSelector } from "react-redux";
 import AccountManagement from "./AccountManagement";
 import BestSellerSettings from "./BestSellerSettings";
 import PaymentSourceManagement from "./PaymentSourceManagement";
 
+// The platform fee is typed per order (Online), not kept per platform.
 const emptyPlatformForm = {
   isActive: true,
   name: "",
-  tax: "",
 };
 const statusOptions = [
   { id: "active", text: "Aktif" },
@@ -39,6 +38,7 @@ const SettingsManagement = () => {
     { id: "suplier", label: "Suplier" },
     { id: "payment", label: "Sumber Pembayaran" },
     { id: "best-seller", label: "Best Seller" },
+    // Akun: admins. Program Promo lives under the dashboard's Menu tab.
     ...(isAdmin ? [{ id: "akun", label: "Akun" }] : []),
   ];
   const queryClient = useQueryClient();
@@ -59,7 +59,7 @@ const SettingsManagement = () => {
     if (!keyword) return platforms;
 
     return platforms.filter((platform) =>
-      [platform.name, platform.tax, platform.isActive ? "aktif" : "nonaktif"]
+      [platform.name, platform.isActive ? "aktif" : "nonaktif"]
         .join(" ")
         .toLowerCase()
         .includes(keyword)
@@ -111,10 +111,7 @@ const SettingsManagement = () => {
   });
 
   const updatePlatformForm = (field, value) => {
-    setPlatformForm((current) => ({
-      ...current,
-      [field]: field === "tax" ? normalizeNominalInput(value) : value,
-    }));
+    setPlatformForm((current) => ({ ...current, [field]: value }));
   };
 
   const handleSubmitPlatform = (event) => {
@@ -125,19 +122,8 @@ const SettingsManagement = () => {
       return;
     }
 
-    const tax =
-      platformForm.tax === "" ? 0 : Number(normalizeNominalInput(platformForm.tax));
-
-    if (!Number.isFinite(tax) || tax < 0) {
-      enqueueSnackbar("Biaya platform tidak boleh minus.", {
-        variant: "warning",
-      });
-      return;
-    }
-
     platformMutation.mutate({
       name: platformForm.name.trim(),
-      tax,
       isActive: Boolean(platformForm.isActive),
     });
   };
@@ -147,10 +133,6 @@ const SettingsManagement = () => {
     setPlatformForm({
       isActive: platform.isActive !== false,
       name: platform.name || "",
-      tax:
-        platform.tax === null || platform.tax === undefined
-          ? ""
-          : String(platform.tax),
     });
   };
 
@@ -196,23 +178,6 @@ const SettingsManagement = () => {
               placeholder="GoFood"
               className="mt-2 w-full rounded-lg bg-[#262626] px-4 py-3 text-sm text-[#f5f5f5] outline-none"
             />
-          </label>
-
-          <label className="mt-4 block text-sm font-semibold text-[#ababab]">
-            Biaya Platform
-            <div className="mt-2 flex overflow-hidden rounded-lg bg-[#262626]">
-              <span className="flex shrink-0 items-center px-4 text-sm font-bold text-[#a79981]">
-                Rp
-              </span>
-              <input
-                value={formatNominalInput(platformForm.tax)}
-                onChange={(event) => updatePlatformForm("tax", event.target.value)}
-                type="text"
-                inputMode="numeric"
-                placeholder="0"
-                className="min-w-0 w-full bg-transparent py-3 pr-4 text-sm text-[#f5f5f5] outline-none"
-              />
-            </div>
           </label>
 
           <label className="mt-4 block text-sm font-semibold text-[#ababab]">
@@ -273,7 +238,6 @@ const SettingsManagement = () => {
               <thead className="bg-[#333] text-[#ababab]">
                 <tr>
                   <th className="p-3">Platform</th>
-                  <th className="p-3 text-right">Biaya Platform</th>
                   <th className="p-3 text-center">Status</th>
                   <th className="p-3 text-center">Aksi</th>
                 </tr>
@@ -285,9 +249,6 @@ const SettingsManagement = () => {
                     className="border-b border-gray-600 hover:bg-[#333]"
                   >
                     <td className="p-4 font-semibold">{platform.name}</td>
-                    <td className="p-4 text-right font-semibold">
-                      {formatCurrency(platform.tax || platform.taxRate || 0)}
-                    </td>
                     <td className="p-4 text-center">
                       <span
                         className={`inline-flex rounded-md px-3 py-1 text-xs font-bold ${
@@ -326,7 +287,7 @@ const SettingsManagement = () => {
                 ))}
                 {filteredPlatforms.length === 0 && (
                   <tr>
-                    <td className="p-4 text-center text-[#ababab]" colSpan={4}>
+                    <td className="p-4 text-center text-[#ababab]" colSpan={3}>
                       No platforms found
                     </td>
                   </tr>

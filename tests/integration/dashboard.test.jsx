@@ -9,6 +9,7 @@ import { renderWithProviders } from "../renderWithProviders";
 vi.mock("../../src/https/index", async (importOriginal) => ({
   ...(await importOriginal()),
   getCategories: vi.fn(),
+  getLoyaltyProgram: vi.fn(),
   getMenuItems: vi.fn(),
   getOrders: vi.fn(),
   getPaymentSources: vi.fn(),
@@ -41,11 +42,11 @@ const draft = (id, kind) => ({
   items: [{ id: id * 10, itemName: "Gula", quantity: 1, unit: "kg", unitPrice: 10000, total: 10000 }],
   attachments: [],
 });
+// The dashboard bar, badges left out; Pengaturan is its gear (aria-label).
 const menuNames = () =>
-  screen
+  within(screen.getByRole("navigation", { name: "Menu dashboard" }))
     .getAllByRole("button")
-    .map((button) => button.textContent.replace(/\d+$/, ""))
-    .filter((name) => ["Metrik", "Menu Paling Laku", "Stok Bahan", "Belanja", "Menu", "Rekap", "Pengaturan"].includes(name));
+    .map((button) => button.getAttribute("aria-label") || button.textContent.replace(/\d+$/, ""));
 
 describe("dashboard menus: Stok Bahan holds what is on hand, Belanja the purchases", () => {
   beforeEach(() => {
@@ -65,8 +66,10 @@ describe("dashboard menus: Stok Bahan holds what is on hand, Belanja the purchas
 
   it("puts Belanja right after Stok Bahan with the number of draft nota", async () => {
     renderWithProviders(<Dashboard />, { preloadedState: user("Admin") });
-    expect(menuNames()).toEqual(["Metrik", "Menu Paling Laku", "Stok Bahan", "Belanja", "Menu", "Rekap", "Pengaturan"]);
+    expect(menuNames()).toEqual(["Metrik", "Stok Bahan", "Belanja", "Menu", "Rekap", "Pengaturan"]);
     expect(await screen.findByRole("button", { name: "Belanja 2" })).toBeInTheDocument();
+    // Nothing to restock: no badge, not a 0.
+    expect(screen.getByRole("button", { name: "Stok Bahan" })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Belanja 2" }));
     expect(screen.getByRole("heading", { name: "Belanja" })).toBeInTheDocument();
@@ -189,9 +192,33 @@ describe("dashboard menus: Stok Bahan holds what is on hand, Belanja the purchas
     expect(screen.queryByRole("form", { name: "Form bahan olahan" })).not.toBeInTheDocument();
   });
 
+  it("keeps Ringkasan and Menu Paling Laku under Metrik", async () => {
+    api.getMenuItems.mockResolvedValue({ data: { data: [] } });
+    renderWithProviders(<Dashboard />, { preloadedState: user("Admin") });
+    const views = screen.getByRole("group", { name: "Jenis metrik" });
+    expect(within(views).getByRole("button", { name: "Ringkasan" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByText("Metrik", { selector: "p" })).toBeInTheDocument();
+
+    fireEvent.click(within(views).getByRole("button", { name: "Menu Paling Laku" }));
+    expect(screen.getByRole("heading", { name: "Menu Paling Laku" })).toBeInTheDocument();
+    expect(screen.queryByText("Metrik", { selector: "p" })).not.toBeInTheDocument();
+  });
+
+  // LOYALTY: Program Promo (under Menu) dimatikan sementara di main (aktif di develop).
+  it("opens Menu Management from Menu, with no Program Promo", async () => {
+    api.getMenuItems.mockResolvedValue({ data: { data: [] } });
+    api.getCategories.mockResolvedValue({ data: { data: [] } });
+    renderWithProviders(<Dashboard />, { preloadedState: user("Admin") });
+    fireEvent.click(screen.getByRole("button", { name: "Menu" }));
+
+    expect(screen.getByRole("heading", { name: "Menu Management" })).toBeInTheDocument();
+    expect(screen.queryByRole("group", { name: "Jenis menu" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Program Promo" })).not.toBeInTheDocument();
+  });
+
   it("shows Belanja to kasir, who write draft nota", async () => {
     renderWithProviders(<Dashboard />, { preloadedState: user("Cashier") });
-    expect(menuNames()).toEqual(["Metrik", "Menu Paling Laku", "Stok Bahan", "Belanja", "Rekap"]);
+    expect(menuNames()).toEqual(["Metrik", "Stok Bahan", "Belanja", "Rekap"]);
     fireEvent.click(await screen.findByRole("button", { name: "Belanja 2" }));
     expect(screen.getByRole("button", { name: "Tambah Belanja" })).toBeInTheDocument();
   });

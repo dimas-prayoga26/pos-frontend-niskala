@@ -66,7 +66,7 @@ const CustomerInfo = () => {
       setCustomer({
         orderPlatformId: platform?.id || platform?._id || null,
         orderPlatform: platform?.name || "",
-        platformTax: Number(platform?.tax ?? platform?.taxRate ?? 0) || 0,
+        // Biaya Platform is typed per order, never taken from the platform.
       })
     );
     setIsPlatformOpen(false);

@@ -1,13 +1,19 @@
 import { useMemo, useState, useEffect } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import Metrics from "../../../components/dashboard/Metrics";
-import MenuPerformance from "../components/MenuPerformance";
+import { MdOutlineSettings } from "react-icons/md";
+import MenuTab from "../components/MenuTab";
+import MetricsTab from "../components/MetricsTab";
 import { ShoppingPage, StockManagement, usePurchaseDraftCount } from "../../inventory";
-import MenuManagement from "../../../components/dashboard/MenuManagement";
 import RecapManagement from "../../../components/dashboard/RecapManagement";
 import { SettingsManagement } from "../../settings";
 import { useSelector } from "react-redux";
 import { getStockItems } from "../api";
+
+// One tab of the dashboard bar: underlined in the brand colour when open.
+const tabClass = (isActive) =>
+  `whitespace-nowrap border-b-2 px-4 py-3 text-sm font-semibold transition-colors md:px-5 md:text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#d6c7ae] ${
+    isActive ? "border-[#a79981] text-[#f5f5f5]" : "border-transparent text-[#ababab] hover:text-[#f5f5f5]"
+  }`;
 
 const Dashboard = () => {
   const user = useSelector((state) => state.user);
@@ -36,23 +42,16 @@ const Dashboard = () => {
     return stockItems.filter((item) => item.status === "HAMPIR HABIS" || item.status === "HARUS ORDER").length;
   }, [stockItemsRes]);
 
-  const tabs = isAdmin
-    ? [
-        { key: "metrics", label: "Metrik" },
-        { key: "menu-performance", label: "Menu Paling Laku" },
-        { key: "stock", label: "Stok Bahan", badge: lowStockCount },
-        { key: "shopping", label: "Belanja", badge: draftCount },
-        { key: "menu", label: "Menu" },
-        { key: "recap", label: "Rekap" },
-        { key: "setting", label: "Pengaturan" },
-      ]
-    : [
-        { key: "metrics", label: "Metrik" },
-        { key: "menu-performance", label: "Menu Paling Laku" },
-        { key: "stock", label: "Stok Bahan", badge: lowStockCount },
-        { key: "shopping", label: "Belanja", badge: draftCount },
-        { key: "recap", label: "Rekap" },
-      ];
+  // Metrik holds Ringkasan and Menu Paling Laku, Menu holds Daftar Menu and
+  // Program Promo; Pengaturan is the gear at the end of the bar. Menu and
+  // Pengaturan: admins only.
+  const tabs = [
+    { key: "metrics", label: "Metrik" },
+    { key: "stock", label: "Stok Bahan", badge: lowStockCount },
+    { key: "shopping", label: "Belanja", badge: draftCount },
+    ...(isAdmin ? [{ key: "menu", label: "Menu" }] : []),
+    { key: "recap", label: "Rekap" },
+  ];
 
   useEffect(() => {
     document.title = "POS | Admin Dashboard"
@@ -66,42 +65,44 @@ const Dashboard = () => {
 
   return (
     <div className="bg-[#1f1f1f] min-h-[calc(100vh-5rem)] overflow-y-auto pb-16">
-      <div className="container mx-auto flex flex-col lg:flex-row lg:items-center justify-between gap-4 py-8 lg:py-14 px-4 md:px-6">
-        <div />
-
-        <div className="flex items-center gap-2 md:gap-3 overflow-x-auto w-full lg:w-auto pb-1">
-          {tabs.map((tab) => {
-            return (
-              <button
-                key={tab.key}
-                className={`
-                whitespace-nowrap px-4 md:px-8 py-3 rounded-lg text-[#f5f5f5] font-semibold text-sm md:text-md flex items-center gap-2 ${
-                  activeTab === tab.key
-                    ? "bg-[#262626]"
-                    : "bg-[#1a1a1a] hover:bg-[#262626]"
-                }`}
-                onClick={() => handleTabClick(tab.key)}
-              >
-                {tab.label}
-                {typeof tab.badge === "number" && (
-                  <span
-                    className={`ml-1 flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[11px] font-bold leading-none ${
-                      tab.badge > 0
-                        ? "bg-red-500 text-white"
-                        : "bg-[#3a3a3a] text-[#ababab]"
-                    }`}
-                  >
-                    {tab.badge > 99 ? "99+" : tab.badge}
-                  </span>
-                )}
-              </button>
-            );
-          })}
-        </div>
+      <div className="container mx-auto mb-6 pt-6 lg:pt-8">
+        <nav
+          aria-label="Menu dashboard"
+          className="flex overflow-x-auto scrollbar-hide shadow-[inset_0_-1px_0_#333]"
+        >
+          {tabs.map((tab) => (
+            <button
+              key={tab.key}
+              type="button"
+              aria-current={activeTab === tab.key ? "page" : undefined}
+              className={`flex items-center gap-2 ${tabClass(activeTab === tab.key)}`}
+              onClick={() => handleTabClick(tab.key)}
+            >
+              {tab.label}
+              {/* Only when something waits: bahan to restock, draft nota to post. */}
+              {tab.badge > 0 && (
+                <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-[11px] font-bold leading-none text-white">
+                  {tab.badge > 99 ? "99+" : tab.badge}
+                </span>
+              )}
+            </button>
+          ))}
+          {isAdmin && (
+            <button
+              type="button"
+              aria-label="Pengaturan"
+              title="Pengaturan"
+              aria-current={activeTab === "setting" ? "page" : undefined}
+              className={`ml-auto ${tabClass(activeTab === "setting")}`}
+              onClick={() => handleTabClick("setting")}
+            >
+              <MdOutlineSettings className="text-xl" />
+            </button>
+          )}
+        </nav>
       </div>
 
-      {activeTab === "metrics" && <Metrics />}
-      {activeTab === "menu-performance" && <MenuPerformance />}
+      {activeTab === "metrics" && <MetricsTab />}
       {activeTab === "stock" && (
         <StockManagement
           createItem={createStockItem}
@@ -113,7 +114,7 @@ const Dashboard = () => {
       )}
       {activeTab === "shopping" && <ShoppingPage restockItems={restockItems} />}
       {activeTab === "menu" && isAdmin && (
-        <MenuManagement
+        <MenuTab
           onCreateIngredient={(kind, name) => {
             setActiveTab("stock");
             setCreateStockItem({ kind, name });
