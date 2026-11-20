@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import BottomNav from "../../../shared/ui/BottomNav";
 import BackButton from "../../../shared/ui/BackButton";
