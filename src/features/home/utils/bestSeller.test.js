@@ -28,6 +28,25 @@ describe("rankBestSellers", () => {
     expect(rankBestSellers(orders, menuItems)[0]).toMatchObject({ image: "/uploads/menu/latte.png" });
   });
 
+  it("leaves out a loyalty reward given free, in the cart or as saved", () => {
+    const withRewards = [
+      ...orders,
+      {
+        items: [
+          { id: "loyalty-5-1-1", menuItemId: 1, name: "Butterscotch Latte", quantity: 1, price: 0 },
+          { menuItemId: 2, name: "Rice Bowl Ayam", quantity: 1, loyaltyReward: { stamps: 10 } },
+        ],
+      },
+    ];
+
+    expect(rankBestSellers(withRewards, menuItems).map((dish) => [dish.name, dish.numberOfOrders])).toEqual([
+      ["Butterscotch Latte", 4],
+      ["Rice Bowl Ayam", 3],
+      ["Matcha Latte", 3],
+      ["Roti Kukus Coklat", 1],
+    ]);
+  });
+
   it("names the menu categories a menu was sold from", () => {
     expect(rankBestSellers(orders, menuItems).map((dish) => [dish.name, dish.categories])).toEqual([
       ["Butterscotch Latte", ["White Coffee", "Hot White Coffee"]],

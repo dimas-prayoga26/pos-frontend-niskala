@@ -1,8 +1,10 @@
 import { useEffect, useRef } from "react";
 import { FaMinus, FaPlus } from "react-icons/fa6";
+import { MdClose, MdRedeem } from "react-icons/md";
 import { useDispatch, useSelector } from "react-redux";
-import { addItems, decreaseItem, pickBundleChoice, swapIngredient } from "../cartSlice";
+import { addItems, decreaseItem, pickBundleChoice, removeItem, swapIngredient } from "../cartSlice";
 import { groupBundleOptions } from "../utils/bundleChoices";
+import { isLoyaltyLine } from "../utils/loyaltyReward";
 import { formatCurrency } from "../../../shared/lib/format";
 
 const CartInfo = () => {
@@ -42,16 +44,27 @@ const CartInfo = () => {
           </p>
         ) : (
           cartData.map((item) => {
+            // A loyalty reward (its promo package): one free portion, its
+            // menu picked below like any promo, removed whole (✕).
+            const reward = isLoyaltyLine(item) ? item.loyaltyReward?.label || item.variant || "Hadiah loyalty" : "";
+
             return (
               <div
                 key={item.id}
-                className="bg-[#1f1f1f] rounded-lg px-4 py-4 mb-2"
+                aria-label={reward ? `${item.name}, ${reward}` : undefined}
+                className={`bg-[#1f1f1f] rounded-lg px-4 py-4 mb-2 ${reward ? "border border-[#AFA087]/40" : ""}`}
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0 flex-1">
                     <h1 className="truncate text-[#ababab] font-semibold tracking-wide text-md">
                       {item.name}
                     </h1>
+                    {reward && (
+                      <p className="mt-1 flex items-center gap-1 text-xs font-semibold text-[#AFA087]">
+                        <MdRedeem size={14} />
+                        Hadiah loyalty · {reward}
+                      </p>
+                    )}
                     {(item.bundleItems?.length > 0 || item.bundleSlots?.length > 0) && (
                       <div className="mt-2 space-y-2">
                         {(item.bundleItems || []).map((line) => (
@@ -155,22 +168,34 @@ const CartInfo = () => {
                 </div>
 
                 <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
-                  <div className="flex shrink-0 items-center gap-2">
+                  {reward ? (
                     <button
-                      onClick={() => handleIncreaseQuantity(item)}
-                      className="grid h-8 w-8 place-items-center rounded-lg bg-[#252525] text-[#ababab] transition hover:text-[#a79981]"
-                      aria-label={`Increase ${item.name}`}
+                      type="button"
+                      onClick={() => dispatch(removeItem(item.id))}
+                      className="inline-flex h-8 items-center gap-1 rounded-lg bg-[#252525] px-3 text-xs font-semibold text-[#ababab] transition hover:text-[#a79981]"
+                      aria-label={`Batalkan ${reward} ${item.name}`}
                     >
-                      <FaPlus size={14} />
+                      <MdClose size={14} />
+                      Batal tukar
                     </button>
-                    <button
-                      onClick={() => handleDecreaseQuantity(item.id)}
-                      className="grid h-8 w-8 place-items-center rounded-lg bg-[#252525] text-[#ababab] transition hover:text-[#a79981]"
-                      aria-label={`Decrease ${item.name}`}
-                    >
-                      <FaMinus size={14} />
-                    </button>
-                  </div>
+                  ) : (
+                    <div className="flex shrink-0 items-center gap-2">
+                      <button
+                        onClick={() => handleIncreaseQuantity(item)}
+                        className="grid h-8 w-8 place-items-center rounded-lg bg-[#252525] text-[#ababab] transition hover:text-[#a79981]"
+                        aria-label={`Increase ${item.name}`}
+                      >
+                        <FaPlus size={14} />
+                      </button>
+                      <button
+                        onClick={() => handleDecreaseQuantity(item.id)}
+                        className="grid h-8 w-8 place-items-center rounded-lg bg-[#252525] text-[#ababab] transition hover:text-[#a79981]"
+                        aria-label={`Decrease ${item.name}`}
+                      >
+                        <FaMinus size={14} />
+                      </button>
+                    </div>
+                  )}
                   <div className="ml-auto min-w-0 max-w-full text-right">
                     {item.discountPercent > 0 && item.pricePerQuantity * item.quantity > item.price && (
                       <p className="text-xs text-[#777] line-through">

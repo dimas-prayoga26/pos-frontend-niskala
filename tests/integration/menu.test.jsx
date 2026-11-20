@@ -530,6 +530,45 @@ describe("kategori promo", () => {
     });
   });
 
+  it("marks a promo as a loyalty reward, a free promo (Harga 0, Diskon 100%)", async () => {
+    api.updateMenuItem.mockResolvedValue({ data: { success: true } });
+    renderWithProviders(<MenuManagement />, { preloadedState: asAdmin });
+
+    fireEvent.click(await screen.findByRole("button", { name: "Menu Items" }));
+    fireEvent.click(
+      within((await screen.findByText("Paket Hemat")).closest("tr")).getByRole("button", { name: "Ubah" })
+    );
+
+    fireEvent.change(screen.getByLabelText("Hadiah loyalty"), { target: { value: "5" } });
+    // Picking a reward makes it free.
+    expect(screen.getByLabelText("Harga")).toHaveValue("0");
+    expect(screen.getByLabelText("Diskon (%)")).toHaveValue("100");
+
+    fireEvent.click(screen.getByRole("button", { name: "Simpan" }));
+    await waitFor(() => expect(api.updateMenuItem).toHaveBeenCalled());
+    expect(api.updateMenuItem.mock.calls[0][0]).toMatchObject({
+      menuItemId: 20,
+      regularPrice: 0,
+      discountPercent: 100,
+      loyaltyRewardStamps: 5,
+    });
+  });
+
+  it("keeps a loyalty reward free", async () => {
+    renderWithProviders(<MenuManagement />, { preloadedState: asAdmin });
+
+    fireEvent.click(await screen.findByRole("button", { name: "Menu Items" }));
+    fireEvent.click(
+      within((await screen.findByText("Paket Hemat")).closest("tr")).getByRole("button", { name: "Ubah" })
+    );
+    fireEvent.change(screen.getByLabelText("Hadiah loyalty"), { target: { value: "10" } });
+    fireEvent.change(screen.getByLabelText("Harga"), { target: { value: "15000" } });
+    fireEvent.click(screen.getByRole("button", { name: "Simpan" }));
+
+    expect(await screen.findByText("Menu hadiah loyalty harus Harga 0 dan Diskon 100%.")).toBeInTheDocument();
+    expect(api.updateMenuItem).not.toHaveBeenCalled();
+  });
+
   it("rejects a discount above 100%", async () => {
     renderWithProviders(<MenuManagement />, { preloadedState: asAdmin });
 

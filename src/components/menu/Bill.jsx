@@ -3,7 +3,7 @@ import { useDispatch, useSelector } from "react-redux";
 import { getTotalDiscount, getTotalPrice } from "../../redux/slices/cartSlice";
 import { addOrder } from "../../https/index";
 import { enqueueSnackbar } from "notistack";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { removeAllItems } from "../../redux/slices/cartSlice";
 import { removeCustomer, setCustomer } from "../../redux/slices/customerSlice";
 import Invoice from "../invoice/Invoice";
@@ -11,6 +11,7 @@ import { printOrderReceipt } from "../invoice/printOrderReceipt";
 import NonCashPaymentModal from "./NonCashPaymentModal";
 import { useReceiptPaperDialog } from "../invoice/useReceiptPaperDialog";
 import { hasMissingBundlePicks } from "../../features/pos/utils/bundleChoices";
+import { isLoyaltyLine } from "../../features/pos/utils/loyaltyReward";
 import { MdWarningAmber } from "react-icons/md";
 import {
   CREW_MEAL_START_HOUR,
@@ -53,6 +54,7 @@ const getInsufficientStockItems = (error) =>
 
 const Bill = () => {
   const dispatch = useDispatch();
+  const queryClient = useQueryClient();
 
   const customerData = useSelector((state) => state.customer);
   const cartData = useSelector((state) => state.cart);
@@ -175,6 +177,19 @@ const Bill = () => {
       return;
     }
 
+    // Loyalty rewards (free coffee / rice bowl) go with the customer's phone.
+    const hasLoyaltyReward = cartData.some(isLoyaltyLine);
+    if (hasLoyaltyReward && (orderType !== "Offline" || !customerData.customerPhone?.trim())) {
+      enqueueSnackbar("Hadiah loyalty hanya untuk order Offline dengan nomor HP.", { variant: "warning" });
+      return;
+    }
+
+    // Only the free reward in the order: nothing to pay.
+    if (hasLoyaltyReward && totalPriceWithTax === 0) {
+      submitOrder(buildOrderData(undefined, paymentMethod || "Tunai"));
+      return;
+    }
+
     if (isCrewOrder) {
       if (!customerData.customerName?.trim()) {
         enqueueSnackbar("Isi nama crew dulu.", { variant: "warning" });
@@ -272,7 +287,7 @@ const Bill = () => {
     mutationFn: (reqData) => addOrder(reqData),
     retry: false,
     onSuccess: (resData) => {
-      const { data } = resData.data;
+      const { data, loyalty } = resData.data;
       console.log(data);
 
       setOrderInfo(data);
@@ -281,6 +296,12 @@ const Bill = () => {
       enqueueSnackbar("Order Placed!", {
         variant: "success",
       });
+      // Rewards given with this order, redeemed in the loyalty app.
+      (loyalty?.redeemed || []).forEach((reward) =>
+        enqueueSnackbar(`🎁 ${reward.label} ditukar · ${reward.menuName}`, { variant: "success" })
+      );
+      (loyalty?.warnings || []).forEach((warning) => enqueueSnackbar(warning, { variant: "warning" }));
+      if (loyalty) queryClient.invalidateQueries({ queryKey: ["loyalty-customer"] });
       setShowInvoice(true);
       dispatch(removeCustomer());
       dispatch(removeAllItems());

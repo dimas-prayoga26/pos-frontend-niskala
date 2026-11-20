@@ -37,6 +37,8 @@ export const buildMenuCatalog = (categories, menuItems, isOnlineOrder) =>
         // Bahan olahan the cashier may swap in the cart (Nasi Daun Jeruk).
         ingredientChoices: item.ingredientChoices || [],
         discountPercent: Number(item.discountPercent) || 0,
+        // Hadiah loyalty: given by Tukar only, never from the grid.
+        loyaltyRewardStamps: Number(item.loyaltyRewardStamps) || null,
         taxRate:
           item.category?.taxRate ??
           item.category?.tax ??

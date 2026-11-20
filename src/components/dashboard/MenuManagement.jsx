@@ -25,6 +25,7 @@ import { backendBaseUrl } from "../../https/backendUrl";
 import CreatableSelect2 from "../shared/CreatableSelect2";
 import MultiSelect2 from "../../shared/ui/MultiSelect2";
 import { bundleContentsText } from "../../features/pos/utils/bundleChoices";
+import { LOYALTY_REWARD_OPTIONS, loyaltyRewardOptionLabel } from "../../features/pos/utils/loyaltyReward";
 import { MdErrorOutline } from "react-icons/md";
 
 const iconOptions = [
@@ -119,6 +120,8 @@ const emptyMenuForm = {
   ingredients: [],
   bundleItems: [],
   discountPercent: "",
+  // Hadiah loyalty: the reward's stamp this promo is given for ("" none).
+  loyaltyRewardStamps: "",
   imageFile: null,
   imagePath: "",
 };
@@ -794,6 +797,14 @@ const MenuManagement = ({ onCreateIngredient }) => {
     setCategoryForm((current) => ({ ...current, [field]: value }));
   };
 
+  // A loyalty reward is a free promo: picking one sets Harga 0 and Diskon 100%.
+  const updateLoyaltyReward = (stamps) =>
+    setMenuForm((current) => ({
+      ...current,
+      loyaltyRewardStamps: stamps,
+      ...(stamps ? { regularPrice: "0", discountPercent: "100" } : {}),
+    }));
+
   const updateMenuForm = (field, value) => {
     // A new promo starts with one empty box to fill.
     const isNewPromo =
@@ -1082,6 +1093,12 @@ const MenuManagement = ({ onCreateIngredient }) => {
       return;
     }
 
+    const loyaltyRewardStamps = isBundleForm ? Number(menuForm.loyaltyRewardStamps) || null : null;
+    if (loyaltyRewardStamps && (parseMoneyInput(menuForm.regularPrice) !== 0 || promoDiscount !== 100)) {
+      enqueueSnackbar("Menu hadiah loyalty harus Harga 0 dan Diskon 100%.", { variant: "warning" });
+      return;
+    }
+
     if (menuForm.includeOnlinePlatform && menuForm.onlinePrice === "") {
       enqueueSnackbar("Harga online wajib diisi jika platform online disertakan.", {
         variant: "warning",
@@ -1123,6 +1140,7 @@ const MenuManagement = ({ onCreateIngredient }) => {
       bundleItems,
       bundleChoices,
       discountPercent: isBundleForm ? promoDiscount : 0,
+      loyaltyRewardStamps,
       imageFile: menuForm.imageFile,
       imagePath: menuForm.imagePath.trim(),
       isAvailable: Boolean(menuForm.isAvailable),
@@ -1187,6 +1205,7 @@ const MenuManagement = ({ onCreateIngredient }) => {
       name: item.name,
       regularPrice: String(item.regularPrice ?? item.price ?? ""),
       discountPercent: Number(item.discountPercent) > 0 ? String(item.discountPercent) : "",
+      loyaltyRewardStamps: item.loyaltyRewardStamps ? String(item.loyaltyRewardStamps) : "",
       includeOnlinePlatform: Boolean(item.includeOnlinePlatform),
       onlinePrice:
         item.onlinePrice === null || item.onlinePrice === undefined
@@ -2008,6 +2027,25 @@ const MenuManagement = ({ onCreateIngredient }) => {
                     </div>
                   </label>
                 )}
+                {/* A promo given by Tukar for a loyalty reward, not sold from the grid. */}
+                {isBundleForm && (
+                  <label className="block text-sm font-semibold text-[#ababab]">
+                    Hadiah loyalty
+                    <select
+                      value={menuForm.loyaltyRewardStamps}
+                      onChange={(event) => updateLoyaltyReward(event.target.value)}
+                      aria-label="Hadiah loyalty"
+                      className="mt-2 w-full rounded-lg bg-[#262626] px-4 py-3 text-sm text-[#f5f5f5] outline-none"
+                    >
+                      <option value="">Bukan hadiah loyalty</option>
+                      {LOYALTY_REWARD_OPTIONS.map((option) => (
+                        <option key={option.stamps} value={String(option.stamps)}>
+                          {loyaltyRewardOptionLabel(option.stamps)}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
                 {menuForm.includeOnlinePlatform && (
                   <label className="block text-sm font-semibold text-sky-200">
                     Harga Online
@@ -2204,6 +2242,11 @@ const MenuManagement = ({ onCreateIngredient }) => {
                         {(item.bundleItems?.length > 0 || item.bundleChoices?.length > 0) && (
                           <p className="mt-1 text-xs font-normal text-[#ababab]">
                             {bundleContentsText(item)}
+                          </p>
+                        )}
+                        {item.loyaltyRewardStamps && (
+                          <p className="mt-1 text-xs font-semibold text-[#AFA087]">
+                            🎁 Hadiah loyalty · {loyaltyRewardOptionLabel(item.loyaltyRewardStamps)}
                           </p>
                         )}
                       </td>

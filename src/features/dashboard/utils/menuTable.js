@@ -42,7 +42,8 @@ const menuKey = (menu) => menu.name.trim().toLowerCase();
 
 // Menus on sale that sold nothing in the period, shaped like rankBestSellers'
 // rows (0 sold, Rp 0): the least wanted of all, for Kurang Laku. The Ice
-// and Hot copy of a menu are one row; a menu in no kind (groupOf) is left out.
+// and Hot copy of a menu are one row; a menu in no kind (groupOf) is left out,
+// and so is a loyalty reward promo (given, never sold).
 export const unsoldMenus = (menuItems, soldMenus, groupOf) => {
   const sold = new Set(soldMenus.map(menuKey));
   const byName = new Map();
@@ -50,7 +51,7 @@ export const unsoldMenus = (menuItems, soldMenus, groupOf) => {
   menuItems.forEach((item) => {
     const group = groupOf(item);
     const key = menuKey(item);
-    if (!group || sold.has(key)) return;
+    if (!group || sold.has(key) || item.loyaltyRewardStamps) return;
 
     const row = byName.get(key) || {
       id: item.id,

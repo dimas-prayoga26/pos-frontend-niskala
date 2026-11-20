@@ -1,12 +1,22 @@
-import { useEffect, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useMemo, useState } from "react";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { enqueueSnackbar } from "notistack";
-import { getLoyaltyCustomer, redeemLoyaltyReward } from "../../https";
+import { MdRedeem } from "react-icons/md";
+import { useDispatch, useSelector } from "react-redux";
+import { getCategories, getLoyaltyCustomer, getMenuItems } from "../../https";
 import { formatCurrency } from "../../utils";
+import { addItems, removeLoyaltyItemsNotFor } from "../../features/pos/cartSlice";
+import { buildMenuCatalog } from "../../features/pos/utils/menuCatalog";
+import {
+  buildLoyaltyRewardLine,
+  findLoyaltyRewardMenu,
+  loyaltyLinesOf,
+} from "../../features/pos/utils/loyaltyReward";
 
 // Loyalty stamp of the phone typed in the cart. The stamp itself is given
-// by pos-backend after the order is saved; here the cashier sees the card
-// and hands over a ready reward.
+// by pos-backend after the order is saved. Tukar puts the reward's promo
+// menu (Kategori Promo, marked for its stamp) in the order details, where the
+// coffee / rice bowl is picked; the reward is redeemed when the order is saved.
 const MIN_DIGITS = 10;
 const DEBOUNCE_MS = 500;
 
@@ -27,28 +37,39 @@ const NEW_NUMBER_TEXT = "text-green-400";
 const REGISTERED_TEXT = "text-[#AFA087]";
 
 const LoyaltyStatus = ({ phone }) => {
-  const queryClient = useQueryClient();
+  const dispatch = useDispatch();
+  const cart = useSelector((state) => state.cart);
   const trimmed = String(phone || "").trim();
   const debouncedPhone = useDebounced(trimmed, DEBOUNCE_MS);
   const enabled = debouncedPhone.replace(/\D/g, "").length >= MIN_DIGITS;
-  const queryKey = ["loyalty-customer", debouncedPhone];
 
   const { data, error, isFetching } = useQuery({
-    queryKey,
+    queryKey: ["loyalty-customer", debouncedPhone],
     queryFn: () => getLoyaltyCustomer(debouncedPhone),
     enabled,
     retry: false,
     staleTime: 0,
   });
-
-  const redeemMutation = useMutation({
-    mutationFn: (reward) => redeemLoyaltyReward({ phone: debouncedPhone, rewardStamps: reward.stamps }),
-    onSuccess: (_response, reward) => {
-      queryClient.invalidateQueries({ queryKey });
-      enqueueSnackbar(`${reward.label} ditukar`, { variant: "success" });
-    },
-    onError: (redeemError) => enqueueSnackbar(errorMessage(redeemError), { variant: "error" }),
+  // The POS catalog (shared with the menu grid): where the reward promos are.
+  const { data: categoriesRes } = useQuery({
+    queryKey: ["categories"],
+    queryFn: getCategories,
+    placeholderData: keepPreviousData,
   });
+  const { data: menuItemsRes } = useQuery({
+    queryKey: ["menu-items"],
+    queryFn: () => getMenuItems(),
+    placeholderData: keepPreviousData,
+  });
+  const catalog = useMemo(
+    () => buildMenuCatalog(categoriesRes?.data?.data || [], menuItemsRes?.data?.data || [], false),
+    [categoriesRes, menuItemsRes]
+  );
+
+  // A reward belongs to the number it was claimed for.
+  useEffect(() => {
+    dispatch(removeLoyaltyItemsNotFor(trimmed));
+  }, [dispatch, trimmed]);
 
   if (!enabled || trimmed !== debouncedPhone) return null;
 
@@ -78,10 +99,18 @@ const LoyaltyStatus = ({ phone }) => {
 
   const { customer, card, next_reward: nextReward, ready_rewards: readyRewards = [] } = loyalty;
 
-  const confirmRedeem = (reward) => {
-    if (window.confirm(`Tukar ${reward.label} untuk ${customer.code}?`)) {
-      redeemMutation.mutate(reward);
-    }
+  const giveReward = (reward, rewardMenu) => {
+    dispatch(
+      addItems(
+        buildLoyaltyRewardLine({ reward, ...rewardMenu, catalog, phone: debouncedPhone, cart })
+      )
+    );
+    enqueueSnackbar(
+      rewardMenu.menu.bundleChoices?.length
+        ? `🎁 ${rewardMenu.menu.name} masuk pesanan · pilih menunya di Order Details`
+        : `🎁 ${rewardMenu.menu.name} masuk pesanan`,
+      { variant: "success" }
+    );
   };
 
   return (
@@ -107,18 +136,49 @@ const LoyaltyStatus = ({ phone }) => {
       )}
       {readyRewards.length > 0 && (
         <div className="mt-2 flex flex-wrap gap-2">
-          {readyRewards.map((reward) => (
-            <button
-              key={reward.stamps}
-              type="button"
-              disabled={redeemMutation.isPending}
-              onClick={() => confirmRedeem(reward)}
-              className="rounded-md bg-[#a79981] px-3 py-1.5 font-semibold text-[#101010] disabled:opacity-60"
-            >
-              Tukar {reward.label}
-              {reward.count > 1 ? ` (${reward.count})` : ""}
-            </button>
-          ))}
+          {readyRewards.map((reward) => {
+            const left = (Number(reward.count) || 0) - loyaltyLinesOf(cart, reward.stamps).length;
+            const rewardMenu = findLoyaltyRewardMenu(catalog, reward.stamps);
+
+            // No promo menu marked for this reward yet (Menu → Kategori Promo).
+            if (!rewardMenu) {
+              return (
+                <span
+                  key={reward.stamps}
+                  className="inline-flex items-center gap-1 rounded-md border border-dashed border-[#AFA087]/50 px-3 py-1.5"
+                >
+                  <MdRedeem size={14} />
+                  {reward.label} siap · menu promonya belum ada
+                </span>
+              );
+            }
+
+            // Already in the order: shown, not offered again.
+            if (left <= 0) {
+              return (
+                <span
+                  key={reward.stamps}
+                  className="inline-flex items-center gap-1 rounded-md border border-[#AFA087]/50 px-3 py-1.5 font-semibold"
+                >
+                  <MdRedeem size={14} />
+                  {reward.label} di pesanan
+                </span>
+              );
+            }
+
+            return (
+              <button
+                key={reward.stamps}
+                type="button"
+                onClick={() => giveReward(reward, rewardMenu)}
+                className="inline-flex items-center gap-1 rounded-md bg-[#a79981] px-3 py-1.5 font-semibold text-[#101010] transition hover:bg-[#b9aa91]"
+              >
+                <MdRedeem size={14} />
+                Tukar {reward.label}
+                {left > 1 ? ` (${left})` : ""}
+              </button>
+            );
+          })}
         </div>
       )}
     </div>

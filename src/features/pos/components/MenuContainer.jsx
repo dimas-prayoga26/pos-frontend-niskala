@@ -12,6 +12,7 @@ import {
   pickedBundleChoices,
 } from "../utils/bundleChoices";
 import { buildCartItem, getCartItemId, getMenuCardPrice } from "../utils/menuPricing";
+import { hideLoyaltyRewardMenus } from "../utils/loyaltyReward";
 import CategorySelector from "./CategorySelector";
 import MenuItemCard from "./MenuItemCard";
 
@@ -36,12 +37,15 @@ const MenuContainer = () => {
     placeholderData: keepPreviousData,
   });
 
+  // Reward promos (Hadiah loyalty) are given by Tukar, not from the grid.
   const menuData = useMemo(
     () =>
-      buildMenuCatalog(
-        categoriesRes?.data?.data || [],
-        menuItemsRes?.data?.data || [],
-        isOnlineOrder
+      hideLoyaltyRewardMenus(
+        buildMenuCatalog(
+          categoriesRes?.data?.data || [],
+          menuItemsRes?.data?.data || [],
+          isOnlineOrder
+        )
       ),
     [categoriesRes, isOnlineOrder, menuItemsRes]
   );

@@ -130,6 +130,14 @@ describe("unsoldMenus", () => {
   });
   const groupOf = (menuItem) => menuItem.category.group;
 
+  it("leaves out a loyalty reward promo: given, never sold", () => {
+    const reward = { ...item(9, "Loyalty Minuman Gratis", "PROMO", "Bundling"), loyaltyRewardStamps: 5 };
+
+    expect(unsoldMenus([reward, item(5, "Nasi Goreng", "Main Course", "Makanan")], [], groupOf).map((row) => row.name)).toEqual([
+      "Nasi Goreng",
+    ]);
+  });
+
   it("lists the menus on sale that sold nothing, Ice and Hot as one, menus in no kind left out", () => {
     const items = [
       item(1, "Americano", "Black Coffee", "Minuman", "/uploads/menu/americano.jpg"),

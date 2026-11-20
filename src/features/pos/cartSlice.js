@@ -169,6 +169,15 @@ const cartSlice = createSlice({
       line.bundleChoices = pickedBundleChoices(line.bundleSlots);
     },
 
+    // Loyalty reward lines belong to the number they were claimed for: a
+    // changed (or cleared) phone takes them out of the cart.
+    removeLoyaltyItemsNotFor: (state, action) => {
+      const phone = String(action.payload || "").trim();
+      const belongs = (item) => !item.loyaltyReward || item.loyaltyReward.phone === phone;
+      if (state.every(belongs)) return;
+      return state.filter(belongs);
+    },
+
     removeAllItems: () => {
       return [];
     },
@@ -192,6 +201,7 @@ export const {
   pickBundleChoice,
   swapIngredient,
   updateItemCustomization,
+  removeLoyaltyItemsNotFor,
   removeAllItems,
 } =
   cartSlice.actions;

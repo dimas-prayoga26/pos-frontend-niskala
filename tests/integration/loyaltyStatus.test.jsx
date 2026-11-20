@@ -7,6 +7,9 @@ import { renderWithProviders } from "../renderWithProviders";
 vi.mock("../../src/https/index", async (importOriginal) => ({
   ...(await importOriginal()),
   getLoyaltyCustomer: vi.fn(),
+  // The POS catalog, where the reward promos are looked up.
+  getCategories: vi.fn(async () => ({ data: { data: [] } })),
+  getMenuItems: vi.fn(async () => ({ data: { data: [] } })),
 }));
 
 const respond = (data) => api.getLoyaltyCustomer.mockResolvedValue({ data: { data } });

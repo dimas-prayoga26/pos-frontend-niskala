@@ -239,6 +239,25 @@ describe("Thermer receipt", () => {
     expect(lines.indexOf("Pilihan: Nasi Daun Jeruk")).toBe(lines.indexOf("Rice Bowl Ayam") + 1);
   });
 
+  it("prints a loyalty reward as one, with what was picked in it, not as a discount", () => {
+    const lines = textLines(buildThermerReceiptEntries({
+      ...order,
+      items: [{
+        id: "loyalty-5-50-1",
+        name: "Loyalty Minuman",
+        variant: "Minuman gratis",
+        quantity: 1,
+        pricePerQuantity: 0,
+        discountPercent: 100,
+        price: 0,
+        bundleChoices: [{ menuItemId: 11, name: "Americano", quantity: 1 }],
+      }],
+    }, { paperWidth: 58 }));
+
+    expect(lines).toEqual(expect.arrayContaining(["Loyalty Minuman", "Isi: Americano", "Hadiah loyalty: Minuman gratis"]));
+    expect(lines).not.toContain("Diskon 100%");
+  });
+
   it("keeps text the printer can print", () => {
     expect(toPrinterText("Café Latte – “Special” × 2")).toBe('Cafe Latte - "Special" x 2');
     expect(wrapText("A".repeat(40), 32)).toEqual(["A".repeat(32), "A".repeat(8)]);

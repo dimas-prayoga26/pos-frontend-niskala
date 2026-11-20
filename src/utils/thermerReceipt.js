@@ -7,6 +7,7 @@
 // width: a printer left in 80 mm mode (or Thermer's paper size) would centre
 // over 80 mm and push it off 58 mm paper.
 import { bundleChoicesText } from "../features/pos/utils/bundleChoices";
+import { isLoyaltyLine, loyaltyRewardLabelOf } from "../features/pos/utils/loyaltyReward";
 import { formatJakartaReceiptDate, formatJakartaReceiptDateTime } from "../shared/lib/dates";
 import { formatReceiptCurrency } from "../shared/lib/format";
 
@@ -185,7 +186,12 @@ const getItemLines = (item, width) => {
     ...(item.bundleChoices?.length ? wrapText(`Isi: ${bundleChoicesText(item.bundleChoices)}`, width) : []),
     // Bahan olahan swapped (Nasi Daun Jeruk for Nasi Putih).
     ...(item.ingredientSwaps || []).flatMap((swap) => wrapText(`Pilihan: ${swap.toName}`, width)),
-    ...(discountPercent > 0 ? [`Diskon ${discountPercent}%`] : []),
+    // A loyalty reward says so instead of "Diskon 100%".
+    ...(isLoyaltyLine(item)
+      ? wrapText(`Hadiah loyalty: ${loyaltyRewardLabelOf(item) || "gratis"}`, width)
+      : discountPercent > 0
+        ? [`Diskon ${discountPercent}%`]
+        : []),
     ...leftRight(`Qty: ${item.quantity}`, formatReceiptCurrency(item.price), width),
     ...(item.addOns?.length
       ? wrapText(`Add-ons: ${item.addOns.map((addOn) => addOn.name).join(", ")}`, width)
