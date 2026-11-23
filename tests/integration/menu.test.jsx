@@ -730,7 +730,7 @@ describe("kategori promo", () => {
     });
   });
 
-  it("has no Hadiah Stamp Card and asks no stamp card without a loyalty key (Pengaturan → API)", async () => {
+  it("lists Hadiah Stamp Card disabled and asks no stamp card without a loyalty key (Pengaturan → API)", async () => {
     api.getIntegrationStatus.mockResolvedValueOnce({ data: { success: true, data: { loyalty: false } } });
     api.getLoyaltyProgram.mockClear();
     renderWithProviders(<MenuManagement />, { preloadedState: asAdmin });
@@ -739,12 +739,13 @@ describe("kategori promo", () => {
       within((await screen.findByText("Paket Hemat")).closest("section")).getByRole("button", { name: "Ubah" })
     );
 
-    expect(screen.getByLabelText("Diskon (%)")).toBeInTheDocument();
-    expect(screen.queryByLabelText("Jenis promo")).not.toBeInTheDocument();
+    const kind = screen.getByLabelText("Jenis promo");
+    expect(optionNames(kind)).toEqual(["Paket biasa", "Hadiah Stamp Card (API) · nonaktif"]);
+    expect(kind.options[1]).toBeDisabled();
     expect(api.getLoyaltyProgram).not.toHaveBeenCalled();
   });
 
-  it("shows Jenis promo right under Category, only while the stamp card is on (Menu → Promo)", async () => {
+  it("shows Jenis promo right under Category, Hadiah Stamp Card disabled while the stamp card is off", async () => {
     const { unmount } = renderWithProviders(<MenuManagement />, { preloadedState: asAdmin });
     fireEvent.click(await screen.findByRole("button", { name: "Promo" }));
     fireEvent.click(
@@ -764,7 +765,9 @@ describe("kategori promo", () => {
       within((await screen.findByText("Paket Hemat")).closest("section")).getByRole("button", { name: "Ubah" })
     );
     expect(screen.getByLabelText("Diskon (%)")).toBeInTheDocument();
-    expect(screen.queryByLabelText("Jenis promo")).not.toBeInTheDocument();
+    const off = screen.getByLabelText("Jenis promo");
+    expect(off).toHaveValue("paket");
+    expect(off.options[1]).toBeDisabled();
   });
 
   it("shows which reward each Hadiah Stamp Card gives", async () => {

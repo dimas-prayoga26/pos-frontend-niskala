@@ -18,17 +18,27 @@ const inputClass =
 // What the card says under its name: the key's state, the end of the key.
 const statusOf = (integration) => {
   if (integration.keyUnreadable) return { warning: "API key tersimpan tidak bisa dibaca: isi ulang." };
-  if (!integration.hasKey) return { warning: "Belum ada API key: semua fitur loyalty disembunyikan." };
-  if (!integration.isActive) return { warning: "Nonaktif: semua fitur loyalty disembunyikan." };
+  if (!integration.hasKey) return { warning: "Belum ada API key: semua fitur loyalty dinonaktifkan." };
+  if (!integration.isActive) return { warning: "Nonaktif: semua fitur loyalty dinonaktifkan." };
   return { subtitle: `Aktif · key ••••${integration.keyHint}` };
 };
 
-// One outside service, the same card as Menu → Promo: its URL and key (the
-// key itself never comes back, only its last 4 characters), on/off, Tes koneksi.
+// The saved key as the field shows it: censored but its end (the key itself
+// never comes back from the server, only its last 4 characters).
+const MASK_LENGTH = 20;
+const maskedKeyOf = (integration) =>
+  integration.hasKey ? `${"*".repeat(MASK_LENGTH)}${integration.keyHint}` : "";
+
+// One outside service, the same card as Menu → Promo: its URL and key, on/off,
+// Tes koneksi. The key field shows the saved key censored; typing over it
+// gives a new key, left as it is the saved one stays.
 function IntegrationCard({ integration }) {
   const queryClient = useQueryClient();
+  const maskedKey = maskedKeyOf(integration);
   const [baseUrl, setBaseUrl] = useState(integration.baseUrl);
-  const [apiKey, setApiKey] = useState("");
+  const [apiKey, setApiKey] = useState(maskedKey);
+  // A new key only when typed (not the censored one, not left empty).
+  const typedKey = apiKey.trim() && apiKey !== maskedKey ? apiKey.trim() : "";
   const [testResult, setTestResult] = useState(null);
   const [isConfirmingRemove, setIsConfirmingRemove] = useState(false);
 
@@ -51,7 +61,7 @@ function IntegrationCard({ integration }) {
     queryClient.invalidateQueries({ queryKey: INTEGRATION_STATUS_KEY });
     queryClient.invalidateQueries({ queryKey: ["loyalty-program"] });
     queryClient.invalidateQueries({ queryKey: ["loyalty-customer"] });
-    setApiKey("");
+    setApiKey(maskedKeyOf(response.data.data));
     setIsConfirmingRemove(false);
     enqueueSnackbar(message, { variant: "success" });
   };
@@ -71,7 +81,7 @@ function IntegrationCard({ integration }) {
     onError: (error) => enqueueSnackbar(errorMessage(error, "Gagal menyimpan API."), { variant: "error" }),
   });
   const testMutation = useMutation({
-    mutationFn: () => testIntegration({ code: integration.code, baseUrl, ...(apiKey.trim() ? { apiKey } : {}) }),
+    mutationFn: () => testIntegration({ code: integration.code, baseUrl, ...(typedKey ? { apiKey: typedKey } : {}) }),
     onSuccess: (response) => setTestResult(response.data.data),
     onError: (error) => setTestResult({ ok: false, message: errorMessage(error, "Tes koneksi gagal.") }),
   });
@@ -85,7 +95,7 @@ function IntegrationCard({ integration }) {
       baseUrl,
       // A first key switches it on; otherwise it stays as the switch says.
       isActive: integration.isActive || !integration.hasKey,
-      ...(apiKey.trim() ? { apiKey } : {}),
+      ...(typedKey ? { apiKey: typedKey } : {}),
     });
   };
   const removeKey = () =>
@@ -120,10 +130,13 @@ function IntegrationCard({ integration }) {
           <input
             value={apiKey}
             onChange={(event) => setApiKey(event.target.value)}
-            type="password"
-            autoComplete="new-password"
-            placeholder={integration.hasKey ? `Tersimpan ••••${integration.keyHint}` : "Tempel API key"}
-            className={inputClass}
+            // The whole censored key at once: typing replaces it.
+            onFocus={(event) => apiKey === maskedKey && event.target.select()}
+            type="text"
+            autoComplete="off"
+            spellCheck={false}
+            placeholder="Tempel API key"
+            className={`${inputClass} font-mono`}
           />
         </label>
         <div className="flex flex-wrap items-center gap-2 md:col-span-2">

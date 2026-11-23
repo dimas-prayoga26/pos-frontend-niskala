@@ -206,7 +206,7 @@ describe("dashboard menus: Stok Bahan holds what is on hand, Belanja the purchas
     expect(screen.queryByText("Metrik", { selector: "p" })).not.toBeInTheDocument();
   });
 
-  it("has no stamp card in Menu → Promo without a loyalty key (Pengaturan → API)", async () => {
+  it("keeps the stamp card in Menu → Promo, disabled, without a loyalty key (Pengaturan → API)", async () => {
     api.getIntegrationStatus.mockResolvedValue({ data: { success: true, data: { loyalty: false } } });
     api.getMenuItems.mockResolvedValue({ data: { data: [] } });
     api.getCategories.mockResolvedValue({ data: { data: [] } });
@@ -217,7 +217,10 @@ describe("dashboard menus: Stok Bahan holds what is on hand, Belanja the purchas
 
     expect(await screen.findByRole("button", { name: "Tambah Promo" })).toBeInTheDocument();
     await waitFor(() => expect(api.getIntegrationStatus).toHaveBeenCalled());
-    expect(screen.queryByRole("region", { name: "Stamp Card" })).not.toBeInTheDocument();
+    const card = await screen.findByRole("region", { name: "Stamp Card" });
+    expect(within(card).getByText("Loyalty nonaktif: aktifkan di Pengaturan → API.")).toBeInTheDocument();
+    expect(within(card).getByRole("switch", { name: "Stamp Card" })).toBeDisabled();
+    expect(within(card).getByRole("button", { name: "Riwayat" })).toBeDisabled();
     expect(api.getLoyaltyProgram).not.toHaveBeenCalled();
     api.getIntegrationStatus.mockResolvedValue({ data: { success: true, data: { loyalty: true } } });
   });

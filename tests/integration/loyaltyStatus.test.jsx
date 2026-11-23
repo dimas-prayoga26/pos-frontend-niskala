@@ -51,16 +51,15 @@ describe("LoyaltyStatus", () => {
     expect(container.querySelector("p")).toBeNull();
   });
 
-  it("shows nothing and asks loyalty nothing without a loyalty key (Pengaturan → API)", async () => {
+  it("says loyalty is off and asks loyalty nothing without a loyalty key (Pengaturan → API)", async () => {
     api.getIntegrationStatus.mockResolvedValueOnce({ data: { success: true, data: { loyalty: false } } });
     respond({ registered: false, stamp_min_order_total: 100000 });
-    const { container } = renderWithProviders(<LoyaltyStatus phone="083123555526" />);
+    renderWithProviders(<LoyaltyStatus phone="083123555526" />);
 
-    await waitFor(() => expect(api.getIntegrationStatus).toHaveBeenCalled());
-    await new Promise((resolve) => setTimeout(resolve, 700));
+    const note = await findText("Loyalty nonaktif.");
+    expect(note).toHaveClass("text-[#777]");
     expect(api.getLoyaltyProgram).not.toHaveBeenCalled();
     expect(api.getLoyaltyCustomer).not.toHaveBeenCalled();
-    expect(container.querySelector("p")).toBeNull();
   });
 
   it("looks the number up again once the stamp card is switched back on", async () => {

@@ -46,24 +46,25 @@ describe("settings: API", () => {
     expect(screen.queryByRole("button", { name: "API" })).not.toBeInTheDocument();
   });
 
-  it("shows the loyalty URL and only the end of its key", async () => {
+  it("shows the loyalty URL and its key censored but its end, in a field that can be typed over", async () => {
     const card = await openApi();
 
     expect(within(card).getByText("Aktif · key ••••2bef")).toBeInTheDocument();
     expect(within(card).getByLabelText("URL API")).toHaveValue("https://loyalty.test/api/pos");
     const key = within(card).getByLabelText("API Key");
-    expect(key).toHaveAttribute("type", "password");
-    expect(key).toHaveValue("");
-    expect(key).toHaveAttribute("placeholder", "Tersimpan ••••2bef");
+    expect(key).toHaveValue("********************2bef");
+    expect(key).not.toHaveAttribute("readonly");
+    expect(key).not.toBeDisabled();
     expect(within(card).getByRole("switch", { name: "Loyalty (Stamp Card)" })).toHaveAttribute("aria-checked", "true");
   });
 
-  it("says loyalty is hidden while there is no key", async () => {
+  it("says loyalty is off (not hidden) while there is no key", async () => {
     api.getIntegrations.mockResolvedValue(answer([loyalty({ baseUrl: "", hasKey: false, keyHint: "", isActive: false })]));
     const card = await openApi();
 
-    expect(within(card).getByText("Belum ada API key: semua fitur loyalty disembunyikan.")).toBeInTheDocument();
+    expect(within(card).getByText("Belum ada API key: semua fitur loyalty dinonaktifkan.")).toBeInTheDocument();
     expect(within(card).queryByRole("button", { name: "Hapus API Key" })).not.toBeInTheDocument();
+    expect(within(card).getByLabelText("API Key")).toHaveValue("");
   });
 
   it("saves a first URL and key, switched on", async () => {

@@ -2,9 +2,9 @@ import MenuManagement from "../../../components/dashboard/MenuManagement";
 import useLoyaltyEnabled from "../../../shared/lib/useLoyaltyEnabled";
 import { PromoProgramSettings } from "../../settings";
 
-// Dashboard → Menu (admin): Menu Items, Promo (a card per promo, the stamp
-// card first with the menu of each reward) and Categories. Without a loyalty
-// key (Pengaturan → API) there is no stamp card.
+// Dashboard → Menu (admin): Menu Items, Promo (the stamp card above the promo
+// cards) and Categories. Without a loyalty key (Pengaturan → API) the stamp
+// card stays, disabled.
 export default function MenuTab({ onCreateIngredient }) {
   const loyalty = useLoyaltyEnabled();
 
@@ -12,7 +12,9 @@ export default function MenuTab({ onCreateIngredient }) {
     <MenuManagement
       onCreateIngredient={onCreateIngredient}
       renderPromoHeader={
-        loyalty.enabled ? ({ onEditMenu }) => <PromoProgramSettings onEditMenu={onEditMenu} /> : null
+        loyalty.known
+          ? ({ onEditMenu }) => <PromoProgramSettings onEditMenu={onEditMenu} disabled={!loyalty.enabled} />
+          : null
       }
     />
   );

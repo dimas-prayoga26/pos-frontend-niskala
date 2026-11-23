@@ -1770,9 +1770,10 @@ const MenuManagement = ({ onCreateIngredient, renderPromoHeader = null }) => {
               </div>
             </label>
             {/* Hadiah Stamp Card: given by Tukar for the reward picked here,
-                never sold from the grid. Only while the stamp card is on
-                (Menu → Promo); the menu keeps its kind while it is off. */}
-            {isBundleForm && isLoyaltyProgramActive && (
+                never sold from the grid. With loyalty off (Pengaturan → API)
+                or the stamp card off it stays listed, disabled; the menu
+                keeps its kind meanwhile. */}
+            {isBundleForm && (
               <div className="mt-4 text-sm font-semibold text-[#ababab]">
                 <span>Jenis promo</span>
                 <select
@@ -1783,7 +1784,9 @@ const MenuManagement = ({ onCreateIngredient, renderPromoHeader = null }) => {
                 >
                   <option value="paket">Paket biasa</option>
                   {/* (API): it works through the loyalty key of Pengaturan → API. */}
-                  <option value="loyalty">Hadiah Stamp Card (API)</option>
+                  <option value="loyalty" disabled={!isLoyaltyProgramActive}>
+                    {isLoyaltyProgramActive ? "Hadiah Stamp Card (API)" : "Hadiah Stamp Card (API) · nonaktif"}
+                  </option>
                 </select>
                 {menuForm.isLoyaltyPromo && (
                   <>
@@ -1792,11 +1795,12 @@ const MenuManagement = ({ onCreateIngredient, renderPromoHeader = null }) => {
                       value={menuForm.loyaltyRewardId}
                       onChange={(event) => updateMenuForm("loyaltyRewardId", event.target.value)}
                       aria-label="Hadiah Stamp Card"
-                      className={`mt-2 w-full cursor-pointer rounded-lg border border-[#3a3a3a] bg-[#262626] px-4 py-3 text-sm font-semibold outline-none focus:border-[#a79981] ${
+                      disabled={!isLoyaltyProgramActive}
+                      className={`mt-2 w-full cursor-pointer rounded-lg border border-[#3a3a3a] bg-[#262626] px-4 py-3 text-sm font-semibold outline-none focus:border-[#a79981] disabled:cursor-not-allowed disabled:opacity-60 ${
                         menuForm.loyaltyRewardId ? "text-[#f5f5f5]" : "text-amber-300"
                       }`}
                     >
-                      <option value="">Pilih hadiah</option>
+                      <option value="">{isLoyaltyProgramActive ? "Pilih hadiah" : "Loyalty nonaktif"}</option>
                       {loyaltyRewardOptions.map((option) => (
                         <option key={option.id} value={option.id}>
                           {option.text}

@@ -85,9 +85,13 @@ const LoyaltyStatus = ({ phone }) => {
     dispatch(removeLoyaltyItemsNotFor(programOff ? "" : trimmed));
   }, [dispatch, trimmed, programOff]);
 
-  if (!loyaltyApi.enabled || !enabled || trimmed !== debouncedPhone || programOff) return null;
-
   const box = "mt-2 rounded-lg bg-[#1a1a1a] px-3 py-2 text-xs";
+
+  // Loyalty off in Pengaturan → API: said, greyed out, nothing looked up.
+  if (loyaltyApi.known && !loyaltyApi.enabled) {
+    return enabled && trimmed === debouncedPhone ? <p className={`${box} text-[#777]`}>Loyalty nonaktif.</p> : null;
+  }
+  if (!loyaltyApi.enabled || !enabled || trimmed !== debouncedPhone || programOff) return null;
 
   if (programQuery.isError || error) {
     return <p className={`${box} text-[#ababab]`}>{errorMessage(programQuery.error || error)}</p>;

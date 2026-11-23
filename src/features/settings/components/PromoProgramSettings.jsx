@@ -14,14 +14,16 @@ const errorMessage = (error, fallback) => error?.response?.data?.message || fall
 // its rewards and Riwayat. Off, the cashier sees no stamp card, no order
 // earns a stamp and no reward is given (the stamps stay). The menu each
 // reward gives is picked in the promo form (Jenis promo: Hadiah Stamp Card);
-// onEditMenu(menuItemId) opens it from its reward's row.
-export default function PromoProgramSettings({ onEditMenu = null }) {
+// onEditMenu(menuItemId) opens it from its reward's row. disabled: loyalty is
+// off in Pengaturan → API; the card stays, greyed out, and asks nothing.
+export default function PromoProgramSettings({ onEditMenu = null, disabled = false }) {
   const queryClient = useQueryClient();
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const closeHistory = useCallback(() => setIsHistoryOpen(false), []);
   const programQuery = useQuery({
     queryKey: ["loyalty-program"],
     queryFn: getLoyaltyProgram,
+    enabled: !disabled,
     retry: false,
   });
   const program = programQuery.data?.data?.data;
@@ -50,6 +52,24 @@ export default function PromoProgramSettings({ onEditMenu = null }) {
     onError: (error) => enqueueSnackbar(errorMessage(error, "Gagal mengubah hadiah."), { variant: "error" }),
   });
 
+  if (disabled) {
+    return (
+      <div aria-disabled="true" className="opacity-60">
+        <SettingCard
+          icon={<MdRedeem size={20} />}
+          title="Stamp Card"
+          warning="Loyalty nonaktif: aktifkan di Pengaturan → API."
+          actions={<Switch checked={false} onChange={() => {}} label="Stamp Card" disabled />}
+          footer={
+            <button type="button" disabled className={`inline-flex items-center gap-1.5 ${cardButtonClass}`}>
+              <MdHistory size={16} />
+              Riwayat
+            </button>
+          }
+        />
+      </div>
+    );
+  }
   if (programQuery.isPending) {
     return <p className="rounded-lg bg-[#1f1f1f] p-6 text-center text-sm text-[#ababab]">Memuat program promo...</p>;
   }
