@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   keepPreviousData,
   useMutation,
@@ -18,7 +18,9 @@ import {
   getStockItems,
   uploadMenuImage,
   updateCategory,
+  setMenuItemAvailability,
   updateCategoryPositions,
+  updateLoyaltyReward,
   updateMenuItem,
 } from "../../https";
 import { formatCurrency } from "../../utils";
@@ -27,7 +29,11 @@ import CreatableSelect2 from "../shared/CreatableSelect2";
 import MultiSelect2 from "../../shared/ui/MultiSelect2";
 import { bundleContentsText } from "../../features/pos/utils/bundleChoices";
 import { loyaltyRewardOptionLabel } from "../../features/pos/utils/loyaltyReward";
-import { MdErrorOutline } from "react-icons/md";
+import useLoyaltyEnabled from "../../shared/lib/useLoyaltyEnabled";
+import SettingCard, { cardButtonClass, cardDangerButtonClass } from "../../shared/ui/SettingCard";
+import Switch from "../../shared/ui/Switch";
+import PromoSalesDialog from "./PromoSalesDialog";
+import { MdErrorOutline, MdHistory, MdLocalOffer, MdRedeem } from "react-icons/md";
 
 const iconOptions = [
   "☕",
@@ -121,8 +127,10 @@ const emptyMenuForm = {
   ingredients: [],
   bundleItems: [],
   discountPercent: "",
-  // Jenis promo: Promo loyalty (given by Tukar, never sold) or Promo biasa.
+  // Jenis promo: Hadiah Stamp Card (given by Tukar, never sold; stored as
+  // isLoyaltyPromo) or Paket biasa. loyaltyRewardId: the reward it gives.
   isLoyaltyPromo: false,
+  loyaltyRewardId: "",
   imageFile: null,
   imagePath: "",
 };
@@ -335,9 +343,11 @@ const formatMoneyDisplay = (value) =>
 
 // onCreateIngredient(kind, name): a recipe bahan the search did not find,
 // made at Stok Bahan ("raw" Tambah Bahan, "semi" Tambah Bahan Olahan).
-const MenuManagement = ({ onCreateIngredient }) => {
+// renderPromoHeader({ onEditMenu }): shown above the promos (the stamp card,
+// on develop); onEditMenu(menuItemId) opens a promo it shows.
+const MenuManagement = ({ onCreateIngredient, renderPromoHeader = null }) => {
   const queryClient = useQueryClient();
-  const [activeSection, setActiveSection] = useState("categories");
+  const [activeSection, setActiveSection] = useState("menus");
   const [categoryForm, setCategoryForm] = useState(emptyCategoryForm);
   const [menuForm, setMenuForm] = useState(emptyMenuForm);
   const newChoiceCount = useRef(0);
@@ -347,11 +357,16 @@ const MenuManagement = ({ onCreateIngredient }) => {
   const [isMenuFormOpen, setIsMenuFormOpen] = useState(false);
   const [categoryPendingDelete, setCategoryPendingDelete] = useState(null);
   const [menuPendingDelete, setMenuPendingDelete] = useState(null);
+  // The promo whose Riwayat (who bought it) is open.
+  const [salesMenu, setSalesMenu] = useState(null);
+  const closeSalesDialog = useCallback(() => setSalesMenu(null), []);
   const [categorySearch, setCategorySearch] = useState("");
   const [menuSearch, setMenuSearch] = useState("");
   const [menuCategoryFilter, setMenuCategoryFilter] = useState("");
-  const [categoryPage, setCategoryPage] = useState(1);
   const [menuPage, setMenuPage] = useState(1);
+  const [promoSearch, setPromoSearch] = useState("");
+  // What the open form makes: a menu (Menu Items) or a promo (Promo).
+  const [menuFormKind, setMenuFormKind] = useState("menu");
   const [imagePreviewUrl, setImagePreviewUrl] = useState("");
   const [isImagePreviewOpen, setIsImagePreviewOpen] = useState(false);
   const [draggedCategoryId, setDraggedCategoryId] = useState("");
@@ -382,6 +397,15 @@ const MenuManagement = ({ onCreateIngredient }) => {
 
   const categoriesData = categoriesRes?.data?.data;
   const categories = useMemo(() => categoriesData || [], [categoriesData]);
+  // Kategori Promo: their menus are listed in Promo, every other in Menu Items.
+  const promoCategoryIds = useMemo(
+    () => new Set(categories.filter((category) => category.isBundle).map(getCategoryId)),
+    [categories]
+  );
+  const isPromoMenu = useCallback(
+    (item) => promoCategoryIds.has(menuCategoryIdOf(item)) || isPackageMenu(item),
+    [promoCategoryIds]
+  );
   const menuItemsData = menuItemsRes?.data?.data;
   const menuItems = useMemo(() => menuItemsData || [], [menuItemsData]);
   const stockItemsData = stockItemsRes?.data?.data;
@@ -404,18 +428,32 @@ const MenuManagement = ({ onCreateIngredient }) => {
     categories.find((category) => getCategoryId(category) === String(menuForm.categoryId))
       ?.isBundle
   );
-  // Promo loyalty menus show which reward gives them, as linked in
-  // Program Promo (the stamp card's rewards).
+  // The stamp card's rewards (Pengaturan → Stamp Card). A Hadiah Stamp Card
+  // promo picks its reward here; the reward keeps the link (promo_menu_item_id).
+  // No loyalty key in Pengaturan → API: no stamp card, no Hadiah Stamp Card.
+  const loyaltyApi = useLoyaltyEnabled();
   const { data: loyaltyProgramRes } = useQuery({
     queryKey: ["loyalty-program"],
     queryFn: getLoyaltyProgram,
+    enabled: loyaltyApi.enabled,
     retry: false,
   });
-  const loyaltyRewards = loyaltyProgramRes?.data?.data?.rewards || [];
-  // Stamp Card off (or loyalty unreachable): no Jenis promo switch.
-  const isLoyaltyProgramActive = Boolean(loyaltyProgramRes?.data?.data?.active);
+  const loyaltyRewardsData = loyaltyProgramRes?.data?.data?.rewards;
+  const loyaltyRewards = useMemo(() => loyaltyRewardsData || [], [loyaltyRewardsData]);
+  // Stamp Card off (or loyalty unreachable): no Jenis promo dropdown.
+  const isLoyaltyProgramActive = loyaltyApi.enabled && Boolean(loyaltyProgramRes?.data?.data?.active);
   const linkedRewardsOf = (menuItemId) =>
     loyaltyRewards.filter((reward) => Number(reward.promo_menu_item_id) === Number(menuItemId));
+  // Hadiah options; a reward another menu gives says which (picking it moves it here).
+  const loyaltyRewardOptions = loyaltyRewards.map((reward) => {
+    const givenBy = Number(reward.promo_menu_item_id);
+    const otherMenu =
+      givenBy && givenBy !== Number(getMenuItemId(editingMenuItem)) ? menuItemsById.get(String(givenBy)) : null;
+    return {
+      id: String(reward.id),
+      text: `${loyaltyRewardOptionLabel(reward.stamps, loyaltyRewards)}${otherMenu ? ` (dipakai ${otherMenu.name})` : ""}`,
+    };
+  });
   // A promo sells at its price less its discount percent (e.g. 100% for a
   // Google Maps review).
   const discountText = String(menuForm.discountPercent ?? "").trim().replace(",", ".");
@@ -488,27 +526,20 @@ const MenuManagement = ({ onCreateIngredient }) => {
       })),
     [categories]
   );
-  // The menu form groups the Kategori Promo apart: their menus are packages of
-  // menus already listed in the other categories.
+  // A menu is made in Menu Items (a Category Menu), a promo in Promo (a
+  // Kategori Promo: a package of menus already listed in the others).
   const menuFormCategoryOptions = useMemo(() => {
-    const isPromo = (option) =>
-      categories.some(
-        (category) => getCategoryId(category) === option.id && category.isBundle
-      );
-    const ordinary = categorySelectOptions.filter((option) => !isPromo(option));
-    const promos = categorySelectOptions.filter(isPromo);
-
-    return [
-      { id: "", text: "Pilih category" },
-      ...(promos.length && ordinary.length
-        ? [{ text: "Category Menu", children: ordinary }]
-        : ordinary),
-      ...(promos.length ? [{ text: "Kategori Promo (isi dari menu yang sudah ada)", children: promos }] : []),
-    ];
-  }, [categories, categorySelectOptions]);
+    const ofKind = categorySelectOptions.filter(
+      (option) => promoCategoryIds.has(option.id) === (menuFormKind === "promo")
+    );
+    return [{ id: "", text: menuFormKind === "promo" ? "Pilih kategori promo" : "Pilih category" }, ...ofKind];
+  }, [categorySelectOptions, promoCategoryIds, menuFormKind]);
   const menuCategoryFilterOptions = useMemo(
-    () => [{ id: "", text: "Semua kategori" }, ...categorySelectOptions],
-    [categorySelectOptions]
+    () => [
+      { id: "", text: "Semua kategori" },
+      ...categorySelectOptions.filter((option) => !promoCategoryIds.has(option.id)),
+    ],
+    [categorySelectOptions, promoCategoryIds]
   );
   // The options of each kind. Only bahan resep are offered (Stok → Bahan
   // Baku), plus what the form already uses.
@@ -634,8 +665,28 @@ const MenuManagement = ({ onCreateIngredient }) => {
     },
   });
 
+  // Hadiah Stamp Card: the reward picked gives this menu; any other reward
+  // that gave it lets go (a Paket biasa gives none). Skipped while the stamp
+  // card is off: the links stay as they are.
+  const linkLoyaltyRewards = async (menuItemId, rewardId) => {
+    if (!isLoyaltyProgramActive || !menuItemId) return false;
+
+    const changes = loyaltyRewards
+      .map((reward) => {
+        const isPicked = String(reward.id) === String(rewardId);
+        const givesThis = Number(reward.promo_menu_item_id) === Number(menuItemId);
+        if (isPicked && !givesThis) return { id: reward.id, promoMenuItemId: Number(menuItemId) };
+        if (!isPicked && givesThis) return { id: reward.id, promoMenuItemId: null };
+        return null;
+      })
+      .filter(Boolean);
+    for (const change of changes) await updateLoyaltyReward(change);
+
+    return changes.length > 0;
+  };
+
   const menuItemMutation = useMutation({
-    mutationFn: async ({ imageFile, ...payload }) => {
+    mutationFn: async ({ imageFile, loyaltyRewardId, ...payload }) => {
       let imagePath = payload.imagePath;
 
       if (imageFile) {
@@ -647,19 +698,34 @@ const MenuManagement = ({ onCreateIngredient }) => {
 
       const nextPayload = { ...payload, imagePath };
 
-      return editingMenuItem
-        ? updateMenuItem({
+      const response = editingMenuItem
+        ? await updateMenuItem({
             menuItemId: editingMenuItem.id || editingMenuItem._id,
             ...nextPayload,
           })
-        : addMenuItem(nextPayload);
+        : await addMenuItem(nextPayload);
+
+      // The menu is saved; a reward that fails to follow is only reported.
+      const menuItemId = getMenuItemId(editingMenuItem) || getMenuItemId(response?.data?.data);
+      try {
+        return { linkedRewards: await linkLoyaltyRewards(menuItemId, loyaltyRewardId) };
+      } catch (error) {
+        return { linkError: error };
+      }
     },
-    onSuccess: () => {
+    onSuccess: ({ linkedRewards, linkError } = {}) => {
       refreshMenuData();
+      if (linkedRewards || linkError) queryClient.invalidateQueries({ queryKey: ["loyalty-program"] });
       enqueueSnackbar(
         editingMenuItem ? "Menu berhasil diubah." : "Menu berhasil ditambahkan.",
         { variant: "success" }
       );
+      if (linkError) {
+        enqueueSnackbar(
+          `Hadiah Stamp Card gagal dihubungkan: ${linkError?.response?.data?.message || "coba simpan lagi."}`,
+          { variant: "warning" }
+        );
+      }
       setMenuForm(emptyMenuForm);
       setEditingMenuItem(null);
       setIsMenuFormOpen(false);
@@ -685,6 +751,18 @@ const MenuManagement = ({ onCreateIngredient }) => {
     },
   });
 
+  // The switch on a promo card: Tersedia on/off, nothing else saved.
+  const availabilityMutation = useMutation({
+    mutationFn: setMenuItemAvailability,
+    onSuccess: (_response, { isAvailable }) => {
+      refreshMenuData();
+      enqueueSnackbar(isAvailable ? "Promo diaktifkan." : "Promo dinonaktifkan.", { variant: "success" });
+    },
+    onError: (error) => {
+      enqueueSnackbar(error?.response?.data?.message || "Gagal mengubah status promo.", { variant: "error" });
+    },
+  });
+
   const menuDeleteMutation = useMutation({
     mutationFn: deleteMenuItem,
     onSuccess: () => {
@@ -699,23 +777,35 @@ const MenuManagement = ({ onCreateIngredient }) => {
     },
   });
 
+  // One list: the active categories in their POS order (dragged to move),
+  // then the inactive ones.
+  const orderedCategories = useMemo(
+    () => [...positionCategories, ...categories.filter((category) => category.isActive === false)],
+    [categories, positionCategories]
+  );
+  const positionOf = (category) =>
+    positionCategories.findIndex((candidate) => getCategoryId(candidate) === getCategoryId(category)) + 1;
+  // While searching the rows are a subset: no dragging.
+  const canReorderCategories = !categorySearch.trim() && !categoryPositionMutation.isPending;
   const filteredCategories = useMemo(() => {
     const keyword = categorySearch.trim().toLowerCase();
-    if (!keyword) return categories;
+    if (!keyword) return orderedCategories;
 
-    return categories.filter((category) =>
+    return orderedCategories.filter((category) =>
       [category.name, category.icon, category.taxRate ?? category.tax ?? ""]
         .join(" ")
         .toLowerCase()
         .includes(keyword)
     );
-  }, [categories, categorySearch]);
+  }, [orderedCategories, categorySearch]);
 
+  // Menu Items: the menus sold, never a promo (listed in Promo).
   const filteredMenuItems = useMemo(() => {
     const keyword = menuSearch.trim().toLowerCase();
     const selectedCategoryId = String(menuCategoryFilter || "");
 
     return menuItems.filter((item) =>
+      !isPromoMenu(item) &&
       (!selectedCategoryId ||
         String(item.categoryId || item.category?.id || item.category?._id) ===
           selectedCategoryId) &&
@@ -731,30 +821,29 @@ const MenuManagement = ({ onCreateIngredient }) => {
           .toLowerCase()
           .includes(keyword))
     );
-  }, [menuItems, menuSearch, menuCategoryFilter]);
-
-  const categoryTotalPages = Math.max(
-    1,
-    Math.ceil(filteredCategories.length / ITEMS_PER_PAGE)
+  }, [menuItems, menuSearch, menuCategoryFilter, isPromoMenu]);
+  // Promo: every Kategori Promo menu (Paket biasa and Hadiah Stamp Card).
+  const promoMenus = useMemo(() => {
+    const keyword = promoSearch.trim().toLowerCase();
+    return menuItems.filter(
+      (item) =>
+        isPromoMenu(item) &&
+        (!keyword || [item.name, item.category?.name, bundleContentsText(item)].join(" ").toLowerCase().includes(keyword))
+    );
+  }, [menuItems, promoSearch, isPromoMenu]);
+  // A card each, except a Hadiah Stamp Card the stamp card above already
+  // shows on its reward's row.
+  const promoCards = promoMenus.filter(
+    (item) => !(renderPromoHeader && item.isLoyaltyPromo && linkedRewardsOf(item.id).length > 0)
   );
+
   const menuTotalPages = Math.max(
     1,
     Math.ceil(filteredMenuItems.length / ITEMS_PER_PAGE)
   );
-  const paginatedCategories = filteredCategories.slice(
-    (categoryPage - 1) * ITEMS_PER_PAGE,
-    categoryPage * ITEMS_PER_PAGE
-  );
   const paginatedMenuItems = filteredMenuItems.slice(
     (menuPage - 1) * ITEMS_PER_PAGE,
     menuPage * ITEMS_PER_PAGE
-  );
-  const categoryStart = filteredCategories.length
-    ? (categoryPage - 1) * ITEMS_PER_PAGE + 1
-    : 0;
-  const categoryEnd = Math.min(
-    categoryPage * ITEMS_PER_PAGE,
-    filteredCategories.length
   );
   const menuStart = filteredMenuItems.length
     ? (menuPage - 1) * ITEMS_PER_PAGE + 1
@@ -790,18 +879,8 @@ const MenuManagement = ({ onCreateIngredient }) => {
   const isGrossProfitAuto = !isBundleForm || isDiscountPromo;
 
   useEffect(() => {
-    setCategoryPage(1);
-  }, [categorySearch]);
-
-  useEffect(() => {
     setMenuPage(1);
   }, [menuSearch, menuCategoryFilter]);
-
-  useEffect(() => {
-    if (categoryPage > categoryTotalPages) {
-      setCategoryPage(categoryTotalPages);
-    }
-  }, [categoryPage, categoryTotalPages]);
 
   useEffect(() => {
     if (menuPage > menuTotalPages) {
@@ -813,7 +892,7 @@ const MenuManagement = ({ onCreateIngredient }) => {
     setCategoryForm((current) => ({ ...current, [field]: value }));
   };
 
-  // Promo loyalty is a free promo: switching to it sets Harga 0 and Diskon 100%.
+  // Hadiah Stamp Card is a free promo: switching to it sets Harga 0 and Diskon 100%.
   const updateLoyaltyPromo = (isLoyaltyPromo) =>
     setMenuForm((current) => ({
       ...current,
@@ -1111,7 +1190,12 @@ const MenuManagement = ({ onCreateIngredient }) => {
 
     const isLoyaltyPromo = isBundleForm && Boolean(menuForm.isLoyaltyPromo);
     if (isLoyaltyPromo && (parseMoneyInput(menuForm.regularPrice) !== 0 || promoDiscount !== 100)) {
-      enqueueSnackbar("Promo loyalty harus Harga 0 dan Diskon 100%.", { variant: "warning" });
+      enqueueSnackbar("Hadiah Stamp Card harus Harga 0 dan Diskon 100%.", { variant: "warning" });
+      return;
+    }
+    // Picked here with the promo (only while the stamp card is on).
+    if (isLoyaltyPromo && isLoyaltyProgramActive && !menuForm.loyaltyRewardId) {
+      enqueueSnackbar("Pilih hadiah Stamp Card-nya.", { variant: "warning" });
       return;
     }
 
@@ -1157,6 +1241,7 @@ const MenuManagement = ({ onCreateIngredient }) => {
       bundleChoices,
       discountPercent: isBundleForm ? promoDiscount : 0,
       isLoyaltyPromo,
+      loyaltyRewardId: isLoyaltyPromo ? menuForm.loyaltyRewardId : "",
       imageFile: menuForm.imageFile,
       imagePath: menuForm.imagePath.trim(),
       isAvailable: Boolean(menuForm.isAvailable),
@@ -1214,6 +1299,7 @@ const MenuManagement = ({ onCreateIngredient }) => {
       })),
     ];
     setEditingMenuItem(item);
+    setMenuFormKind(isPromoMenu(item) ? "promo" : "menu");
     setIsMenuFormOpen(true);
     setMenuForm({
       categoryId: String(item.categoryId || item.category?.id || ""),
@@ -1222,6 +1308,7 @@ const MenuManagement = ({ onCreateIngredient }) => {
       regularPrice: String(item.regularPrice ?? item.price ?? ""),
       discountPercent: Number(item.discountPercent) > 0 ? String(item.discountPercent) : "",
       isLoyaltyPromo: Boolean(item.isLoyaltyPromo),
+      loyaltyRewardId: item.isLoyaltyPromo ? String(linkedRewardsOf(getMenuItemId(item))[0]?.id ?? "") : "",
       includeOnlinePlatform: Boolean(item.includeOnlinePlatform),
       onlinePrice:
         item.onlinePrice === null || item.onlinePrice === undefined
@@ -1248,7 +1335,27 @@ const MenuManagement = ({ onCreateIngredient }) => {
 
   const startCreateMenuItem = () => {
     setEditingMenuItem(null);
+    setMenuFormKind("menu");
     setMenuForm(emptyMenuForm);
+    setIsMenuFormOpen(true);
+  };
+
+  // Ubah on a reward's row of the stamp card.
+  const editMenuById = (menuItemId) => {
+    const item = menuItemsById.get(String(menuItemId));
+    if (item) startEditMenuItem(item);
+  };
+  // + Tambah Promo: with one Kategori Promo (PROMO) it is picked, and the
+  // promo starts with one empty box to fill.
+  const startCreatePromo = () => {
+    const onlyPromoCategory = promoCategoryIds.size === 1 ? [...promoCategoryIds][0] : "";
+    setEditingMenuItem(null);
+    setMenuFormKind("promo");
+    setMenuForm({
+      ...emptyMenuForm,
+      categoryId: onlyPromoCategory,
+      bundleItems: onlyPromoCategory ? [newChoiceLine()] : [],
+    });
     setIsMenuFormOpen(true);
   };
 
@@ -1333,14 +1440,16 @@ const MenuManagement = ({ onCreateIngredient }) => {
             Kelola category dan item menu untuk POS.
           </p>
         </div>
-        <div className="flex rounded-lg bg-[#1f1f1f] p-1">
+        <div role="group" aria-label="Jenis data menu" className="flex rounded-lg bg-[#1f1f1f] p-1">
           {[
-            ["categories", "Categories"],
             ["menus", "Menu Items"],
+            ["promos", "Promo"],
+            ["categories", "Categories"],
           ].map(([key, label]) => (
             <button
               key={key}
               type="button"
+              aria-pressed={activeSection === key}
               onClick={() => setActiveSection(key)}
               className={`rounded-md px-4 py-2 text-sm font-bold ${
                 activeSection === key
@@ -1485,77 +1594,12 @@ const MenuManagement = ({ onCreateIngredient }) => {
             <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <h3 className="text-lg font-bold text-[#f5f5f5]">
-                  Position Categories
-                </h3>
-                <p className="mt-1 text-sm text-[#ababab]">
-                  Atur posisi card category yang tampil di POS.
-                </p>
-              </div>
-              <span
-                className={`w-fit rounded-md px-3 py-1 text-xs font-bold ${
-                  categoryPositionMutation.isPending
-                    ? "bg-amber-900/50 text-amber-200"
-                    : "bg-[#262626] text-[#ababab]"
-                }`}
-              >
-                {categoryPositionMutation.isPending ? "Menyimpan..." : "Auto save"}
-              </span>
-            </div>
-            <div className="rounded-lg border border-[#333] bg-[#262626] p-3">
-              <div className="grid grid-cols-1 gap-2 md:grid-cols-2 lg:grid-cols-4">
-                {positionCategories.map((category, index) => {
-                  const categoryId = getCategoryId(category);
-                  const isDragging = draggedCategoryId === categoryId;
-
-                  return (
-                    <div
-                      key={categoryId}
-                      draggable
-                      onDragStart={() => handleCategoryDragStart(category)}
-                      onDragOver={(event) => event.preventDefault()}
-                      onDrop={(event) => {
-                        event.preventDefault();
-                        handleCategoryDrop(category);
-                      }}
-                      onDragEnd={() => setDraggedCategoryId("")}
-                      className={`flex min-h-[52px] cursor-move items-center gap-3 rounded-lg border px-3 py-2 transition ${
-                        isDragging
-                          ? "border-[#a79981] bg-[#3a342b] opacity-70"
-                          : "border-[#3a3a3a] bg-[#1f1f1f] hover:border-[#a79981]"
-                      }`}
-                    >
-                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-[#333] text-lg">
-                        {category.icon || "-"}
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-bold text-[#f5f5f5]">
-                          {category.name}
-                        </p>
-                        <p className="text-xs font-semibold text-[#777]">
-                          Position {index + 1}
-                        </p>
-                      </div>
-                      <span className="text-lg leading-none text-[#777]">⋮⋮</span>
-                    </div>
-                  );
-                })}
-              </div>
-              {positionCategories.length === 0 && (
-                <div className="rounded-lg bg-[#1f1f1f] p-4 text-center text-sm text-[#ababab]">
-                  No active categories found
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div className="rounded-lg bg-[#1f1f1f] p-4">
-            <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <h3 className="text-lg font-bold text-[#f5f5f5]">
                   Categories
                 </h3>
                 <p className="mt-1 text-sm text-[#ababab]">
-                  Daftar category, tax, dan status.
+                  {categoryPositionMutation.isPending
+                    ? "Menyimpan urutan..."
+                    : "Geser baris untuk mengatur urutan di POS."}
                 </p>
               </div>
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
@@ -1588,13 +1632,43 @@ const MenuManagement = ({ onCreateIngredient }) => {
                   </tr>
                 </thead>
                 <tbody>
-                  {paginatedCategories.map((category, index) => (
+                  {filteredCategories.map((category) => {
+                    const categoryId = getCategoryId(category);
+                    const position = positionOf(category);
+                    // An active category is dragged to its place (not while searching).
+                    const isDraggable = canReorderCategories && position > 0;
+                    const isDragging = draggedCategoryId === categoryId;
+
+                    return (
                     <tr
-                      key={category.id || category._id}
-                      className="border-b border-gray-600 hover:bg-[#333]"
+                      key={categoryId}
+                      draggable={isDraggable}
+                      onDragStart={isDraggable ? () => handleCategoryDragStart(category) : undefined}
+                      onDragOver={isDraggable ? (event) => event.preventDefault() : undefined}
+                      onDrop={
+                        isDraggable
+                          ? (event) => {
+                              event.preventDefault();
+                              handleCategoryDrop(category);
+                            }
+                          : undefined
+                      }
+                      onDragEnd={() => setDraggedCategoryId("")}
+                      className={`border-b border-gray-600 hover:bg-[#333] ${isDraggable ? "cursor-move" : ""} ${
+                        isDragging ? "bg-[#3a342b] opacity-70" : ""
+                      }`}
                     >
                       <td className="p-4 text-center font-bold text-[#ababab]">
-                        {(categoryPage - 1) * ITEMS_PER_PAGE + index + 1}
+                        {position > 0 ? (
+                          <span className="inline-flex items-center gap-2">
+                            {isDraggable && (
+                              <span aria-hidden="true" className="text-[#777]">⋮⋮</span>
+                            )}
+                            {position}
+                          </span>
+                        ) : (
+                          "-"
+                        )}
                       </td>
                       <td className="p-4 text-xl">{category.icon || "-"}</td>
                       <td className="p-4 font-semibold">
@@ -1640,7 +1714,8 @@ const MenuManagement = ({ onCreateIngredient }) => {
                         </div>
                       </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                   {filteredCategories.length === 0 && (
                     <tr>
                       <td className="p-4 text-center text-[#ababab]" colSpan={6}>
@@ -1651,44 +1726,12 @@ const MenuManagement = ({ onCreateIngredient }) => {
                 </tbody>
               </table>
             </div>
-            <div className="mt-4 flex flex-col gap-3 text-sm text-[#ababab] sm:flex-row sm:items-center sm:justify-between">
-              <span>
-                Showing {categoryStart} - {categoryEnd} of{" "}
-                {filteredCategories.length}
-              </span>
-              <div className="flex items-center gap-3">
-                <button
-                  type="button"
-                  onClick={() => setCategoryPage((page) => Math.max(1, page - 1))}
-                  disabled={categoryPage === 1}
-                  className="rounded-lg bg-[#262626] px-3 py-2 font-bold text-[#f5f5f5] disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                  Prev
-                </button>
-                <span className="font-bold text-[#f5f5f5]">
-                  {categoryPage} / {categoryTotalPages}
-                </span>
-                <button
-                  type="button"
-                  onClick={() =>
-                    setCategoryPage((page) =>
-                      Math.min(categoryTotalPages, page + 1)
-                    )
-                  }
-                  disabled={categoryPage === categoryTotalPages}
-                  className="rounded-lg bg-[#262626] px-3 py-2 font-bold text-[#f5f5f5] disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                  Next
-                </button>
-              </div>
-            </div>
           </div>
         </div>
       )}
 
-      {activeSection === "menus" && (
-        <div className="space-y-4">
-          {isMenuFormOpen && (
+      {/* The menu form: a menu from Menu Items, a promo from Promo. */}
+      {isMenuFormOpen && (
             <div className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-black/70 p-4">
               <form
                 id="menu-form-panel"
@@ -1698,7 +1741,7 @@ const MenuManagement = ({ onCreateIngredient }) => {
             <div className="mb-4 flex flex-col gap-2 border-b border-[#333] pb-4 sm:flex-row sm:items-start sm:justify-between">
               <div>
                 <h3 className="text-lg font-bold text-[#f5f5f5]">
-                  {editingMenuItem ? "Ubah Menu" : "Tambah Menu"}
+                  {`${editingMenuItem ? "Ubah" : "Tambah"} ${menuFormKind === "promo" ? "Promo" : "Menu"}`}
                 </h3>
                 <p className="mt-1 text-sm text-[#ababab]">
                   {isBundleForm
@@ -1726,32 +1769,42 @@ const MenuManagement = ({ onCreateIngredient }) => {
                 />
               </div>
             </label>
-            {/* Promo loyalty: given by Tukar for a reward (which one: Program
-                Promo), never sold from the grid. Only while the stamp
-                card is on there; the menu keeps its kind while it is off. */}
+            {/* Hadiah Stamp Card: given by Tukar for the reward picked here,
+                never sold from the grid. Only while the stamp card is on
+                (Menu → Promo); the menu keeps its kind while it is off. */}
             {isBundleForm && isLoyaltyProgramActive && (
-              <div className="mt-4 block text-sm font-semibold text-[#ababab]">
-                Jenis promo
-                <div role="group" aria-label="Jenis promo" className="mt-2 flex gap-1 rounded-lg bg-[#262626] p-1">
-                  {[
-                    { value: false, label: "Promo biasa" },
-                    { value: true, label: "Promo loyalty" },
-                  ].map((option) => (
-                    <button
-                      key={option.label}
-                      type="button"
-                      aria-pressed={Boolean(menuForm.isLoyaltyPromo) === option.value}
-                      onClick={() => updateLoyaltyPromo(option.value)}
-                      className={`flex-1 rounded-md px-3 py-2 text-sm font-bold transition ${
-                        Boolean(menuForm.isLoyaltyPromo) === option.value
-                          ? "bg-[#a79981] text-[#101010]"
-                          : "text-[#ababab] hover:text-[#f5f5f5]"
+              <div className="mt-4 text-sm font-semibold text-[#ababab]">
+                <span>Jenis promo</span>
+                <select
+                  value={menuForm.isLoyaltyPromo ? "loyalty" : "paket"}
+                  onChange={(event) => updateLoyaltyPromo(event.target.value === "loyalty")}
+                  aria-label="Jenis promo"
+                  className="mt-2 w-full cursor-pointer rounded-lg border border-[#3a3a3a] bg-[#262626] px-4 py-3 text-sm font-semibold text-[#f5f5f5] outline-none focus:border-[#a79981]"
+                >
+                  <option value="paket">Paket biasa</option>
+                  {/* (API): it works through the loyalty key of Pengaturan → API. */}
+                  <option value="loyalty">Hadiah Stamp Card (API)</option>
+                </select>
+                {menuForm.isLoyaltyPromo && (
+                  <>
+                    <span className="mt-4 block">Hadiah</span>
+                    <select
+                      value={menuForm.loyaltyRewardId}
+                      onChange={(event) => updateMenuForm("loyaltyRewardId", event.target.value)}
+                      aria-label="Hadiah Stamp Card"
+                      className={`mt-2 w-full cursor-pointer rounded-lg border border-[#3a3a3a] bg-[#262626] px-4 py-3 text-sm font-semibold outline-none focus:border-[#a79981] ${
+                        menuForm.loyaltyRewardId ? "text-[#f5f5f5]" : "text-amber-300"
                       }`}
                     >
-                      {option.label}
-                    </button>
-                  ))}
-                </div>
+                      <option value="">Pilih hadiah</option>
+                      {loyaltyRewardOptions.map((option) => (
+                        <option key={option.id} value={option.id}>
+                          {option.text}
+                        </option>
+                      ))}
+                    </select>
+                  </>
+                )}
               </div>
             )}
             <label className="mt-4 block text-sm font-semibold text-[#ababab]">
@@ -2206,6 +2259,104 @@ const MenuManagement = ({ onCreateIngredient }) => {
             </div>
           )}
 
+      {activeSection === "promos" && (
+        <div className="space-y-4">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
+            <input
+              value={promoSearch}
+              onChange={(event) => setPromoSearch(event.target.value)}
+              type="search"
+              placeholder="Search promo"
+              className="rounded-lg bg-[#1f1f1f] px-4 py-2 text-sm text-[#f5f5f5] outline-none"
+            />
+            <button
+              type="button"
+              onClick={startCreatePromo}
+              className="rounded-lg bg-[#a79981] px-4 py-2 text-sm font-bold text-[#101010] hover:bg-[#b7aa94]"
+            >
+              Tambah Promo
+            </button>
+          </div>
+          {/* The stamp card, its rewards and the menu each gives (Ubah opens it). */}
+          {renderPromoHeader?.({ onEditMenu: editMenuById })}
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            {promoCards.map((item) => {
+              const rewards = item.isLoyaltyPromo ? linkedRewardsOf(item.id) : [];
+              const contents = bundleContentsText(item);
+              // Gratis · Hadiah Stamp Card · Stamp ke-5 ..., or Rp 20.000 · diskon 20% · Online.
+              const summary = item.isLoyaltyPromo
+                ? [
+                    "Gratis",
+                    "Hadiah Stamp Card",
+                    !loyaltyApi.enabled
+                      ? "loyalty tidak aktif"
+                      : rewards.length
+                        ? rewards.map((reward) => loyaltyRewardOptionLabel(reward.stamps, loyaltyRewards)).join(", ")
+                        : "belum dipilih hadiahnya",
+                  ]
+                : [
+                    formatCurrency(item.regularPrice ?? item.price),
+                    Number(item.discountPercent) > 0 ? `diskon ${Number(item.discountPercent)}%` : null,
+                    item.includeOnlinePlatform ? "Online" : null,
+                  ];
+
+              return (
+                <SettingCard
+                  key={getMenuItemId(item)}
+                  icon={item.isLoyaltyPromo ? <MdRedeem size={20} /> : <MdLocalOffer size={20} />}
+                  title={item.name}
+                  subtitle={summary.filter(Boolean).join(" · ")}
+                  note={contents}
+                  warning={item.isAvailable === false ? "Tidak tersedia: tidak tampil di kasir." : null}
+                  // On (top right): sold at the cashier (Tersedia).
+                  actions={
+                    <Switch
+                      checked={item.isAvailable !== false}
+                      onChange={(isAvailable) =>
+                        availabilityMutation.mutate({ menuItemId: getMenuItemId(item), isAvailable })
+                      }
+                      label={item.name}
+                      disabled={availabilityMutation.isPending}
+                    />
+                  }
+                  footer={
+                    <>
+                      {/* Who bought it. */}
+                      <button
+                        type="button"
+                        onClick={() => setSalesMenu(item)}
+                        aria-label={`Riwayat ${item.name}`}
+                        className={`inline-flex items-center gap-1.5 ${cardButtonClass}`}
+                      >
+                        <MdHistory size={16} />
+                        Riwayat
+                      </button>
+                      <button type="button" onClick={() => startEditMenuItem(item)} className={cardButtonClass}>
+                        Ubah
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setMenuPendingDelete(item)}
+                        className={`ml-auto ${cardDangerButtonClass}`}
+                      >
+                        Hapus
+                      </button>
+                    </>
+                  }
+                />
+              );
+            })}
+          </div>
+          {!promoCards.length && (
+            <p className="rounded-lg bg-[#1f1f1f] p-6 text-center text-sm text-[#ababab]">
+              {promoSearch.trim() ? "Promo tidak ditemukan." : "Belum ada promo."}
+            </p>
+          )}
+        </div>
+      )}
+
+      {activeSection === "menus" && (
+        <div className="space-y-4">
           <div className="rounded-lg bg-[#1f1f1f] p-4">
             <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <div>
@@ -2267,16 +2418,6 @@ const MenuManagement = ({ onCreateIngredient }) => {
                         {(item.bundleItems?.length > 0 || item.bundleChoices?.length > 0) && (
                           <p className="mt-1 text-xs font-normal text-[#ababab]">
                             {bundleContentsText(item)}
-                          </p>
-                        )}
-                        {item.isLoyaltyPromo && (
-                          <p className="mt-1 text-xs font-semibold text-[#AFA087]">
-                            🎁 Promo loyalty ·{" "}
-                            {linkedRewardsOf(item.id).length
-                              ? linkedRewardsOf(item.id)
-                                  .map((reward) => loyaltyRewardOptionLabel(reward.stamps, loyaltyRewards))
-                                  .join(", ")
-                              : "belum dihubungkan di Program Promo"}
                           </p>
                         )}
                       </td>
@@ -2452,6 +2593,8 @@ const MenuManagement = ({ onCreateIngredient }) => {
           </div>
         </div>
       )}
+
+      {salesMenu && <PromoSalesDialog menu={salesMenu} onClose={closeSalesDialog} />}
 
       {menuPendingDelete && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">

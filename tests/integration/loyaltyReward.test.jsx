@@ -6,6 +6,8 @@ import { renderWithProviders } from "../renderWithProviders";
 
 vi.mock("../../src/https/index", async (importOriginal) => ({
   ...(await importOriginal()),
+  // Pengaturan → API: the loyalty key is set (a test may answer otherwise).
+  getIntegrationStatus: vi.fn(async () => ({ data: { success: true, data: { loyalty: true } } })),
   addOrder: vi.fn(),
   getCategories: vi.fn(),
   getMenuItems: vi.fn(),

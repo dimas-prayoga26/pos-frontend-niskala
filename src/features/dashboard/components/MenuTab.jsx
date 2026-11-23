@@ -1,23 +1,19 @@
-import { useState } from "react";
 import MenuManagement from "../../../components/dashboard/MenuManagement";
-import { PromoProgramPage } from "../../settings";
-import ViewSwitch from "./ViewSwitch";
+import useLoyaltyEnabled from "../../../shared/lib/useLoyaltyEnabled";
+import { PromoProgramSettings } from "../../settings";
 
-const VIEWS = [
-  { key: "menus", label: "Daftar Menu" },
-  { key: "promo", label: "Program Promo" },
-];
-
-// Dashboard → Menu (admin): the menus, and Program Promo next to them since
-// each reward gives a Kategori Promo menu. One view only: no switch.
+// Dashboard → Menu (admin): Menu Items, Promo (a card per promo, the stamp
+// card first with the menu of each reward) and Categories. Without a loyalty
+// key (Pengaturan → API) there is no stamp card.
 export default function MenuTab({ onCreateIngredient }) {
-  const [view, setView] = useState("menus");
+  const loyalty = useLoyaltyEnabled();
 
   return (
-    <>
-      {VIEWS.length > 1 && <ViewSwitch label="Jenis menu" views={VIEWS} value={view} onChange={setView} />}
-      {view === "menus" && <MenuManagement onCreateIngredient={onCreateIngredient} />}
-      {view === "promo" && <PromoProgramPage />}
-    </>
+    <MenuManagement
+      onCreateIngredient={onCreateIngredient}
+      renderPromoHeader={
+        loyalty.enabled ? ({ onEditMenu }) => <PromoProgramSettings onEditMenu={onEditMenu} /> : null
+      }
+    />
   );
 }

@@ -8,6 +8,8 @@ import { renderWithProviders } from "../renderWithProviders";
 
 vi.mock("../../src/https/index", async (importOriginal) => ({
   ...(await importOriginal()),
+  // Pengaturan → API: the loyalty key is set (a test may answer otherwise).
+  getIntegrationStatus: vi.fn(async () => ({ data: { success: true, data: { loyalty: true } } })),
   getCategories: vi.fn(),
   getLoyaltyProgram: vi.fn(),
   getMenuItems: vi.fn(),
@@ -204,7 +206,23 @@ describe("dashboard menus: Stok Bahan holds what is on hand, Belanja the purchas
     expect(screen.queryByText("Metrik", { selector: "p" })).not.toBeInTheDocument();
   });
 
-  it("keeps Daftar Menu and Program Promo under Menu", async () => {
+  it("has no stamp card in Menu → Promo without a loyalty key (Pengaturan → API)", async () => {
+    api.getIntegrationStatus.mockResolvedValue({ data: { success: true, data: { loyalty: false } } });
+    api.getMenuItems.mockResolvedValue({ data: { data: [] } });
+    api.getCategories.mockResolvedValue({ data: { data: [] } });
+    api.getLoyaltyProgram.mockClear();
+    renderWithProviders(<Dashboard />, { preloadedState: user("Admin") });
+    fireEvent.click(screen.getByRole("button", { name: "Menu" }));
+    fireEvent.click(screen.getByRole("button", { name: "Promo" }));
+
+    expect(await screen.findByRole("button", { name: "Tambah Promo" })).toBeInTheDocument();
+    await waitFor(() => expect(api.getIntegrationStatus).toHaveBeenCalled());
+    expect(screen.queryByRole("region", { name: "Stamp Card" })).not.toBeInTheDocument();
+    expect(api.getLoyaltyProgram).not.toHaveBeenCalled();
+    api.getIntegrationStatus.mockResolvedValue({ data: { success: true, data: { loyalty: true } } });
+  });
+
+  it("opens Menu Items straight from Menu, with Promo next to it holding the stamp card", async () => {
     api.getMenuItems.mockResolvedValue({ data: { data: [] } });
     api.getCategories.mockResolvedValue({ data: { data: [] } });
     api.getLoyaltyProgram.mockResolvedValue({
@@ -213,14 +231,26 @@ describe("dashboard menus: Stok Bahan holds what is on hand, Belanja the purchas
     renderWithProviders(<Dashboard />, { preloadedState: user("Admin") });
     fireEvent.click(screen.getByRole("button", { name: "Menu" }));
 
-    const views = screen.getByRole("group", { name: "Jenis menu" });
-    expect(within(views).getByRole("button", { name: "Daftar Menu" })).toHaveAttribute("aria-pressed", "true");
+    // One switch only: no Daftar Menu / Program Promo above it.
+    expect(screen.queryByRole("group", { name: "Jenis menu" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Program Promo" })).not.toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Menu Management" })).toBeInTheDocument();
+    const data = screen.getByRole("group", { name: "Jenis data menu" });
+    expect(within(data).getAllByRole("button").map((button) => button.textContent)).toEqual([
+      "Menu Items",
+      "Promo",
+      "Categories",
+    ]);
+    expect(within(data).getByRole("button", { name: "Menu Items" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.queryByRole("region", { name: "Stamp Card" })).not.toBeInTheDocument();
 
-    fireEvent.click(within(views).getByRole("button", { name: "Program Promo" }));
-    expect(screen.getByRole("heading", { name: "Program Promo" })).toBeInTheDocument();
+    fireEvent.click(within(data).getByRole("button", { name: "Promo" }));
     expect(await screen.findByRole("region", { name: "Stamp Card" })).toBeInTheDocument();
-    expect(screen.queryByRole("heading", { name: "Menu Management" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Tambah Promo" })).toBeInTheDocument();
+
+    // Not under Pengaturan any more.
+    fireEvent.click(screen.getByRole("button", { name: "Pengaturan" }));
+    expect(screen.queryByRole("button", { name: "Stamp Card" })).not.toBeInTheDocument();
   });
 
   it("shows Belanja to kasir, who write draft nota", async () => {

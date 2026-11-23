@@ -6,6 +6,8 @@ import { renderWithProviders } from "../renderWithProviders";
 
 vi.mock("../../src/https/index", async (importOriginal) => ({
   ...(await importOriginal()),
+  // Pengaturan → API: the loyalty key is set (a test may answer otherwise).
+  getIntegrationStatus: vi.fn(async () => ({ data: { success: true, data: { loyalty: true } } })),
   getLoyaltyCustomer: vi.fn(),
   getLoyaltyProgram: vi.fn(),
   // The POS catalog, where the reward promos are looked up.
@@ -46,6 +48,18 @@ describe("LoyaltyStatus", () => {
     await new Promise((resolve) => setTimeout(resolve, 700));
     expect(api.getLoyaltyCustomer).not.toHaveBeenCalled();
     expect(screen.queryByText("Mengecek loyalty…")).not.toBeInTheDocument();
+    expect(container.querySelector("p")).toBeNull();
+  });
+
+  it("shows nothing and asks loyalty nothing without a loyalty key (Pengaturan → API)", async () => {
+    api.getIntegrationStatus.mockResolvedValueOnce({ data: { success: true, data: { loyalty: false } } });
+    respond({ registered: false, stamp_min_order_total: 100000 });
+    const { container } = renderWithProviders(<LoyaltyStatus phone="083123555526" />);
+
+    await waitFor(() => expect(api.getIntegrationStatus).toHaveBeenCalled());
+    await new Promise((resolve) => setTimeout(resolve, 700));
+    expect(api.getLoyaltyProgram).not.toHaveBeenCalled();
+    expect(api.getLoyaltyCustomer).not.toHaveBeenCalled();
     expect(container.querySelector("p")).toBeNull();
   });
 

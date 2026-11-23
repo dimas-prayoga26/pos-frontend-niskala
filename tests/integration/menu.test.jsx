@@ -7,14 +7,20 @@ import { renderWithProviders } from "../renderWithProviders";
 
 vi.mock("../../src/https/index", async (importOriginal) => ({
   ...(await importOriginal()),
+  // Pengaturan → API: the loyalty key is set (a test may answer otherwise).
+  getIntegrationStatus: vi.fn(async () => ({ data: { success: true, data: { loyalty: true } } })),
   addCategory: vi.fn(),
   deleteMenuItem: vi.fn(),
   getCategories: vi.fn(),
   getMenuItems: vi.fn(),
   getSemiItems: vi.fn(),
   getStockItems: vi.fn(),
+  getMenuItemSales: vi.fn(),
+  setMenuItemAvailability: vi.fn(),
+  updateCategoryPositions: vi.fn(),
   updateMenuItem: vi.fn(),
-  // Pengaturan → Program Promo: which reward gives each Promo loyalty menu.
+  updateLoyaltyReward: vi.fn(),
+  // Pengaturan → Stamp Card: its rewards, each giving a Hadiah Stamp Card menu.
   getLoyaltyProgram: vi.fn(async () => ({
     data: {
       data: {
@@ -184,6 +190,58 @@ describe("menu delete", () => {
   });
 });
 
+describe("categories", () => {
+  beforeEach(() => {
+    api.getMenuItems.mockResolvedValue({ data: { data: [] } });
+    api.getStockItems.mockResolvedValue({ data: { data: [] } });
+    api.getSemiItems.mockResolvedValue({ data: { data: [] } });
+    api.getCategories.mockResolvedValue({
+      data: {
+        data: [
+          { id: 1, name: "Kopi", isActive: true },
+          { id: 9, name: "Lama", isActive: false },
+          { id: 2, name: "Snack", isActive: true },
+        ],
+      },
+    });
+    api.updateCategoryPositions.mockReset().mockResolvedValue({ data: { success: true } });
+  });
+
+  it("opens Menu Items first, then lists the categories in one table: POS order, inactive last, dragged to move", async () => {
+    renderWithProviders(<MenuManagement />, { preloadedState: asAdmin });
+
+    expect(screen.getByRole("button", { name: "Menu Items" })).toHaveAttribute("aria-pressed", "true");
+    fireEvent.click(screen.getByRole("button", { name: "Categories" }));
+
+    expect(screen.queryByText("Position Categories")).not.toBeInTheDocument();
+    const rowOf = (name) => screen.getByText(name).closest("tr");
+    await screen.findByText("Snack");
+    const rows = within(screen.getByRole("table")).getAllByRole("row").slice(1);
+    expect(rows.map((row) => [row.cells[0].textContent, row.cells[2].textContent])).toEqual([
+      ["⋮⋮1", "Kopi"],
+      ["⋮⋮2", "Snack"],
+      ["-", "Lama"],
+    ]);
+    expect(rowOf("Lama")).not.toHaveAttribute("draggable", "true");
+
+    fireEvent.dragStart(rowOf("Snack"));
+    fireEvent.dragOver(rowOf("Kopi"));
+    fireEvent.drop(rowOf("Kopi"));
+
+    await waitFor(() => expect(api.updateCategoryPositions).toHaveBeenCalled());
+    expect(api.updateCategoryPositions.mock.calls[0][0]).toEqual(["2", "1", "9"]);
+  });
+
+  it("doesn't drag while searching", async () => {
+    renderWithProviders(<MenuManagement />, { preloadedState: asAdmin });
+    fireEvent.click(screen.getByRole("button", { name: "Categories" }));
+    await screen.findByText("Snack");
+
+    fireEvent.change(screen.getByPlaceholderText("Search category"), { target: { value: "o" } });
+    expect(screen.getByText("Kopi").closest("tr")).not.toHaveAttribute("draggable", "true");
+  });
+});
+
 describe("kategori promo", () => {
   const menu = (id, name, regularPrice, hppCost, extra = {}) => ({
     id,
@@ -241,6 +299,7 @@ describe("kategori promo", () => {
       },
     });
     renderWithProviders(<MenuManagement />, { preloadedState: asAdmin });
+    fireEvent.click(screen.getByRole("button", { name: "Categories" }));
 
     // The list labels a Kategori Promo, unless its name already says Promo.
     const rowOf = async (name) =>
@@ -257,34 +316,43 @@ describe("kategori promo", () => {
     expect(api.addCategory.mock.calls[0][0]).toMatchObject({ name: "PAKET", isBundle: true });
   });
 
-  it("lists the Kategori Promo apart in the menu form", async () => {
+  it("keeps menus in Menu Items and promos in Promo, each made from its own tab", async () => {
     renderWithProviders(<MenuManagement />, { preloadedState: asAdmin });
+    const categoryNames = () =>
+      Array.from(screen.getAllByLabelText("Category")[0].options).map((option) => option.textContent);
+    const listed = (name) => screen.queryByText(name);
 
-    fireEvent.click(await screen.findByRole("button", { name: "Menu Items" }));
-    fireEvent.click(await screen.findByRole("button", { name: "Tambah Menu" }));
-    const groupsOf = () =>
-      screen
-        .getAllByLabelText("Category")
-        .flatMap((element) => Array.from(element.querySelectorAll("optgroup")));
-    await waitFor(() =>
-      expect(groupsOf().map((group) => [
-        group.label,
-        Array.from(group.children).map((option) => option.textContent),
-      ])).toEqual([
-        ["Category Menu", ["Kopi"]],
-        ["Kategori Promo (isi dari menu yang sudah ada)", ["PROMO"]],
-      ])
-    );
+    // Menu Items: the menus sold, made in a Category Menu only.
+    expect(await screen.findByText("Kopi Susu")).toBeInTheDocument();
+    expect(listed("Paket Hemat")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Tambah Menu" }));
+    await waitFor(() => expect(categoryNames()).toEqual(["Pilih category", "Kopi"]));
+    fireEvent.click(screen.getByRole("button", { name: "Tutup" }));
+
+    // Promo: a card per Kategori Promo menu, no table; Tambah Promo picks
+    // PROMO and starts a box.
+    fireEvent.click(screen.getByRole("button", { name: "Promo" }));
+    const card = await screen.findByRole("region", { name: "Paket Hemat" });
+    expect(within(card).getByText("Rp 28.000")).toBeInTheDocument();
+    expect(within(card).getByText("1× Kopi Susu · 1× Croissant")).toBeInTheDocument();
+    expect(within(card).getByRole("button", { name: "Ubah" })).toBeInTheDocument();
+    expect(screen.queryByRole("table")).not.toBeInTheDocument();
+    expect(listed("Kopi Susu")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Tambah Promo" }));
+    expect(screen.getByRole("heading", { name: "Tambah Promo" })).toBeInTheDocument();
+    await waitFor(() => expect(categoryNames()).toEqual(["Pilih kategori promo", "PROMO"]));
+    expect(screen.getAllByLabelText("Category")[0]).toHaveValue("2");
+    expect(screen.getByText("Isi Paket")).toBeInTheDocument();
   });
 
   it("fills a promo with boxes: one menu always goes in, of several the cashier picks one", async () => {
     api.updateMenuItem.mockResolvedValue({ data: { success: true } });
     renderWithProviders(<MenuManagement />, { preloadedState: asAdmin });
 
-    fireEvent.click(await screen.findByRole("button", { name: "Menu Items" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Promo" }));
     expect(await screen.findByText("1× Kopi Susu · 1× Croissant")).toBeInTheDocument();
     fireEvent.click(
-      within(screen.getByText("Paket Hemat").closest("tr")).getByRole("button", { name: "Ubah" })
+      within(screen.getByText("Paket Hemat").closest("section")).getByRole("button", { name: "Ubah" })
     );
 
     expect(screen.queryByText("Komposisi Bahan")).not.toBeInTheDocument();
@@ -353,9 +421,9 @@ describe("kategori promo", () => {
     });
     renderWithProviders(<MenuManagement />, { preloadedState: asAdmin });
 
-    fireEvent.click(await screen.findByRole("button", { name: "Menu Items" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Promo" }));
     fireEvent.click(
-      within((await screen.findByText("Pilih Kopi")).closest("tr")).getByRole("button", { name: "Ubah" })
+      within((await screen.findByText("Pilih Kopi")).closest("section")).getByRole("button", { name: "Ubah" })
     );
 
     expect(screen.getByText("Pilihan Kopi")).toBeInTheDocument();
@@ -399,9 +467,9 @@ describe("kategori promo", () => {
     });
     renderWithProviders(<MenuManagement />, { preloadedState: asAdmin });
 
-    fireEvent.click(await screen.findByRole("button", { name: "Menu Items" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Promo" }));
     fireEvent.click(
-      within((await screen.findByText("Siang Kenyang")).closest("tr")).getByRole("button", { name: "Ubah" })
+      within((await screen.findByText("Siang Kenyang")).closest("section")).getByRole("button", { name: "Ubah" })
     );
 
     // Its fixed menu is a box of that one menu.
@@ -486,19 +554,20 @@ describe("kategori promo", () => {
     expect(factorOf("Americano")).toBe("451%");
     // Below 100%: the price does not cover the HPP plus 30%.
     expect(factorOf("Rugi")).toBe("64%");
-    // No price, no HPP, or a package (HPP counted per sale): nothing to show.
+    // No price or no HPP: nothing to show.
     expect(factorOf("Gratis")).toBe("-");
     expect(factorOf("Tanpa Resep")).toBe("-");
-    expect(factorOf("Paket")).toBe("-");
+    // A package is listed in Promo, not here.
+    expect(screen.queryByText("Paket")).not.toBeInTheDocument();
   });
 
   it("keeps a promo's price and a discount percent off it", async () => {
     api.updateMenuItem.mockResolvedValue({ data: { success: true } });
     renderWithProviders(<MenuManagement />, { preloadedState: asAdmin });
 
-    fireEvent.click(await screen.findByRole("button", { name: "Menu Items" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Promo" }));
     fireEvent.click(
-      within((await screen.findByText("Paket Hemat")).closest("tr")).getByRole("button", { name: "Ubah" })
+      within((await screen.findByText("Paket Hemat")).closest("section")).getByRole("button", { name: "Ubah" })
     );
 
     fireEvent.change(screen.getByLabelText("Harga"), { target: { value: "18000" } });
@@ -518,9 +587,9 @@ describe("kategori promo", () => {
     api.updateMenuItem.mockResolvedValue({ data: { success: true } });
     renderWithProviders(<MenuManagement />, { preloadedState: asAdmin });
 
-    fireEvent.click(await screen.findByRole("button", { name: "Menu Items" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Promo" }));
     fireEvent.click(
-      within((await screen.findByText("Paket Hemat")).closest("tr")).getByRole("button", { name: "Ubah" })
+      within((await screen.findByText("Paket Hemat")).closest("section")).getByRole("button", { name: "Ubah" })
     );
     // Without a discount the profit is typed in.
     expect(screen.getByLabelText("Gross Profit")).toBeEnabled();
@@ -542,29 +611,38 @@ describe("kategori promo", () => {
     });
   });
 
-  it("sets a promo as Promo loyalty with the Jenis promo switch: a free promo (Harga 0, Diskon 100%)", async () => {
+  it("sets a promo as Hadiah Stamp Card and picks its reward in the same form", async () => {
     api.updateMenuItem.mockResolvedValue({ data: { success: true } });
+    api.updateLoyaltyReward.mockReset().mockResolvedValue({ data: { success: true } });
     renderWithProviders(<MenuManagement />, { preloadedState: asAdmin });
 
-    fireEvent.click(await screen.findByRole("button", { name: "Menu Items" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Promo" }));
     fireEvent.click(
-      within((await screen.findByText("Paket Hemat")).closest("tr")).getByRole("button", { name: "Ubah" })
+      within((await screen.findByText("Paket Hemat")).closest("section")).getByRole("button", { name: "Ubah" })
     );
 
-    const kind = screen.getByRole("group", { name: "Jenis promo" });
-    expect(within(kind).getByRole("button", { name: "Promo biasa" })).toHaveAttribute("aria-pressed", "true");
-    // No reward picked here: which reward gives it is set in Program Promo.
-    expect(screen.queryByLabelText("Hadiah loyalty")).not.toBeInTheDocument();
+    // A dropdown: Paket biasa or Hadiah Stamp Card (through Pengaturan → API).
+    const kind = screen.getByLabelText("Jenis promo");
+    expect(optionNames(kind)).toEqual(["Paket biasa", "Hadiah Stamp Card (API)"]);
+    expect(kind).toHaveValue("paket");
+    expect(screen.queryByLabelText("Hadiah Stamp Card")).not.toBeInTheDocument();
 
-    fireEvent.click(within(kind).getByRole("button", { name: "Promo loyalty" }));
-    expect(within(kind).getByRole("button", { name: "Promo loyalty" })).toHaveAttribute("aria-pressed", "true");
+    fireEvent.change(kind, { target: { value: "loyalty" } });
+    expect(kind).toHaveValue("loyalty");
     expect(screen.getByLabelText("Harga")).toHaveValue("0");
     expect(screen.getByLabelText("Diskon (%)")).toHaveValue("100");
     // Given away: 0, not minus its menus' HPP (each Tukar records that).
     expect(screen.getByLabelText("Gross Profit")).toHaveValue("0");
 
+    const reward = screen.getByLabelText("Hadiah Stamp Card");
+    expect(optionNames(reward)).toEqual(["Pilih hadiah", "Stamp ke-5 · Minuman gratis", "Stamp ke-10 · Makanan gratis"]);
     fireEvent.click(screen.getByRole("button", { name: "Simpan" }));
-    await waitFor(() => expect(api.updateMenuItem).toHaveBeenCalled());
+    expect(await screen.findByText("Pilih hadiah Stamp Card-nya.")).toBeInTheDocument();
+    expect(api.updateMenuItem).not.toHaveBeenCalled();
+
+    fireEvent.change(reward, { target: { value: "1" } });
+    fireEvent.click(screen.getByRole("button", { name: "Simpan" }));
+    await waitFor(() => expect(api.updateLoyaltyReward).toHaveBeenCalledWith({ id: 1, promoMenuItemId: 20 }));
     expect(api.updateMenuItem.mock.calls[0][0]).toMatchObject({
       menuItemId: 20,
       regularPrice: 0,
@@ -572,16 +650,108 @@ describe("kategori promo", () => {
       isLoyaltyPromo: true,
       grossProfit: 0,
     });
+    expect(api.updateMenuItem.mock.calls[0][0]).not.toHaveProperty("loyaltyRewardId");
+    expect(api.updateLoyaltyReward).toHaveBeenCalledTimes(1);
   });
 
-  it("shows Jenis promo right under Category, only while the stamp card is on in Program Promo", async () => {
-    const { unmount } = renderWithProviders(<MenuManagement />, { preloadedState: asAdmin });
-    fireEvent.click(await screen.findByRole("button", { name: "Menu Items" }));
+  describe("a Hadiah Stamp Card already giving stamp 5", () => {
+    const freePromo = (id, name, menuItemId) =>
+      menu(id, name, 0, 0, {
+        categoryId: 2,
+        isBundle: true,
+        isLoyaltyPromo: true,
+        discountPercent: 100,
+        bundleItems: [{ menuItemId, name: "Kopi Susu", quantity: 1 }],
+      });
+    const openIt = async () => {
+      api.getMenuItems.mockResolvedValue({
+        data: { data: [menu(7, "Kopi Susu", 18000, 6000), freePromo(20, "Gratis Minuman", 7), freePromo(31, "Loyalty Lama", 7)] },
+      });
+      api.getLoyaltyProgram.mockResolvedValueOnce({
+        data: {
+          data: {
+            active: true,
+            rewards: [
+              { id: 1, stamps: 5, label: "Minuman gratis", active: true, promo_menu_item_id: 20 },
+              { id: 2, stamps: 10, label: "Makanan gratis", active: true, promo_menu_item_id: 31 },
+            ],
+          },
+        },
+      });
+      api.updateMenuItem.mockResolvedValue({ data: { success: true } });
+      api.updateLoyaltyReward.mockReset().mockResolvedValue({ data: { success: true } });
+      renderWithProviders(<MenuManagement />, { preloadedState: asAdmin });
+      fireEvent.click(screen.getByRole("button", { name: "Promo" }));
+      fireEvent.click(
+        within((await screen.findByText("Gratis Minuman")).closest("section")).getByRole("button", { name: "Ubah" })
+      );
+    };
+
+    it("moves a reward another menu gives to it, and lets go of the old one", async () => {
+      await openIt();
+
+      const reward = screen.getByLabelText("Hadiah Stamp Card");
+      expect(reward).toHaveValue("1");
+      expect(optionNames(reward)).toEqual([
+        "Pilih hadiah",
+        "Stamp ke-5 · Minuman gratis",
+        "Stamp ke-10 · Makanan gratis (dipakai Loyalty Lama)",
+      ]);
+      fireEvent.change(reward, { target: { value: "2" } });
+      fireEvent.click(screen.getByRole("button", { name: "Simpan" }));
+
+      await waitFor(() => expect(api.updateLoyaltyReward).toHaveBeenCalledTimes(2));
+      expect(api.updateLoyaltyReward).toHaveBeenCalledWith({ id: 1, promoMenuItemId: null });
+      expect(api.updateLoyaltyReward).toHaveBeenCalledWith({ id: 2, promoMenuItemId: 20 });
+    });
+
+    it("lets go of its reward as a Paket biasa", async () => {
+      await openIt();
+
+      fireEvent.change(screen.getByLabelText("Jenis promo"), { target: { value: "paket" } });
+      fireEvent.click(screen.getByRole("button", { name: "Simpan" }));
+
+      await waitFor(() => expect(api.updateLoyaltyReward).toHaveBeenCalledWith({ id: 1, promoMenuItemId: null }));
+      expect(api.updateMenuItem.mock.calls[0][0]).toMatchObject({ menuItemId: 20, isLoyaltyPromo: false });
+      expect(api.updateLoyaltyReward).toHaveBeenCalledTimes(1);
+    });
+
+    it("keeps the menu saved when its reward can't follow, and says so", async () => {
+      await openIt();
+      api.updateLoyaltyReward.mockRejectedValue({ response: { data: { message: "Loyalty sedang tidak tersedia." } } });
+
+      fireEvent.change(screen.getByLabelText("Hadiah Stamp Card"), { target: { value: "2" } });
+      fireEvent.click(screen.getByRole("button", { name: "Simpan" }));
+
+      expect(await screen.findByText("Menu berhasil diubah.")).toBeInTheDocument();
+      expect(
+        await screen.findByText("Hadiah Stamp Card gagal dihubungkan: Loyalty sedang tidak tersedia.")
+      ).toBeInTheDocument();
+    });
+  });
+
+  it("has no Hadiah Stamp Card and asks no stamp card without a loyalty key (Pengaturan → API)", async () => {
+    api.getIntegrationStatus.mockResolvedValueOnce({ data: { success: true, data: { loyalty: false } } });
+    api.getLoyaltyProgram.mockClear();
+    renderWithProviders(<MenuManagement />, { preloadedState: asAdmin });
+    fireEvent.click(await screen.findByRole("button", { name: "Promo" }));
     fireEvent.click(
-      within((await screen.findByText("Paket Hemat")).closest("tr")).getByRole("button", { name: "Ubah" })
+      within((await screen.findByText("Paket Hemat")).closest("section")).getByRole("button", { name: "Ubah" })
     );
 
-    const kind = await screen.findByRole("group", { name: "Jenis promo" });
+    expect(screen.getByLabelText("Diskon (%)")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Jenis promo")).not.toBeInTheDocument();
+    expect(api.getLoyaltyProgram).not.toHaveBeenCalled();
+  });
+
+  it("shows Jenis promo right under Category, only while the stamp card is on (Menu → Promo)", async () => {
+    const { unmount } = renderWithProviders(<MenuManagement />, { preloadedState: asAdmin });
+    fireEvent.click(await screen.findByRole("button", { name: "Promo" }));
+    fireEvent.click(
+      within((await screen.findByText("Paket Hemat")).closest("section")).getByRole("button", { name: "Ubah" })
+    );
+
+    const kind = await screen.findByLabelText("Jenis promo");
     // Before Nama Menu, after Category.
     const nameInput = screen.getByPlaceholderText("Latte");
     expect(kind.compareDocumentPosition(nameInput) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
@@ -589,15 +759,15 @@ describe("kategori promo", () => {
 
     api.getLoyaltyProgram.mockResolvedValueOnce({ data: { data: { active: false, rewards: [] } } });
     renderWithProviders(<MenuManagement />, { preloadedState: asAdmin });
-    fireEvent.click(await screen.findByRole("button", { name: "Menu Items" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Promo" }));
     fireEvent.click(
-      within((await screen.findByText("Paket Hemat")).closest("tr")).getByRole("button", { name: "Ubah" })
+      within((await screen.findByText("Paket Hemat")).closest("section")).getByRole("button", { name: "Ubah" })
     );
     expect(screen.getByLabelText("Diskon (%)")).toBeInTheDocument();
-    expect(screen.queryByRole("group", { name: "Jenis promo" })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Jenis promo")).not.toBeInTheDocument();
   });
 
-  it("shows which reward gives a Promo loyalty menu, as linked in Program Promo", async () => {
+  it("shows which reward each Hadiah Stamp Card gives", async () => {
     // Saved before its gross profit was kept at 0.
     const promo = (id, name) =>
       menu(id, name, 0, 0, { categoryId: 2, isBundle: true, isLoyaltyPromo: true, discountPercent: 100, grossProfit: -14803 });
@@ -607,39 +777,142 @@ describe("kategori promo", () => {
     api.getLoyaltyProgram.mockResolvedValueOnce({
       data: { data: { active: true, rewards: [{ id: 1, stamps: 5, label: "Minuman gratis", active: true, promo_menu_item_id: 30 }] } },
     });
-    renderWithProviders(<MenuManagement />, { preloadedState: asAdmin });
-    fireEvent.click(await screen.findByRole("button", { name: "Menu Items" }));
+    const { unmount } = renderWithProviders(<MenuManagement />, { preloadedState: asAdmin });
+    fireEvent.click(await screen.findByRole("button", { name: "Promo" }));
 
-    expect(await screen.findByText("🎁 Promo loyalty · Stamp ke-5 · Minuman gratis")).toBeInTheDocument();
-    const cellOf = (name) => screen.getByText(name).closest("td");
-    expect(within(cellOf("Loyalty Minuman")).getByText("🎁 Promo loyalty · Stamp ke-5 · Minuman gratis")).toBeInTheDocument();
+    // Without the stamp card above: a card each, saying which reward.
     expect(
-      within(cellOf("Loyalty Lama")).getByText("🎁 Promo loyalty · belum dihubungkan di Program Promo")
+      within(await screen.findByRole("region", { name: "Loyalty Minuman" })).getByText(
+        "Gratis · Hadiah Stamp Card · Stamp ke-5 · Minuman gratis"
+      )
+    ).toBeInTheDocument();
+    expect(
+      within(screen.getByRole("region", { name: "Loyalty Lama" })).getByText(
+        "Gratis · Hadiah Stamp Card · belum dipilih hadiahnya"
+      )
     ).toBeInTheDocument();
     expect(screen.queryByText("-Rp 14.803")).not.toBeInTheDocument();
+    unmount();
+
+    // With it (Menu tab): a linked one shows on its reward's row only, whose
+    // Ubah opens it; one with no reward keeps its card.
+    api.getLoyaltyProgram.mockResolvedValueOnce({
+      data: { data: { active: true, rewards: [{ id: 1, stamps: 5, label: "Minuman gratis", active: true, promo_menu_item_id: 30 }] } },
+    });
+    renderWithProviders(
+      <MenuManagement
+        renderPromoHeader={({ onEditMenu }) => (
+          <button type="button" onClick={() => onEditMenu(30)}>
+            Ubah menu hadiah stamp 5
+          </button>
+        )}
+      />,
+      { preloadedState: asAdmin }
+    );
+    fireEvent.click(await screen.findByRole("button", { name: "Promo" }));
+    expect(await screen.findByRole("region", { name: "Loyalty Lama" })).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole("region", { name: "Loyalty Minuman" })).not.toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: "Ubah menu hadiah stamp 5" }));
+    expect(screen.getByRole("heading", { name: "Ubah Promo" })).toBeInTheDocument();
+    expect(screen.getByPlaceholderText("Latte")).toHaveValue("Loyalty Minuman");
   });
 
-  it("keeps a Promo loyalty free", async () => {
+  it("keeps a Hadiah Stamp Card free", async () => {
     renderWithProviders(<MenuManagement />, { preloadedState: asAdmin });
 
-    fireEvent.click(await screen.findByRole("button", { name: "Menu Items" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Promo" }));
     fireEvent.click(
-      within((await screen.findByText("Paket Hemat")).closest("tr")).getByRole("button", { name: "Ubah" })
+      within((await screen.findByText("Paket Hemat")).closest("section")).getByRole("button", { name: "Ubah" })
     );
-    fireEvent.click(within(screen.getByRole("group", { name: "Jenis promo" })).getByRole("button", { name: "Promo loyalty" }));
+    fireEvent.change(screen.getByLabelText("Jenis promo"), { target: { value: "loyalty" } });
     fireEvent.change(screen.getByLabelText("Harga"), { target: { value: "15000" } });
     fireEvent.click(screen.getByRole("button", { name: "Simpan" }));
 
-    expect(await screen.findByText("Promo loyalty harus Harga 0 dan Diskon 100%.")).toBeInTheDocument();
+    expect(await screen.findByText("Hadiah Stamp Card harus Harga 0 dan Diskon 100%.")).toBeInTheDocument();
     expect(api.updateMenuItem).not.toHaveBeenCalled();
+  });
+
+  it("switches a promo on or off with its card's switch, nothing else saved", async () => {
+    api.setMenuItemAvailability.mockReset().mockResolvedValue({ data: { success: true } });
+    renderWithProviders(<MenuManagement />, { preloadedState: asAdmin });
+    fireEvent.click(await screen.findByRole("button", { name: "Promo" }));
+
+    const card = await screen.findByRole("region", { name: "Paket Hemat" });
+    const active = within(card).getByRole("switch", { name: "Paket Hemat" });
+    expect(active).toHaveAttribute("aria-checked", "true");
+    fireEvent.click(active);
+
+    await waitFor(() =>
+      expect(api.setMenuItemAvailability).toHaveBeenCalledWith({ menuItemId: "20", isAvailable: false })
+    );
+    expect(await screen.findByText("Promo dinonaktifkan.")).toBeInTheDocument();
+    expect(api.updateMenuItem).not.toHaveBeenCalled();
+  });
+
+  it("shows who bought a promo (Riwayat), with how many in all", async () => {
+    api.getMenuItemSales.mockReset().mockResolvedValue({
+      data: {
+        success: true,
+        data: {
+          data: [
+            {
+              id: 7,
+              orderId: 91,
+              orderCode: "2611-0095",
+              orderDate: "2026-11-09 11:48:10",
+              customerName: "Adi",
+              customerPhone: "081234567890",
+              orderType: "Offline",
+              quantity: 2,
+              price: 56000,
+            },
+          ],
+          meta: { page: 1, perPage: 20, total: 1, lastPage: 1 },
+          summary: { orders: 1, quantity: 2, revenue: 56000 },
+        },
+      },
+    });
+    renderWithProviders(<MenuManagement />, { preloadedState: asAdmin });
+    fireEvent.click(await screen.findByRole("button", { name: "Promo" }));
+
+    fireEvent.click(await screen.findByRole("button", { name: "Riwayat Paket Hemat" }));
+    const dialog = await screen.findByRole("dialog", { name: "Riwayat Paket Hemat" });
+
+    const row = (await within(dialog).findByText("2611-0095")).closest("tr");
+    expect(plainText(Array.from(row.cells).map((cell) => cell.textContent))).toEqual([
+      "09/11/26 11:48",
+      "2611-0095",
+      "Adi081234567890",
+      "Offline",
+      "2",
+      "Rp 56.000",
+    ]);
+    expect(within(dialog).getByText("1 nota · 2 terjual · Rp 56.000", { normalizer: (text) => text.replace(/\s/g, " ") }))
+      .toBeInTheDocument();
+    expect(api.getMenuItemSales).toHaveBeenCalledWith({ menuItemId: 20, page: 1, perPage: 20 });
+
+    fireEvent.click(within(dialog).getByRole("button", { name: "Tutup" }));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("says when nobody bought a promo yet", async () => {
+    api.getMenuItemSales.mockReset().mockResolvedValue({
+      data: { success: true, data: { data: [], meta: { page: 1, perPage: 20, total: 0, lastPage: 1 }, summary: { orders: 0, quantity: 0, revenue: 0 } } },
+    });
+    renderWithProviders(<MenuManagement />, { preloadedState: asAdmin });
+    fireEvent.click(await screen.findByRole("button", { name: "Promo" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Riwayat Paket Hemat" }));
+
+    expect(await screen.findByText("Belum ada yang membeli promo ini.")).toBeInTheDocument();
   });
 
   it("rejects a discount above 100%", async () => {
     renderWithProviders(<MenuManagement />, { preloadedState: asAdmin });
 
-    fireEvent.click(await screen.findByRole("button", { name: "Menu Items" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Promo" }));
     fireEvent.click(
-      within((await screen.findByText("Paket Hemat")).closest("tr")).getByRole("button", { name: "Ubah" })
+      within((await screen.findByText("Paket Hemat")).closest("section")).getByRole("button", { name: "Ubah" })
     );
     fireEvent.change(screen.getByLabelText("Diskon (%)"), { target: { value: "120" } });
     fireEvent.click(screen.getByRole("button", { name: "Simpan" }));
@@ -652,9 +925,9 @@ describe("kategori promo", () => {
     api.updateMenuItem.mockResolvedValue({ data: { success: true } });
     renderWithProviders(<MenuManagement />, { preloadedState: asAdmin });
 
-    fireEvent.click(await screen.findByRole("button", { name: "Menu Items" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Promo" }));
     fireEvent.click(
-      within((await screen.findByText("Paket Hemat")).closest("tr")).getByRole("button", { name: "Ubah" })
+      within((await screen.findByText("Paket Hemat")).closest("section")).getByRole("button", { name: "Ubah" })
     );
     fireEvent.click(screen.getByRole("button", { name: "Hapus Pilihan Croissant" }));
     fireEvent.click(screen.getByRole("button", { name: "Hapus Pilihan Kopi Susu" }));
@@ -668,9 +941,9 @@ describe("kategori promo", () => {
     api.updateMenuItem.mockResolvedValue({ data: { success: true } });
     renderWithProviders(<MenuManagement />, { preloadedState: asAdmin });
 
-    fireEvent.click(await screen.findByRole("button", { name: "Menu Items" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Promo" }));
     fireEvent.click(
-      within((await screen.findByText("Paket Hemat")).closest("tr")).getByRole("button", { name: "Ubah" })
+      within((await screen.findByText("Paket Hemat")).closest("section")).getByRole("button", { name: "Ubah" })
     );
     fireEvent.click(screen.getByRole("button", { name: "Hapus Pilihan Croissant" }));
     fireEvent.click(screen.getByRole("button", { name: "Simpan" }));

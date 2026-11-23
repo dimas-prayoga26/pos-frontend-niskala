@@ -42,7 +42,11 @@ export const getMenuItems = (categoryIdOrParams) => {
 };
 export const updateMenuItem = ({ menuItemId, ...menuItemData }) =>
   axiosWrapper.put(`/api/menu-item/${menuItemId}`, menuItemData);
-export const deleteMenuItem = (menuItemId) =>
+// Menu → Promo card: on/off (Tersedia only) and Riwayat (who bought it).
+export const setMenuItemAvailability = ({ menuItemId, isAvailable }) =>
+  axiosWrapper.patch(`/api/menu-item/${menuItemId}/availability`, { isAvailable });
+export const getMenuItemSales = ({ menuItemId, page = 1, perPage = 20 }) =>
+  axiosWrapper.get(`/api/menu-item/${menuItemId}/sales`, { params: { page, perPage } });export const deleteMenuItem = (menuItemId) =>
   axiosWrapper.delete(`/api/menu-item/${menuItemId}`);
 
 // Order Endpoints
@@ -80,9 +84,18 @@ export const getLoyaltyCustomer = (phone) =>
 export const getLoyaltyProgram = () => axiosWrapper.get("/api/loyalty/program");
 export const updateLoyaltyProgram = ({ active }) => axiosWrapper.put("/api/loyalty/program", { active });
 export const updateLoyaltyReward = ({ id, ...patch }) => axiosWrapper.put(`/api/loyalty/rewards/${id}`, patch);
-// Program Promo → Riwayat: the rewards handed over, newest first (admin).
+// Stamp Card → Riwayat, newest first (admin): the stamps given and the
+// rewards handed over.
+export const getLoyaltyStamps = ({ page = 1, perPage = 20, q = "" } = {}) =>
+  axiosWrapper.get("/api/loyalty/stamps", { params: { page, perPage, ...(q ? { q } : {}) } });
 export const getLoyaltyRedemptions = ({ page = 1, perPage = 20, q = "" } = {}) =>
   axiosWrapper.get("/api/loyalty/redemptions", { params: { page, perPage, ...(q ? { q } : {}) } });
+// Pengaturan → API (API Management, admin): the outside services and their
+// keys. status ({ loyalty }) is read by every user to show or hide loyalty.
+export const getIntegrationStatus = () => axiosWrapper.get("/api/integrations/status");
+export const getIntegrations = () => axiosWrapper.get("/api/integrations");
+export const updateIntegration = ({ code, ...data }) => axiosWrapper.put(`/api/integrations/${code}`, data);
+export const testIntegration = ({ code, ...data }) => axiosWrapper.post(`/api/integrations/${code}/test`, data);
 
 // Recap Endpoints
 export const getRecapMeta = (params = {}) =>

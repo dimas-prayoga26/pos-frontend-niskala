@@ -16,6 +16,7 @@ import {
 import CreatableSelect2 from "../../../shared/ui/CreatableSelect2";
 import { useSelector } from "react-redux";
 import AccountManagement from "./AccountManagement";
+import ApiManagement from "./ApiManagement";
 import BestSellerSettings from "./BestSellerSettings";
 import PaymentSourceManagement from "./PaymentSourceManagement";
 
@@ -38,8 +39,14 @@ const SettingsManagement = () => {
     { id: "suplier", label: "Suplier" },
     { id: "payment", label: "Sumber Pembayaran" },
     { id: "best-seller", label: "Best Seller" },
-    // Akun: admins. Program Promo lives under the dashboard's Menu tab.
-    ...(isAdmin ? [{ id: "akun", label: "Akun" }] : []),
+    // Admins: API (the loyalty key: without it no loyalty anywhere; the
+    // stamp card itself lives under Menu → Promo) and Akun.
+    ...(isAdmin
+      ? [
+          { id: "api", label: "API" },
+          { id: "akun", label: "Akun" },
+        ]
+      : []),
   ];
   const queryClient = useQueryClient();
   const [platformForm, setPlatformForm] = useState(emptyPlatformForm);
@@ -161,7 +168,7 @@ const SettingsManagement = () => {
         </nav>
       </div>
 
-      {activeMenu === "akun" && isAdmin ? <AccountManagement /> : activeMenu === "best-seller" ? <BestSellerSettings /> : activeMenu === "payment" ? <PaymentSourceManagement /> : activeMenu === "suplier" ? <SupplierManagement /> : <div className="grid grid-cols-1 gap-4 xl:grid-cols-[360px_1fr]">
+      {activeMenu === "akun" && isAdmin ? <AccountManagement /> : activeMenu === "api" && isAdmin ? <ApiManagement /> : activeMenu === "best-seller" ? <BestSellerSettings /> : activeMenu === "payment" ? <PaymentSourceManagement /> : activeMenu === "suplier" ? <SupplierManagement /> : <div className="grid grid-cols-1 gap-4 xl:grid-cols-[360px_1fr]">
         <form
           onSubmit={handleSubmitPlatform}
           className="rounded-lg bg-[#1f1f1f] p-4"

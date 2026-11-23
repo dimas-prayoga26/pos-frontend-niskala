@@ -7,6 +7,7 @@ import { getCategories, getLoyaltyCustomer, getLoyaltyProgram, getMenuItems } fr
 import { formatCurrency } from "../../utils";
 import { addItems, removeLoyaltyItemsNotFor } from "../../features/pos/cartSlice";
 import { buildMenuCatalog } from "../../features/pos/utils/menuCatalog";
+import useLoyaltyEnabled from "../../shared/lib/useLoyaltyEnabled";
 import {
   buildLoyaltyRewardLine,
   findLoyaltyRewardMenu,
@@ -43,11 +44,13 @@ const LoyaltyStatus = ({ phone }) => {
   const debouncedPhone = useDebounced(trimmed, DEBOUNCE_MS);
   const enabled = debouncedPhone.replace(/\D/g, "").length >= MIN_DIGITS;
 
-  // Program Promo: with the stamp card off the number is not
-  // looked up at all.
+  // No loyalty key (Pengaturan → API), or the stamp card off: the number is
+  // not looked up at all.
+  const loyaltyApi = useLoyaltyEnabled();
   const programQuery = useQuery({
     queryKey: ["loyalty-program"],
     queryFn: getLoyaltyProgram,
+    enabled: loyaltyApi.enabled,
     retry: false,
   });
   const programActive = programQuery.data?.data?.data?.active === true;
@@ -75,14 +78,14 @@ const LoyaltyStatus = ({ phone }) => {
     [categoriesRes, menuItemsRes]
   );
 
-  // A reward belongs to the number it was claimed for, and goes when the
-  // stamp card is switched off.
-  const programOff = programQuery.isSuccess && !programActive;
+  // A reward belongs to the number it was claimed for, and goes when
+  // loyalty is gone or the stamp card is switched off.
+  const programOff = (loyaltyApi.known && !loyaltyApi.enabled) || (programQuery.isSuccess && !programActive);
   useEffect(() => {
     dispatch(removeLoyaltyItemsNotFor(programOff ? "" : trimmed));
   }, [dispatch, trimmed, programOff]);
 
-  if (!enabled || trimmed !== debouncedPhone || programOff) return null;
+  if (!loyaltyApi.enabled || !enabled || trimmed !== debouncedPhone || programOff) return null;
 
   const box = "mt-2 rounded-lg bg-[#1a1a1a] px-3 py-2 text-xs";
 

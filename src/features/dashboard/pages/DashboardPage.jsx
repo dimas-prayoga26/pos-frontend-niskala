@@ -42,8 +42,8 @@ const Dashboard = () => {
     return stockItems.filter((item) => item.status === "HAMPIR HABIS" || item.status === "HARUS ORDER").length;
   }, [stockItemsRes]);
 
-  // Metrik holds Ringkasan and Menu Paling Laku, Menu holds Daftar Menu and
-  // Program Promo; Pengaturan is the gear at the end of the bar. Menu and
+  // Metrik holds Ringkasan and Menu Paling Laku, Menu the menus and every
+  // promo; Pengaturan is the gear at the end of the bar. Menu and
   // Pengaturan: admins only.
   const tabs = [
     { key: "metrics", label: "Metrik" },
