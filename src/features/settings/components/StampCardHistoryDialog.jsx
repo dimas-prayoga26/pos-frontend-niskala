@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { getLoyaltyRedemptions, getLoyaltyStamps } from "../api";
+import { getLoyaltyMembers, getLoyaltyRedemptions, getLoyaltyStamps } from "../api";
 import { formatJakartaReceiptDateTime } from "../../../shared/lib/dates";
 
 const PER_PAGE = 20;
@@ -20,10 +20,13 @@ const CustomerCell = ({ customer }) => (
   </td>
 );
 
-// Stamp Card → Riwayat, newest first: the stamps given (loyalty_stamps, each
-// with the order that earned it) and the rewards handed over
-// (loyalty_redemptions, with the order they went out in).
-const VIEWS = [
+const CARD_STATUS = { completed: "Penuh", redeemed: "Selesai", expired: "Kedaluwarsa" };
+
+// Stamp Card → Riwayat. Member (first, opens by default): every member, most
+// stamps first, with all the stamps they have earned. Then, newest first, the
+// stamps given (loyalty_stamps, each with the order that earned it) and the
+// rewards handed over (loyalty_redemptions, with the order they went out in).
+const [STAMPS_VIEW, REDEMPTIONS_VIEW, MEMBERS_VIEW] = [
   {
     key: "stamps",
     label: "Stamp Masuk",
@@ -69,7 +72,49 @@ const VIEWS = [
       </>
     ),
   },
+  {
+    key: "members",
+    label: "Member",
+    queryKey: "loyalty-members",
+    fetch: getLoyaltyMembers,
+    total: (count) => `${count} member`,
+    empty: "Belum ada member.",
+    columns: ["Pelanggan", "Total Stamp", "Kartu Sekarang", "Hadiah", "Stamp Terakhir"],
+    renderRow: (row) => (
+      <>
+        <CustomerCell customer={row.customer} />
+        <td className={cellClass}>
+          <span className="block text-base font-bold">{row.total_stamps}</span>
+          <span className="text-xs text-[#ababab]">{row.cards} kartu</span>
+        </td>
+        <td className={cellClass}>
+          {row.card ? (
+            <>
+              <span className="block">
+                {row.card.stamps}/{row.card.slots}
+                {CARD_STATUS[row.card.status] ? ` · ${CARD_STATUS[row.card.status]}` : ""}
+              </span>
+              <span className="text-xs text-[#ababab]">{row.card.number}</span>
+            </>
+          ) : (
+            "-"
+          )}
+        </td>
+        <td className={cellClass}>
+          <span className="block">{row.rewards_redeemed} ditukar</span>
+          <span className={`text-xs ${row.rewards_ready > 0 ? "font-semibold text-[#AFA087]" : "text-[#ababab]"}`}>
+            {row.rewards_ready} siap ditukar
+          </span>
+        </td>
+        <td className={`${cellClass} whitespace-nowrap`}>
+          {row.last_stamp_at ? formatJakartaReceiptDateTime(row.last_stamp_at) : <span className="text-[#ababab]">Belum ada</span>}
+        </td>
+      </>
+    ),
+  },
 ];
+
+const VIEWS = [MEMBERS_VIEW, STAMPS_VIEW, REDEMPTIONS_VIEW];
 
 export default function StampCardHistoryDialog({ onClose }) {
   const [viewKey, setViewKey] = useState(VIEWS[0].key);

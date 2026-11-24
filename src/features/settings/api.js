@@ -8,6 +8,7 @@ export {
   deleteUser,
   getCategories,
   getIntegrations,
+  getLoyaltyMembers,
   getLoyaltyProgram,
   getLoyaltyRedemptions,
   getLoyaltyStamps,

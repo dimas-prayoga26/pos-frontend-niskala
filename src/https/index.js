@@ -79,6 +79,10 @@ export const deleteOrderPlatform = (platformId) =>
 // redeemed with the order they go out in (addOrder), not on their own.
 export const getLoyaltyCustomer = (phone) =>
   axiosWrapper.get(`/api/loyalty/customers/${encodeURIComponent(phone)}`);
+// The QR on the back of a stamp card: whose it is and whether its reward can
+// be handed over ({ status, ready, message, customer, reward }).
+export const getLoyaltyVoucher = (code) =>
+  axiosWrapper.get(`/api/loyalty/vouchers/${encodeURIComponent(String(code).trim())}`);
 // Program Promo: the stamp card (on/off, rules, rewards).
 // Changes are admin only; each answers with the whole program.
 export const getLoyaltyProgram = () => axiosWrapper.get("/api/loyalty/program");
@@ -90,6 +94,9 @@ export const getLoyaltyStamps = ({ page = 1, perPage = 20, q = "" } = {}) =>
   axiosWrapper.get("/api/loyalty/stamps", { params: { page, perPage, ...(q ? { q } : {}) } });
 export const getLoyaltyRedemptions = ({ page = 1, perPage = 20, q = "" } = {}) =>
   axiosWrapper.get("/api/loyalty/redemptions", { params: { page, perPage, ...(q ? { q } : {}) } });
+// The members, most stamps first, with all the stamps each has earned.
+export const getLoyaltyMembers = ({ page = 1, perPage = 20, q = "" } = {}) =>
+  axiosWrapper.get("/api/loyalty/members", { params: { page, perPage, ...(q ? { q } : {}) } });
 // Pengaturan → API (API Management, admin): the outside services and their
 // keys. status ({ loyalty }) is read by every user to show or hide loyalty.
 export const getIntegrationStatus = () => axiosWrapper.get("/api/integrations/status");

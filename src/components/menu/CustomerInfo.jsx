@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
+import { enqueueSnackbar } from "notistack";
 import { setCustomer } from "../../redux/slices/customerSlice";
 import {
   CREW_ORDER_TYPE,
@@ -10,12 +11,24 @@ import {
   normalizeNominalInput,
 } from "../../utils";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { getOrderPlatforms } from "../../https";
-import { MdKeyboardArrowDown } from "react-icons/md";
+import { getLoyaltyVoucher, getOrderPlatforms } from "../../https";
+import { MdKeyboardArrowDown, MdQrCodeScanner } from "react-icons/md";
 import LoyaltyStatus from "./LoyaltyStatus";
+import LoyaltyQrScanner from "./LoyaltyQrScanner";
+import useLoyaltyEnabled from "../../shared/lib/useLoyaltyEnabled";
+import { isLoyaltyVoucherCode, localPhone } from "../../features/pos/utils/loyaltyVoucher";
+
+const voucherErrorMessage = (error) =>
+  error?.response?.data?.message || "Voucher tidak bisa dicek. Coba lagi.";
 
 const CustomerInfo = () => {
   const [isPlatformOpen, setIsPlatformOpen] = useState(false);
+  // Stamp card voucher QR: the camera, the lookup, and the reward to put in
+  // the order once LoyaltyStatus has looked the number up ({ id, phone, stamps, label }).
+  const [isScannerOpen, setIsScannerOpen] = useState(false);
+  const [isCheckingVoucher, setIsCheckingVoucher] = useState(false);
+  const [voucherClaim, setVoucherClaim] = useState(null);
+  const loyaltyApi = useLoyaltyEnabled();
   const dispatch = useDispatch();
   const customerData = useSelector((state) => state.customer);
   const cartData = useSelector((state) => state.cart);
@@ -50,6 +63,65 @@ const CustomerInfo = () => {
       })
     );
   };
+
+  // A scanned voucher fills in its customer's name and number; a ready
+  // reward then goes in the order like Tukar.
+  const applyVoucher = async (code) => {
+    setIsScannerOpen(false);
+    if (!isLoyaltyVoucherCode(code)) {
+      enqueueSnackbar("QR ini bukan voucher Stamp Card Niskala.", { variant: "warning" });
+      return;
+    }
+
+    setIsCheckingVoucher(true);
+    try {
+      const response = await getLoyaltyVoucher(code);
+      const voucher = response?.data?.data;
+      const phone = localPhone(voucher?.customer?.phone);
+      if (!phone) throw new Error("voucher without phone");
+
+      // Customer Name and Nomor Telepon fill in from the card; a card
+      // without a name keeps what was typed.
+      dispatch(
+        setCustomer({
+          phone,
+          name: voucher.customer?.name?.trim() || customerData.customerName || "",
+        })
+      );
+
+      if (voucher.ready) {
+        setVoucherClaim({
+          id: `${code}-${Date.now()}`,
+          phone,
+          stamps: Number(voucher.reward?.stamps),
+          label: voucher.reward?.label || "Hadiah",
+        });
+      } else {
+        enqueueSnackbar(voucher.message || "Hadiah ini belum bisa ditukar.", { variant: "warning" });
+      }
+    } catch (error) {
+      // What a scanner gun typed before the code was complete is no number.
+      if (/^NSKV/i.test(String(customerData.customerPhone || "").trim())) {
+        updateCustomer("phone", "");
+      }
+      enqueueSnackbar(voucherErrorMessage(error), { variant: "error" });
+    } finally {
+      setIsCheckingVoucher(false);
+    }
+  };
+
+  // A scanner gun types the voucher into Nomor Telepon.
+  const updatePhone = (value) => {
+    if (isLoyaltyVoucherCode(value)) {
+      applyVoucher(value.trim());
+      return;
+    }
+    updateCustomer("phone", value);
+  };
+
+  const closeScanner = useCallback(() => setIsScannerOpen(false), []);
+  const finishVoucherClaim = useCallback(() => setVoucherClaim(null), []);
+  const loyaltyOff = loyaltyApi.known && !loyaltyApi.enabled;
 
   const updateCatering = (field, value) => {
     dispatch(
@@ -147,18 +219,43 @@ const CustomerInfo = () => {
 
         {!isOnlineOrder && !isCrewOrder && (
           <div>
-            <label className="block text-[#ababab] mb-2 text-xs font-medium">
+            <label
+              htmlFor="customer-phone"
+              className="block text-[#ababab] mb-2 text-xs font-medium"
+            >
               Nomor Telepon
             </label>
-            <input
-              value={customerData.customerPhone}
-              onChange={(event) => updateCustomer("phone", event.target.value)}
-              type="tel"
-              inputMode="tel"
-              placeholder="0812-xxxx-xxxx"
-              className="w-full rounded-lg bg-[#1f1f1f] px-4 py-3 text-sm text-white outline-none"
+            <div className="relative">
+              <input
+                id="customer-phone"
+                value={customerData.customerPhone}
+                onChange={(event) => updatePhone(event.target.value)}
+                type="tel"
+                inputMode="tel"
+                placeholder="0812-xxxx-xxxx"
+                className="w-full rounded-lg bg-[#1f1f1f] py-3 pl-4 pr-12 text-sm text-white outline-none"
+              />
+              <button
+                type="button"
+                onClick={() => setIsScannerOpen(true)}
+                disabled={loyaltyOff || isCheckingVoucher}
+                aria-label="Scan QR Stamp Card"
+                title={loyaltyOff ? "Loyalty nonaktif" : "Scan QR Stamp Card"}
+                className="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-md text-[#ababab] transition hover:bg-[#2a2a2a] hover:text-[#a79981] disabled:cursor-not-allowed disabled:text-[#555] disabled:hover:bg-transparent"
+              >
+                {isCheckingVoucher ? (
+                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-[#a79981] border-t-transparent" />
+                ) : (
+                  <MdQrCodeScanner size={20} />
+                )}
+              </button>
+            </div>
+            <LoyaltyStatus
+              phone={customerData.customerPhone}
+              claim={voucherClaim}
+              onClaimDone={finishVoucherClaim}
             />
-            <LoyaltyStatus phone={customerData.customerPhone} />
+            <LoyaltyQrScanner open={isScannerOpen} onClose={closeScanner} onDetected={applyVoucher} />
           </div>
         )}
 

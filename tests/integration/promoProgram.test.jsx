@@ -6,6 +6,7 @@ import { renderWithProviders } from "../renderWithProviders";
 
 vi.mock("../../src/https/index", async (importOriginal) => ({
   ...(await importOriginal()),
+  getLoyaltyMembers: vi.fn(),
   getLoyaltyProgram: vi.fn(),
   getLoyaltyRedemptions: vi.fn(),
   getLoyaltyStamps: vi.fn(),
@@ -170,21 +171,39 @@ describe("program promo", () => {
       fireEvent.click(within(card).getByRole("button", { name: "Riwayat" }));
       return screen.findByRole("dialog", { name: "Riwayat Stamp Card" });
     };
-    const openHistory = async () => {
+    const openView = async (label) => {
       const dialog = await openStampHistory();
-      fireEvent.click(within(within(dialog).getByRole("group", { name: "Jenis riwayat" })).getByRole("button", { name: "Tukar Hadiah" }));
+      fireEvent.click(within(within(dialog).getByRole("group", { name: "Jenis riwayat" })).getByRole("button", { name: label }));
       return dialog;
     };
+    const openStamps = () => openView("Stamp Masuk");
+    const openHistory = () => openView("Tukar Hadiah");
 
     beforeEach(() => {
+      api.getLoyaltyMembers.mockReset();
+      api.getLoyaltyMembers.mockResolvedValue(history([]));
       api.getLoyaltyStamps.mockReset();
       api.getLoyaltyStamps.mockResolvedValue(history([STAMPED, GIVEN]));
       api.getLoyaltyRedemptions.mockReset();
       api.getLoyaltyRedemptions.mockResolvedValue(history([REDEEMED]));
     });
 
-    it("opens on the stamps given: when, who, which stamp of which card, the nota and the cashier", async () => {
+    it("opens on Member, the first view, before Stamp Masuk and Tukar Hadiah", async () => {
       const dialog = await openStampHistory();
+
+      const views = within(dialog).getByRole("group", { name: "Jenis riwayat" });
+      expect(within(views).getAllByRole("button").map((button) => button.textContent)).toEqual([
+        "Member",
+        "Stamp Masuk",
+        "Tukar Hadiah",
+      ]);
+      expect(within(views).getByRole("button", { name: "Member" })).toHaveAttribute("aria-pressed", "true");
+      await waitFor(() => expect(api.getLoyaltyMembers).toHaveBeenCalledWith({ page: 1, perPage: 20, q: "" }));
+      expect(api.getLoyaltyStamps).not.toHaveBeenCalled();
+    });
+
+    it("lists the stamps given: when, who, which stamp of which card, the nota and the cashier", async () => {
+      const dialog = await openStamps();
 
       const views = within(dialog).getByRole("group", { name: "Jenis riwayat" });
       expect(within(views).getByRole("button", { name: "Stamp Masuk" })).toHaveAttribute("aria-pressed", "true");
@@ -206,7 +225,7 @@ describe("program promo", () => {
 
     it("says when no stamp was given yet", async () => {
       api.getLoyaltyStamps.mockResolvedValue(history([]));
-      const dialog = await openStampHistory();
+      const dialog = await openStamps();
 
       expect(await within(dialog).findByText("Belum ada stamp yang diberikan.")).toBeInTheDocument();
     });
@@ -248,6 +267,77 @@ describe("program promo", () => {
 
       expect(await within(dialog).findByText("Belum ada hadiah yang ditukar.")).toBeInTheDocument();
       expect(within(dialog).queryByRole("button", { name: "Berikutnya" })).not.toBeInTheDocument();
+    });
+
+    describe("Member", () => {
+      // 12 stamps over two cards (the first full), one reward handed over and
+      // one ready; and a member who never got a stamp.
+      const MEMBER = {
+        id: 4,
+        customer: { code: "NSK-000004", name: "Demo Makanan", phone: "62987654321" },
+        registered_at: "2026-11-01T09:00:00+07:00",
+        total_stamps: 12,
+        last_stamp_at: "2026-11-19T12:00:00+07:00",
+        cards: 2,
+        card: { number: "NSK-000004-02", stamps: 2, slots: 10, status: "active" },
+        rewards_redeemed: 1,
+        rewards_ready: 1,
+      };
+      const NEW_MEMBER = {
+        id: 9,
+        customer: { code: "NSK-000009", name: null, phone: "6281111111111" },
+        registered_at: "2026-11-22T09:00:00+07:00",
+        total_stamps: 0,
+        last_stamp_at: null,
+        cards: 1,
+        card: { number: "NSK-000009-01", stamps: 0, slots: 10, status: "active" },
+        rewards_redeemed: 0,
+        rewards_ready: 0,
+      };
+      // Member is the view the dialog opens on.
+      const openMembers = openStampHistory;
+
+      beforeEach(() => {
+        api.getLoyaltyMembers.mockReset();
+        api.getLoyaltyMembers.mockResolvedValue(history([MEMBER, NEW_MEMBER]));
+      });
+
+      it("lists every member with all the stamps they earned, their card now and their rewards", async () => {
+        const dialog = await openMembers();
+
+        const row = (await within(dialog).findByText("NSK-000004-02")).closest("tr");
+        expect(Array.from(row.cells).map((cell) => cell.textContent)).toEqual([
+          "0987654321NSK-000004 · Demo Makanan",
+          "122 kartu",
+          "2/10NSK-000004-02",
+          "1 ditukar1 siap ditukar",
+          "19/11/26 12:00",
+        ]);
+        const fresh = within(dialog).getByText("NSK-000009-01").closest("tr");
+        expect(fresh.cells[1]).toHaveTextContent("01 kartu");
+        expect(fresh.cells[4]).toHaveTextContent("Belum ada");
+        expect(within(dialog).getByText("2 member")).toBeInTheDocument();
+        expect(api.getLoyaltyMembers).toHaveBeenCalledWith({ page: 1, perPage: 20, q: "" });
+      });
+
+      it("says a full card and searches members", async () => {
+        api.getLoyaltyMembers.mockResolvedValue(
+          history([{ ...MEMBER, cards: 1, card: { ...MEMBER.card, number: "NSK-000004-01", stamps: 10, status: "completed" } }])
+        );
+        const dialog = await openMembers();
+
+        expect(await within(dialog).findByText("10/10 · Penuh")).toBeInTheDocument();
+
+        fireEvent.change(within(dialog).getByLabelText("Cari riwayat"), { target: { value: "Demo" } });
+        await waitFor(() => expect(api.getLoyaltyMembers).toHaveBeenLastCalledWith({ page: 1, perPage: 20, q: "Demo" }));
+      });
+
+      it("says when there is no member yet", async () => {
+        api.getLoyaltyMembers.mockResolvedValue(history([]));
+        const dialog = await openMembers();
+
+        expect(await within(dialog).findByText("Belum ada member.")).toBeInTheDocument();
+      });
     });
   });
 

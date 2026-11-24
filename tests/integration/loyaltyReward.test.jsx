@@ -14,6 +14,7 @@ vi.mock("../../src/https/index", async (importOriginal) => ({
   getOrderPlatforms: vi.fn(),
   getLoyaltyCustomer: vi.fn(),
   getLoyaltyProgram: vi.fn(),
+  getLoyaltyVoucher: vi.fn(),
 }));
 
 const CATEGORIES = [
@@ -187,5 +188,143 @@ describe("Loyalty reward as a Kategori Promo menu", () => {
 
     expect(await screen.findByText("Minuman gratis siap · menu promonya belum ada", {}, { timeout: 2000 })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Tukar Minuman gratis/ })).not.toBeInTheDocument();
+  });
+});
+
+// The QR on the back of a stamp card (loyalty app RewardVoucher), scanned
+// with the camera or typed into Nomor Telepon by a scanner gun.
+describe("Stamp card voucher QR at the cashier", () => {
+  const CODE = "NSKV1.NSK-000002-01.5.29872800.0123456789abcdef";
+  const voucher = (overrides = {}) => ({
+    data: {
+      data: {
+        status: "ready",
+        ready: true,
+        message: null,
+        customer: { code: "NSK-000002", name: "Demo Minuman", phone: "1234567890" },
+        card_number: "NSK-000002-01",
+        reward: { stamps: 5, label: "Minuman gratis", promo_menu_item_id: 50 },
+        ...overrides,
+      },
+    },
+  });
+
+  beforeEach(() => {
+    Element.prototype.scrollTo ??= () => {};
+    api.getCategories.mockResolvedValue({ data: { data: CATEGORIES } });
+    api.getMenuItems.mockResolvedValue({ data: { data: MENUS } });
+    api.getOrderPlatforms.mockResolvedValue({ data: { data: [] } });
+    api.getLoyaltyCustomer.mockResolvedValue({ data: { data: customer } });
+    api.getLoyaltyProgram.mockResolvedValue({ data: { success: true, data: { code: "stamp_card", active: true } } });
+    api.getLoyaltyVoucher.mockReset();
+  });
+
+  it("fills in the voucher's customer and puts its reward in the order", async () => {
+    api.getLoyaltyVoucher.mockResolvedValue(voucher());
+    const { store } = renderWithProviders(<MenuPage />, { route: "/menu" });
+    await screen.findAllByText("Americano");
+
+    typePhone(CODE);
+
+    expect(
+      await screen.findByText("🎁 Loyalty Minuman masuk pesanan · pilih menunya di Order Details", {}, { timeout: 3000 })
+    ).toBeInTheDocument();
+    expect(api.getLoyaltyVoucher).toHaveBeenCalledWith(CODE);
+    expect(store.getState().customer).toMatchObject({ customerPhone: "1234567890", customerName: "Demo Minuman" });
+    expect(store.getState().cart).toEqual([
+      expect.objectContaining({
+        id: "loyalty-5-50-1",
+        loyaltyReward: { stamps: 5, label: "Minuman gratis", phone: "1234567890" },
+      }),
+    ]);
+    expect(screen.getByText("Minuman gratis di pesanan")).toBeInTheDocument();
+  });
+
+  it("fills in the card's name over a typed one, and says when the reward was already handed over", async () => {
+    api.getLoyaltyVoucher.mockResolvedValue(
+      voucher({ status: "redeemed", ready: false, message: "Hadiah ini sudah ditukar." })
+    );
+    const { store } = renderWithProviders(<MenuPage />, { route: "/menu" });
+    await screen.findAllByText("Americano");
+    fireEvent.change(screen.getByLabelText("Customer Name"), { target: { value: "Guest 12" } });
+
+    typePhone(CODE);
+
+    expect(await screen.findByText("Hadiah ini sudah ditukar.")).toBeInTheDocument();
+    expect(store.getState().customer).toMatchObject({ customerPhone: "1234567890", customerName: "Demo Minuman" });
+    // The number is looked up as usual; nothing goes in the order by itself.
+    await tukar();
+    expect(store.getState().cart).toEqual([]);
+  });
+
+  it("keeps the typed name when the card has none", async () => {
+    api.getLoyaltyVoucher.mockResolvedValue(
+      voucher({ customer: { code: "NSK-000002", name: null, phone: "1234567890" } })
+    );
+    const { store } = renderWithProviders(<MenuPage />, { route: "/menu" });
+    await screen.findAllByText("Americano");
+    fireEvent.change(screen.getByLabelText("Customer Name"), { target: { value: "Budi" } });
+
+    typePhone(CODE);
+
+    await waitFor(() => expect(store.getState().customer.customerPhone).toBe("1234567890"));
+    expect(store.getState().customer.customerName).toBe("Budi");
+  });
+
+  it("says when the QR is not a voucher and leaves no half-typed code behind", async () => {
+    api.getLoyaltyVoucher.mockRejectedValue({
+      response: { status: 404, data: { message: "QR ini bukan voucher Stamp Card Niskala." } },
+    });
+    const { store } = renderWithProviders(<MenuPage />, { route: "/menu" });
+    await screen.findAllByText("Americano");
+
+    typePhone(CODE.slice(0, -1));
+    typePhone(CODE);
+
+    expect(await screen.findByText("QR ini bukan voucher Stamp Card Niskala.")).toBeInTheDocument();
+    expect(store.getState().customer.customerPhone).toBe("");
+    expect(store.getState().cart).toEqual([]);
+  });
+
+  it("refuses a QR that has changed since (a screenshot) and fills nothing in", async () => {
+    api.getLoyaltyVoucher.mockRejectedValue({
+      response: {
+        status: 422,
+        data: { message: "QR ini sudah berganti. Scan QR yang tampil sekarang di HP pelanggan." },
+      },
+    });
+    const { store } = renderWithProviders(<MenuPage />, { route: "/menu" });
+    await screen.findAllByText("Americano");
+
+    typePhone(CODE);
+
+    expect(
+      await screen.findByText("QR ini sudah berganti. Scan QR yang tampil sekarang di HP pelanggan.")
+    ).toBeInTheDocument();
+    expect(store.getState().customer).toMatchObject({ customerPhone: "", customerName: "" });
+    expect(store.getState().cart).toEqual([]);
+  });
+
+  it("opens the camera from the icon in Nomor Telepon", async () => {
+    renderWithProviders(<MenuPage />, { route: "/menu" });
+    await screen.findAllByText("Americano");
+
+    const scan = screen.getByRole("button", { name: "Scan QR Stamp Card" });
+    await waitFor(() => expect(scan).toBeEnabled());
+    fireEvent.click(scan);
+
+    const dialog = await screen.findByRole("dialog", { name: "Scan QR Stamp Card" });
+    // jsdom has no camera: the reason is shown instead of the picture.
+    expect(await within(dialog).findByText(/Kamera/)).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Tutup" }));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("greys the scan icon out while loyalty is off (Pengaturan → API)", async () => {
+    api.getIntegrationStatus.mockResolvedValue({ data: { success: true, data: { loyalty: false } } });
+    renderWithProviders(<MenuPage />, { route: "/menu" });
+    await screen.findAllByText("Americano");
+
+    await waitFor(() => expect(screen.getByRole("button", { name: "Scan QR Stamp Card" })).toBeDisabled());
   });
 });

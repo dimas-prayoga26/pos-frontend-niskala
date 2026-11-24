@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { enqueueSnackbar } from "notistack";
 import { MdRedeem } from "react-icons/md";
@@ -37,7 +37,10 @@ const errorMessage = (error) => error?.response?.data?.message || "Loyalty tidak
 const NEW_NUMBER_TEXT = "text-green-400";
 const REGISTERED_TEXT = "text-[#AFA087]";
 
-const LoyaltyStatus = ({ phone }) => {
+// claim: a scanned stamp card voucher ({ id, phone, stamps, label }) whose
+// reward goes in the order, like Tukar, once this number is looked up;
+// onClaimDone is called when it is dealt with.
+const LoyaltyStatus = ({ phone, claim = null, onClaimDone }) => {
   const dispatch = useDispatch();
   const cart = useSelector((state) => state.cart);
   const trimmed = String(phone || "").trim();
@@ -85,6 +88,54 @@ const LoyaltyStatus = ({ phone }) => {
     dispatch(removeLoyaltyItemsNotFor(programOff ? "" : trimmed));
   }, [dispatch, trimmed, programOff]);
 
+  const giveReward = (reward, rewardMenu) => {
+    dispatch(
+      addItems(
+        buildLoyaltyRewardLine({ reward, ...rewardMenu, catalog, phone: debouncedPhone, cart })
+      )
+    );
+    enqueueSnackbar(
+      rewardMenu.menu.bundleChoices?.length
+        ? `🎁 ${rewardMenu.menu.name} masuk pesanan · pilih menunya di Order Details`
+        : `🎁 ${rewardMenu.menu.name} masuk pesanan`,
+      { variant: "success" }
+    );
+  };
+
+  // A scanned voucher: once this number's lookup is in (and the menus, for
+  // the reward's promo), its reward goes in the order once.
+  const handledClaimId = useRef(null);
+  const lookedUp = data?.data?.data;
+  useEffect(() => {
+    if (!claim || handledClaimId.current === claim.id) return;
+    if (claim.phone !== trimmed || debouncedPhone !== trimmed || isFetching || !menuItemsRes) return;
+    if (!lookedUp && !error) return;
+
+    handledClaimId.current = claim.id;
+    onClaimDone?.();
+    if (!lookedUp) return; // the lookup failed: its message is shown below
+
+    const reward = (lookedUp.ready_rewards || []).find(
+      (candidate) => Number(candidate.stamps) === Number(claim.stamps)
+    );
+    if (!reward) {
+      enqueueSnackbar(`${claim.label} belum bisa ditukar.`, { variant: "warning" });
+      return;
+    }
+    if ((Number(reward.count) || 0) - loyaltyLinesOf(cart, reward.stamps).length <= 0) {
+      enqueueSnackbar(`${reward.label} sudah di pesanan.`, { variant: "info" });
+      return;
+    }
+    const rewardMenu = findLoyaltyRewardMenu(catalog, reward.promo_menu_item_id);
+    if (!rewardMenu) {
+      enqueueSnackbar(`${reward.label} siap, tapi menu promonya belum ada.`, { variant: "warning" });
+      return;
+    }
+    giveReward(reward, rewardMenu);
+    // giveReward reads the same cart/catalog listed here.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [claim, trimmed, debouncedPhone, isFetching, lookedUp, error, menuItemsRes, catalog, cart, onClaimDone]);
+
   const box = "mt-2 rounded-lg bg-[#1a1a1a] px-3 py-2 text-xs";
 
   // Loyalty off in Pengaturan → API: said, greyed out, nothing looked up.
@@ -117,20 +168,6 @@ const LoyaltyStatus = ({ phone }) => {
   }
 
   const { customer, card, next_reward: nextReward, ready_rewards: readyRewards = [] } = loyalty;
-
-  const giveReward = (reward, rewardMenu) => {
-    dispatch(
-      addItems(
-        buildLoyaltyRewardLine({ reward, ...rewardMenu, catalog, phone: debouncedPhone, cart })
-      )
-    );
-    enqueueSnackbar(
-      rewardMenu.menu.bundleChoices?.length
-        ? `🎁 ${rewardMenu.menu.name} masuk pesanan · pilih menunya di Order Details`
-        : `🎁 ${rewardMenu.menu.name} masuk pesanan`,
-      { variant: "success" }
-    );
-  };
 
   return (
     <div className={`${box} ${REGISTERED_TEXT}`}>
