@@ -11,6 +11,7 @@ vi.mock("../../src/https/index", async (importOriginal) => ({
   // Pengaturan → API: the loyalty key is set (a test may answer otherwise).
   getIntegrationStatus: vi.fn(async () => ({ data: { success: true, data: { loyalty: true } } })),
   getCategories: vi.fn(),
+  getLoyaltyMembers: vi.fn(),
   getLoyaltyProgram: vi.fn(),
   getMenuItems: vi.fn(),
   getOrders: vi.fn(),
@@ -68,7 +69,9 @@ describe("dashboard menus: Stok Bahan holds what is on hand, Belanja the purchas
 
   it("puts Belanja right after Stok Bahan with the number of draft nota", async () => {
     renderWithProviders(<Dashboard />, { preloadedState: user("Admin") });
-    expect(menuNames()).toEqual(["Metrik", "Stok Bahan", "Belanja", "Menu", "Rekap", "Pengaturan"]);
+    // Member Stamp Card shows once loyalty answered (set up in Pengaturan → API).
+    expect(await screen.findByRole("button", { name: "Member Stamp Card" })).toBeInTheDocument();
+    expect(menuNames()).toEqual(["Metrik", "Stok Bahan", "Belanja", "Menu", "Member Stamp Card", "Rekap", "Pengaturan"]);
     expect(await screen.findByRole("button", { name: "Belanja 2" })).toBeInTheDocument();
     // Nothing to restock: no badge, not a 0.
     expect(screen.getByRole("button", { name: "Stok Bahan" })).toBeInTheDocument();
@@ -220,8 +223,10 @@ describe("dashboard menus: Stok Bahan holds what is on hand, Belanja the purchas
     const card = await screen.findByRole("region", { name: "Stamp Card" });
     expect(within(card).getByText("Loyalty nonaktif: aktifkan di Pengaturan → API.")).toBeInTheDocument();
     expect(within(card).getByRole("switch", { name: "Stamp Card" })).toBeDisabled();
-    expect(within(card).getByRole("button", { name: "Riwayat" })).toBeDisabled();
+    expect(within(card).queryByRole("button", { name: "Riwayat" })).not.toBeInTheDocument();
     expect(api.getLoyaltyProgram).not.toHaveBeenCalled();
+    // No loyalty, no Member Stamp Card menu.
+    expect(menuNames()).toEqual(["Metrik", "Stok Bahan", "Belanja", "Menu", "Rekap", "Pengaturan"]);
     api.getIntegrationStatus.mockResolvedValue({ data: { success: true, data: { loyalty: true } } });
   });
 
@@ -254,6 +259,21 @@ describe("dashboard menus: Stok Bahan holds what is on hand, Belanja the purchas
     // Not under Pengaturan any more.
     fireEvent.click(screen.getByRole("button", { name: "Pengaturan" }));
     expect(screen.queryByRole("button", { name: "Stamp Card" })).not.toBeInTheDocument();
+  });
+
+  it("opens Member Stamp Card on its own menu: Member, Stamp Masuk and Hadiah", async () => {
+    api.getLoyaltyMembers.mockResolvedValue({
+      data: { success: true, data: { data: [], meta: { page: 1, per_page: 20, total: 0, last_page: 1 } } },
+    });
+    renderWithProviders(<Dashboard />, { preloadedState: user("Admin") });
+    fireEvent.click(await screen.findByRole("button", { name: "Member Stamp Card" }));
+
+    const page = await screen.findByRole("region", { name: "Member Stamp Card" });
+    const tabs = within(page).getByRole("group", { name: "Jenis data stamp card" });
+    expect(within(tabs).getAllByRole("button").map((button) => button.textContent)).toEqual(["Member", "Stamp Masuk", "Hadiah"]);
+    expect(within(tabs).getByRole("button", { name: "Member" })).toHaveAttribute("aria-pressed", "true");
+    expect(await within(page).findByText("Belum ada member.")).toBeInTheDocument();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
   it("shows Belanja to kasir, who write draft nota", async () => {

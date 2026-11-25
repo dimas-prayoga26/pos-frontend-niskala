@@ -1,25 +1,22 @@
-import { useCallback, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { enqueueSnackbar } from "notistack";
-import { MdHistory, MdRedeem } from "react-icons/md";
+import { MdRedeem } from "react-icons/md";
 import { getLoyaltyProgram, getMenuItems, updateLoyaltyProgram, updateLoyaltyReward } from "../api";
 import { formatCurrency } from "../../../shared/lib/format";
-import SettingCard, { cardButtonClass } from "../../../shared/ui/SettingCard";
+import SettingCard from "../../../shared/ui/SettingCard";
 import Switch from "../../../shared/ui/Switch";
-import StampCardHistoryDialog from "./StampCardHistoryDialog";
 
 const errorMessage = (error, fallback) => error?.response?.data?.message || fallback;
 
-// Menu → Promo, above the promos: the stamp card (loyalty app), its rules,
-// its rewards and Riwayat. Off, the cashier sees no stamp card, no order
+// Menu → Promo, above the promos: the stamp card (loyalty app), its rules
+// and its rewards; its members, stamps and rewards handed over are under
+// Dashboard → Member Stamp Card. Off, the cashier sees no stamp card, no order
 // earns a stamp and no reward is given (the stamps stay). The menu each
 // reward gives is picked in the promo form (Jenis promo: Hadiah Stamp Card);
 // onEditMenu(menuItemId) opens it from its reward's row. disabled: loyalty is
 // off in Pengaturan → API; the card stays, greyed out, and asks nothing.
 export default function PromoProgramSettings({ onEditMenu = null, disabled = false }) {
   const queryClient = useQueryClient();
-  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
-  const closeHistory = useCallback(() => setIsHistoryOpen(false), []);
   const programQuery = useQuery({
     queryKey: ["loyalty-program"],
     queryFn: getLoyaltyProgram,
@@ -60,12 +57,6 @@ export default function PromoProgramSettings({ onEditMenu = null, disabled = fal
           title="Stamp Card"
           warning="Loyalty nonaktif: aktifkan di Pengaturan → API."
           actions={<Switch checked={false} onChange={() => {}} label="Stamp Card" disabled />}
-          footer={
-            <button type="button" disabled className={`inline-flex items-center gap-1.5 ${cardButtonClass}`}>
-              <MdHistory size={16} />
-              Riwayat
-            </button>
-          }
         />
       </div>
     );
@@ -106,17 +97,6 @@ export default function PromoProgramSettings({ onEditMenu = null, disabled = fal
           label={program.name}
           disabled={isBusy}
         />
-      }
-      // Like every promo card: the switch on top, the buttons below.
-      footer={
-        <button
-          type="button"
-          onClick={() => setIsHistoryOpen(true)}
-          className={`inline-flex items-center gap-1.5 ${cardButtonClass}`}
-        >
-          <MdHistory size={16} />
-          Riwayat
-        </button>
       }
     >
       <div className="overflow-hidden rounded-lg border border-[#333]">
@@ -174,7 +154,6 @@ export default function PromoProgramSettings({ onEditMenu = null, disabled = fal
       {rewards.some((reward) => !reward.promo_menu_item_id) && (
         <p className="mt-2 text-xs text-amber-300">Pilih menunya lewat Tambah Promo → Jenis promo: Hadiah stamp card.</p>
       )}
-      {isHistoryOpen && <StampCardHistoryDialog onClose={closeHistory} />}
     </SettingCard>
   );
 }

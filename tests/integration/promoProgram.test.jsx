@@ -1,7 +1,7 @@
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import * as api from "../../src/https/index";
-import { PromoProgramSettings, SettingsManagement } from "../../src/features/settings";
+import { MemberStampCard, PromoProgramSettings, SettingsManagement } from "../../src/features/settings";
 import { renderWithProviders } from "../renderWithProviders";
 
 vi.mock("../../src/https/index", async (importOriginal) => ({
@@ -137,6 +137,13 @@ describe("program promo", () => {
     expect(within(card).getByRole("switch", { name: "Stamp ke-5 · Minuman gratis" })).toHaveAttribute("aria-checked", "false");
   });
 
+  it("has no Riwayat any more: members, stamps and rewards are under Dashboard → Member Stamp Card", async () => {
+    const card = await openProgramPromo();
+
+    expect(within(card).queryByRole("button", { name: "Riwayat" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
   it("has no form to add a reward", async () => {
     const card = await openProgramPromo();
 
@@ -144,7 +151,8 @@ describe("program promo", () => {
     expect(within(card).queryByLabelText("Nama hadiah")).not.toBeInTheDocument();
   });
 
-  describe("Riwayat", () => {
+  // Dashboard → Member Stamp Card (tests/integration/dashboard.test.jsx opens it).
+  describe("Member Stamp Card", () => {
     const REDEEMED = {
       id: 7,
       redeemed_at: "2026-11-20T13:05:00+07:00",
@@ -167,17 +175,16 @@ describe("program promo", () => {
     const GIVEN = { ...STAMPED, id: 30, stamp_number: 2, order: null, cashier: null };
     const history = (data, meta) => answer({ data, meta: { page: 1, per_page: 20, total: data.length, last_page: 1, ...meta } });
     const openStampHistory = async () => {
-      const card = await openProgramPromo();
-      fireEvent.click(within(card).getByRole("button", { name: "Riwayat" }));
-      return screen.findByRole("dialog", { name: "Riwayat Stamp Card" });
+      renderWithProviders(<MemberStampCard />, { preloadedState: asAdmin });
+      return screen.findByRole("region", { name: "Member Stamp Card" });
     };
     const openView = async (label) => {
       const dialog = await openStampHistory();
-      fireEvent.click(within(within(dialog).getByRole("group", { name: "Jenis riwayat" })).getByRole("button", { name: label }));
+      fireEvent.click(within(within(dialog).getByRole("group", { name: "Jenis data stamp card" })).getByRole("button", { name: label }));
       return dialog;
     };
     const openStamps = () => openView("Stamp Masuk");
-    const openHistory = () => openView("Tukar Hadiah");
+    const openHistory = () => openView("Hadiah");
 
     beforeEach(() => {
       api.getLoyaltyMembers.mockReset();
@@ -188,14 +195,14 @@ describe("program promo", () => {
       api.getLoyaltyRedemptions.mockResolvedValue(history([REDEEMED]));
     });
 
-    it("opens on Member, the first view, before Stamp Masuk and Tukar Hadiah", async () => {
+    it("opens on Member, the first tab, before Stamp Masuk and Hadiah", async () => {
       const dialog = await openStampHistory();
 
-      const views = within(dialog).getByRole("group", { name: "Jenis riwayat" });
+      const views = within(dialog).getByRole("group", { name: "Jenis data stamp card" });
       expect(within(views).getAllByRole("button").map((button) => button.textContent)).toEqual([
         "Member",
         "Stamp Masuk",
-        "Tukar Hadiah",
+        "Hadiah",
       ]);
       expect(within(views).getByRole("button", { name: "Member" })).toHaveAttribute("aria-pressed", "true");
       await waitFor(() => expect(api.getLoyaltyMembers).toHaveBeenCalledWith({ page: 1, perPage: 20, q: "" }));
@@ -205,7 +212,7 @@ describe("program promo", () => {
     it("lists the stamps given: when, who, which stamp of which card, the nota and the cashier", async () => {
       const dialog = await openStamps();
 
-      const views = within(dialog).getByRole("group", { name: "Jenis riwayat" });
+      const views = within(dialog).getByRole("group", { name: "Jenis data stamp card" });
       expect(within(views).getByRole("button", { name: "Stamp Masuk" })).toHaveAttribute("aria-pressed", "true");
       const row = (await within(dialog).findByText("NSK-88")).closest("tr");
       expect(Array.from(row.cells).map((cell) => cell.textContent)).toEqual([
@@ -245,8 +252,6 @@ describe("program promo", () => {
       expect(within(dialog).getByText("1 hadiah ditukar")).toBeInTheDocument();
       expect(api.getLoyaltyRedemptions).toHaveBeenCalledWith({ page: 1, perPage: 20, q: "" });
 
-      fireEvent.click(within(dialog).getByRole("button", { name: "Tutup" }));
-      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     });
 
     it("searches by phone and pages through", async () => {
@@ -257,7 +262,7 @@ describe("program promo", () => {
       fireEvent.click(within(dialog).getByRole("button", { name: "Berikutnya" }));
       await waitFor(() => expect(api.getLoyaltyRedemptions).toHaveBeenLastCalledWith({ page: 2, perPage: 20, q: "" }));
 
-      fireEvent.change(within(dialog).getByLabelText("Cari riwayat"), { target: { value: "0812" } });
+      fireEvent.change(within(dialog).getByLabelText("Cari"), { target: { value: "0812" } });
       await waitFor(() => expect(api.getLoyaltyRedemptions).toHaveBeenLastCalledWith({ page: 1, perPage: 20, q: "0812" }));
     });
 
@@ -294,7 +299,7 @@ describe("program promo", () => {
         rewards_redeemed: 0,
         rewards_ready: 0,
       };
-      // Member is the view the dialog opens on.
+      // Member is the tab the page opens on.
       const openMembers = openStampHistory;
 
       beforeEach(() => {
@@ -328,7 +333,7 @@ describe("program promo", () => {
 
         expect(await within(dialog).findByText("10/10 · Penuh")).toBeInTheDocument();
 
-        fireEvent.change(within(dialog).getByLabelText("Cari riwayat"), { target: { value: "Demo" } });
+        fireEvent.change(within(dialog).getByLabelText("Cari"), { target: { value: "Demo" } });
         await waitFor(() => expect(api.getLoyaltyMembers).toHaveBeenLastCalledWith({ page: 1, perPage: 20, q: "Demo" }));
       });
 

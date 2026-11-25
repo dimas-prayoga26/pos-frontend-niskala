@@ -5,9 +5,10 @@ import MenuTab from "../components/MenuTab";
 import MetricsTab from "../components/MetricsTab";
 import { ShoppingPage, StockManagement, usePurchaseDraftCount } from "../../inventory";
 import RecapManagement from "../../../components/dashboard/RecapManagement";
-import { SettingsManagement } from "../../settings";
+import { MemberStampCard, SettingsManagement } from "../../settings";
 import { useSelector } from "react-redux";
 import { getStockItems } from "../api";
+import useLoyaltyEnabled from "../../../shared/lib/useLoyaltyEnabled";
 
 // One tab of the dashboard bar: underlined in the brand colour when open.
 const tabClass = (isActive) =>
@@ -19,6 +20,9 @@ const Dashboard = () => {
   const user = useSelector((state) => state.user);
   const userRole = user.role;
   const isAdmin = userRole?.toLowerCase() === "admin";
+  // Member Stamp Card: admins, once loyalty is set up in Pengaturan → API.
+  const loyalty = useLoyaltyEnabled();
+  const showMembers = isAdmin && loyalty.enabled;
   const [activeTab, setActiveTab] = useState("metrics");
   // Bahan baku a Catat Masak is short of ({ stockItemId, unit }): Belanja
   // Bahan opens Tambah Belanja with them. Any tab click drops them.
@@ -43,13 +47,15 @@ const Dashboard = () => {
   }, [stockItemsRes]);
 
   // Metrik holds Ringkasan and Menu Paling Laku, Menu the menus and every
-  // promo; Pengaturan is the gear at the end of the bar. Menu and
+  // promo, Member Stamp Card the stamp card's members, stamps and rewards;
+  // Pengaturan is the gear at the end of the bar. Menu, Member Stamp Card and
   // Pengaturan: admins only.
   const tabs = [
     { key: "metrics", label: "Metrik" },
     { key: "stock", label: "Stok Bahan", badge: lowStockCount },
     { key: "shopping", label: "Belanja", badge: draftCount },
     ...(isAdmin ? [{ key: "menu", label: "Menu" }] : []),
+    ...(showMembers ? [{ key: "members", label: "Member Stamp Card" }] : []),
     { key: "recap", label: "Rekap" },
   ];
 
@@ -121,6 +127,7 @@ const Dashboard = () => {
           }}
         />
       )}
+      {activeTab === "members" && showMembers && <MemberStampCard />}
       {activeTab === "recap" && <RecapManagement />}
       {activeTab === "setting" && isAdmin && <SettingsManagement />}
     </div>
