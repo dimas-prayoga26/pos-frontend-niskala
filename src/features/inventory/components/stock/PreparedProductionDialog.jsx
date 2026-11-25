@@ -1,3 +1,4 @@
+import OptionalTag from "../../../../shared/ui/OptionalTag";
 import { useState } from "react";
 import { enqueueSnackbar } from "notistack";
 import { currency, quantityDisplay } from "../../utils/format";
@@ -188,7 +189,7 @@ const PreparedProductionDialog = ({ item, stockItems, onSave, onSaveStandard, on
         )}
 
         <label className="mb-3 block">
-          <span className="mb-1 block text-sm font-semibold">Catatan</span>
+          <span className="mb-1 block text-sm font-semibold">Catatan <OptionalTag /></span>
           <input
             value={form.note}
             onChange={setField("note")}

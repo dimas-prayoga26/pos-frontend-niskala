@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { getLoyaltyMembers, getLoyaltyRedemptions, getLoyaltyStamps } from "../api";
-import { formatJakartaReceiptDateTime } from "../../../shared/lib/dates";
+import { formatJakartaReceiptDate, formatJakartaReceiptDateTime } from "../../../shared/lib/dates";
 
 const PER_PAGE = 20;
 const SEARCH_DELAY_MS = 400;
@@ -35,7 +35,7 @@ const VIEWS = [
     fetch: getLoyaltyMembers,
     total: (count) => `${count} member`,
     empty: "Belum ada member.",
-    columns: ["Pelanggan", "Total Stamp", "Kartu Sekarang", "Hadiah", "Stamp Terakhir"],
+    columns: ["Pelanggan", "Total Stamp", "Kartu Sekarang", "Expired", "Hadiah", "Stamp Terakhir"],
     renderRow: (row) => (
       <>
         <CustomerCell customer={row.customer} />
@@ -52,6 +52,16 @@ const VIEWS = [
               </span>
               <span className="text-xs text-[#ababab]">{row.card.number}</span>
             </>
+          ) : (
+            "-"
+          )}
+        </td>
+        {/* Valid until (end of that day), counted from the card's first stamp: none before it. */}
+        <td className={`${cellClass} whitespace-nowrap`}>
+          {row.card?.expires_at ? (
+            <span className={new Date(row.card.expires_at) < new Date() ? "font-semibold text-red-300" : ""}>
+              {formatJakartaReceiptDate(row.card.expires_at)}
+            </span>
           ) : (
             "-"
           )}

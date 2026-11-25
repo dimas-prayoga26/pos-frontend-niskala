@@ -51,7 +51,9 @@ describe("Konsumsi Crew", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Crew" }));
     expect(screen.getByLabelText("Nama Crew")).toHaveAttribute("placeholder", "Nama crew");
-    expect(screen.queryByText("Nomor Telepon")).not.toBeInTheDocument();
+    // A crew name is required: no "(opsional)" on it; no phone for a crew meal.
+    expect(screen.getByText("Nama Crew")).not.toHaveTextContent("opsional");
+    expect(screen.queryByText(/Nomor Telepon/)).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Tunai" })).not.toBeInTheDocument();
     expect(screen.getByText("Konsumsi Crew")).toBeInTheDocument();
 

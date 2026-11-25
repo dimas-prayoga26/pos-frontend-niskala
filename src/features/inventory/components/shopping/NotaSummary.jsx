@@ -1,3 +1,4 @@
+import OptionalTag from "../../../../shared/ui/OptionalTag";
 import { currency, formatRupiahInput } from "../../utils/format";
 import { inputClass } from "./styles";
 
@@ -28,7 +29,7 @@ const NotaSummary = ({ form, setForm, totals, sourceName, disabled }) => {
       <div className="divide-y divide-[#333]">
         <Row label="Subtotal" value={currency(totals.subtotal)} />
         <Row
-          label="Ongkos Kirim / Ekspedisi"
+          label={<>Ongkos Kirim / Ekspedisi <OptionalTag /></>}
           value={currency(totals.shippingCost)}
         >
           <input
@@ -42,7 +43,7 @@ const NotaSummary = ({ form, setForm, totals, sourceName, disabled }) => {
             className={`${inputClass} w-36`}
           />
         </Row>
-        <Row label="Diskon Nota" value={totals.discountAmount ? `-${currency(totals.discountAmount)}` : currency(0)} valueClassName="text-green-400">
+        <Row label={<>Diskon Nota <OptionalTag /></>} value={totals.discountAmount ? `-${currency(totals.discountAmount)}` : currency(0)} valueClassName="text-green-400">
           <div role="group" aria-label="Jenis diskon" className="flex overflow-hidden rounded-lg border border-[#555]">
             {[
               ["amount", "Rp"],

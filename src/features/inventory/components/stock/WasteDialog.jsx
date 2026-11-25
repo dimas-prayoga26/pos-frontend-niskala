@@ -1,3 +1,4 @@
+import OptionalTag from "../../../../shared/ui/OptionalTag";
 import { useEffect, useRef, useState } from "react";
 import { enqueueSnackbar } from "notistack";
 import { currency, quantityDisplay } from "../../utils/format";
@@ -104,7 +105,7 @@ const WasteDialog = ({ item, isAdmin, onSave, onCancel, isSaving }) => {
           </select>
         </label>
         <label className="mt-3 block">
-          <span className="mb-1 block text-sm font-semibold">Catatan</span>
+          <span className="mb-1 block text-sm font-semibold">Catatan <OptionalTag /></span>
           <input
             value={note}
             onChange={(event) => setNote(event.target.value)}

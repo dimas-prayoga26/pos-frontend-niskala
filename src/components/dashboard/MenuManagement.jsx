@@ -1,3 +1,4 @@
+import OptionalTag from "../../shared/ui/OptionalTag";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   keepPreviousData,
@@ -1500,7 +1501,7 @@ const MenuManagement = ({ onCreateIngredient, renderPromoHeader = null }) => {
                   />
                 </label>
                 <label className="mt-4 block text-sm font-semibold text-[#ababab]">
-                  Icon
+                  Icon <OptionalTag />
                   <input
                     value={categoryForm.icon}
                     onChange={(event) =>
@@ -1526,7 +1527,7 @@ const MenuManagement = ({ onCreateIngredient, renderPromoHeader = null }) => {
                   ))}
                 </div>
                 <label className="mt-4 block text-sm font-semibold text-[#ababab]">
-                  Tax (%)
+                  Tax (%) <OptionalTag />
                   <input
                     value={categoryForm.taxRate}
                     onChange={(event) =>
@@ -1896,7 +1897,7 @@ const MenuManagement = ({ onCreateIngredient, renderPromoHeader = null }) => {
                           value={line.label || ""}
                           onChange={(event) => setChoiceLabel(index, event.target.value)}
                           maxLength={100}
-                          placeholder={choiceNameOf({ ...line, label: "" }) || "Nama pilihan"}
+                          placeholder={choiceNameOf({ ...line, label: "" }) || "Nama pilihan (opsional)"}
                           aria-label={`Nama ${bundleMenuName}`}
                           className="w-full rounded-lg border border-transparent bg-[#262626] px-3 py-2 text-sm text-[#f5f5f5] outline-none focus:border-[#a79981]"
                         />
@@ -1926,7 +1927,7 @@ const MenuManagement = ({ onCreateIngredient, renderPromoHeader = null }) => {
             <div className="mt-4">
               <div className="mb-2 flex items-center justify-between">
                 <span className="text-sm font-semibold text-[#ababab]">
-                  Komposisi Bahan <span className="text-xs text-[#777]">(Opsional)</span>
+                  Komposisi Bahan <OptionalTag />
                 </span>
                 <button
                   type="button"
@@ -2111,7 +2112,7 @@ const MenuManagement = ({ onCreateIngredient, renderPromoHeader = null }) => {
                 </label>
                 {isBundleForm && (
                   <label className="block text-sm font-semibold text-[#ababab]">
-                    Diskon (%)
+                    Diskon (%) <OptionalTag />
                     <div className="mt-2 flex overflow-hidden rounded-lg bg-[#262626]">
                       <input
                         value={menuForm.discountPercent}
@@ -2170,7 +2171,7 @@ const MenuManagement = ({ onCreateIngredient, renderPromoHeader = null }) => {
               )}
               <label className="block text-sm font-semibold text-emerald-200">
                 Gross Profit{" "}
-                {isGrossProfitAuto && <span className="text-xs text-[#777]">(Auto)</span>}
+                {isGrossProfitAuto ? <span className="text-xs text-[#777]">(Auto)</span> : <OptionalTag />}
                 <div className="mt-2 flex overflow-hidden rounded-lg border border-emerald-500/30 bg-emerald-500/10">
                   <span className="flex shrink-0 items-center px-4 text-sm font-bold text-emerald-200">
                     Rp

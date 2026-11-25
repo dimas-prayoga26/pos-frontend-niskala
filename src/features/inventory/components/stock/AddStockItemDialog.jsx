@@ -1,3 +1,4 @@
+import OptionalTag from "../../../../shared/ui/OptionalTag";
 import { useMemo, useState } from "react";
 import { enqueueSnackbar } from "notistack";
 import CreatableSelect2 from "../../../../shared/ui/CreatableSelect2";
@@ -131,7 +132,7 @@ const AddStockItemDialog = ({ stockItems, initialName = "", recipeOnly = false, 
         </div>
 
         <label className={`${recipeOnly ? "mb-5" : "mb-3"} block`}>
-          <span className="mb-1 block text-sm font-semibold">Minimum Stok</span>
+          <span className="mb-1 block text-sm font-semibold">Minimum Stok <OptionalTag /></span>
           <input
             type="text"
             inputMode="decimal"

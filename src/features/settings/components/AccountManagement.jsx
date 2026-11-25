@@ -1,3 +1,4 @@
+import OptionalTag from "../../../shared/ui/OptionalTag";
 import { useMemo, useState } from "react";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { enqueueSnackbar } from "notistack";
@@ -130,7 +131,7 @@ const AccountManagement = () => {
           </div>
         </label>
         <label className="mt-4 block text-sm font-semibold text-[#ababab]">
-          Password
+          Password {editingUser && <OptionalTag />}
           <input
             value={form.password}
             onChange={(event) => updateForm("password", event.target.value)}

@@ -1,3 +1,4 @@
+import OptionalTag from "../../../../shared/ui/OptionalTag";
 import { useState } from "react";
 import { enqueueSnackbar } from "notistack";
 import { currency, displayCostUnit, formatRupiahInput } from "../../utils/format";
@@ -107,7 +108,7 @@ const StockCogsDialog = ({ item, onSave, onCancel, isSaving }) => {
         </div>
 
         <label className="mb-4 block">
-          <span className="mb-1 block text-sm font-semibold">Sumber / catatan</span>
+          <span className="mb-1 block text-sm font-semibold">Sumber / catatan <OptionalTag /></span>
           <input
             type="text"
             value={form.supplier}

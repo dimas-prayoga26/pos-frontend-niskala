@@ -33,7 +33,7 @@ describe("settings: platform", () => {
       "Status",
       "Aksi",
     ]);
-    expect(screen.queryByText("Biaya Platform")).not.toBeInTheDocument();
+    expect(screen.queryByText(/Biaya Platform/)).not.toBeInTheDocument();
   });
 
   it("adds and changes a platform with its name and status only", async () => {

@@ -1,3 +1,4 @@
+import OptionalTag from "../../../../shared/ui/OptionalTag";
 /* eslint-disable react/prop-types */
 import { useState } from "react";
 import { formatRupiahInput } from "../../utils/format";
@@ -66,7 +67,7 @@ const SemiSubstitutesDialog = ({ item, semiItems, onSave, onCancel, isSaving }) 
                 </select>
               </label>
               <label>
-                <span className="mb-1 block text-sm font-semibold">Tambahan harga</span>
+                <span className="mb-1 block text-sm font-semibold">Tambahan harga <OptionalTag /></span>
                 <input
                   type="text"
                   inputMode="numeric"

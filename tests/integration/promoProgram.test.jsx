@@ -284,7 +284,8 @@ describe("program promo", () => {
         total_stamps: 12,
         last_stamp_at: "2026-11-19T12:00:00+07:00",
         cards: 2,
-        card: { number: "NSK-000004-02", stamps: 2, slots: 10, status: "active" },
+        // Numbered month-year-sequence; valid until 3 months after its first stamp.
+        card: { number: "11-2026-004", stamps: 2, slots: 10, status: "active", expires_at: "2027-02-19T23:59:59+07:00" },
         rewards_redeemed: 1,
         rewards_ready: 1,
       };
@@ -295,7 +296,8 @@ describe("program promo", () => {
         total_stamps: 0,
         last_stamp_at: null,
         cards: 1,
-        card: { number: "NSK-000009-01", stamps: 0, slots: 10, status: "active" },
+        // No stamp yet: no expiry yet.
+        card: { number: "11-2026-009", stamps: 0, slots: 10, status: "active", expires_at: null },
         rewards_redeemed: 0,
         rewards_ready: 0,
       };
@@ -310,28 +312,42 @@ describe("program promo", () => {
       it("lists every member with all the stamps they earned, their card now and their rewards", async () => {
         const dialog = await openMembers();
 
-        const row = (await within(dialog).findByText("NSK-000004-02")).closest("tr");
+        const row = (await within(dialog).findByText("11-2026-004")).closest("tr");
         expect(Array.from(row.cells).map((cell) => cell.textContent)).toEqual([
           "0987654321NSK-000004 · Demo Makanan",
           "122 kartu",
-          "2/10NSK-000004-02",
+          "2/1011-2026-004",
+          "19/02/2027",
           "1 ditukar1 siap ditukar",
           "19/11/26 12:00",
         ]);
-        const fresh = within(dialog).getByText("NSK-000009-01").closest("tr");
+        const fresh = within(dialog).getByText("11-2026-009").closest("tr");
         expect(fresh.cells[1]).toHaveTextContent("01 kartu");
-        expect(fresh.cells[4]).toHaveTextContent("Belum ada");
+        expect(fresh.cells[3]).toHaveTextContent(/^-$/);
+        expect(fresh.cells[5]).toHaveTextContent("Belum ada");
         expect(within(dialog).getByText("2 member")).toBeInTheDocument();
         expect(api.getLoyaltyMembers).toHaveBeenCalledWith({ page: 1, perPage: 20, q: "" });
       });
 
-      it("says a full card and searches members", async () => {
+      it("says a full card, its expiry still ahead (not red)", async () => {
         api.getLoyaltyMembers.mockResolvedValue(
-          history([{ ...MEMBER, cards: 1, card: { ...MEMBER.card, number: "NSK-000004-01", stamps: 10, status: "completed" } }])
+          history([{ ...MEMBER, cards: 1, card: { ...MEMBER.card, stamps: 10, status: "completed" } }])
         );
         const dialog = await openMembers();
 
         expect(await within(dialog).findByText("10/10 · Penuh")).toBeInTheDocument();
+        expect(within(dialog).getByText("19/02/2027")).not.toHaveClass("text-red-300");
+      });
+
+      it("says an expired card, its date in red, and searches members", async () => {
+        api.getLoyaltyMembers.mockResolvedValue(
+          history([{ ...MEMBER, cards: 1, card: { ...MEMBER.card, number: "08-2026-001", stamps: 10, status: "expired", expires_at: "2026-11-01T23:59:59+07:00" } }])
+        );
+        const dialog = await openMembers();
+
+        // Past its expiry: the date in red.
+        expect(await within(dialog).findByText("10/10 · Kedaluwarsa")).toBeInTheDocument();
+        expect(within(dialog).getByText("01/11/2026")).toHaveClass("text-red-300");
 
         fireEvent.change(within(dialog).getByLabelText("Cari"), { target: { value: "Demo" } });
         await waitFor(() => expect(api.getLoyaltyMembers).toHaveBeenLastCalledWith({ page: 1, perPage: 20, q: "Demo" }));

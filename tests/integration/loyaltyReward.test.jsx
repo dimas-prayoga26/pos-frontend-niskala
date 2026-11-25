@@ -194,7 +194,8 @@ describe("Loyalty reward as a Kategori Promo menu", () => {
 // The QR on the back of a stamp card (loyalty app RewardVoucher), scanned
 // with the camera or typed into Nomor Telepon by a scanner gun.
 describe("Stamp card voucher QR at the cashier", () => {
-  const CODE = "NSKV1.NSK-000002-01.5.29872800.0123456789abcdef";
+  // NSKV1.<card number>.<reward stamps>.<signature>: the same for as long as the card lives.
+  const CODE = "NSKV1.11-2026-002.5.0123456789abcdef";
   const voucher = (overrides = {}) => ({
     data: {
       data: {
@@ -246,7 +247,7 @@ describe("Stamp card voucher QR at the cashier", () => {
     );
     const { store } = renderWithProviders(<MenuPage />, { route: "/menu" });
     await screen.findAllByText("Americano");
-    fireEvent.change(screen.getByLabelText("Customer Name"), { target: { value: "Guest 12" } });
+    fireEvent.change(screen.getByLabelText("Customer Name (opsional)"), { target: { value: "Guest 12" } });
 
     typePhone(CODE);
 
@@ -257,13 +258,29 @@ describe("Stamp card voucher QR at the cashier", () => {
     expect(store.getState().cart).toEqual([]);
   });
 
+  it("fills in the customer from the card's customer QR, with no reward and no warning", async () => {
+    // Stamps 0: the QR every card has, before any reward is ready.
+    const memberCode = "NSKV1.11-2026-002.0.0123456789abcdef";
+    api.getLoyaltyVoucher.mockResolvedValue(voucher({ status: "member", ready: false, message: null, reward: null }));
+    const { store } = renderWithProviders(<MenuPage />, { route: "/menu" });
+    await screen.findAllByText("Americano");
+
+    typePhone(memberCode);
+
+    expect(await screen.findByText("Nama dan nomor HP pelanggan terisi.")).toBeInTheDocument();
+    expect(api.getLoyaltyVoucher).toHaveBeenCalledWith(memberCode);
+    expect(store.getState().customer).toMatchObject({ customerPhone: "1234567890", customerName: "Demo Minuman" });
+    expect(screen.queryByText("Hadiah ini belum bisa ditukar.")).not.toBeInTheDocument();
+    expect(store.getState().cart).toEqual([]);
+  });
+
   it("keeps the typed name when the card has none", async () => {
     api.getLoyaltyVoucher.mockResolvedValue(
       voucher({ customer: { code: "NSK-000002", name: null, phone: "1234567890" } })
     );
     const { store } = renderWithProviders(<MenuPage />, { route: "/menu" });
     await screen.findAllByText("Americano");
-    fireEvent.change(screen.getByLabelText("Customer Name"), { target: { value: "Budi" } });
+    fireEvent.change(screen.getByLabelText("Customer Name (opsional)"), { target: { value: "Budi" } });
 
     typePhone(CODE);
 
@@ -283,25 +300,6 @@ describe("Stamp card voucher QR at the cashier", () => {
 
     expect(await screen.findByText("QR ini bukan voucher Stamp Card Niskala.")).toBeInTheDocument();
     expect(store.getState().customer.customerPhone).toBe("");
-    expect(store.getState().cart).toEqual([]);
-  });
-
-  it("refuses a QR that has changed since (a screenshot) and fills nothing in", async () => {
-    api.getLoyaltyVoucher.mockRejectedValue({
-      response: {
-        status: 422,
-        data: { message: "QR ini sudah berganti. Scan QR yang tampil sekarang di HP pelanggan." },
-      },
-    });
-    const { store } = renderWithProviders(<MenuPage />, { route: "/menu" });
-    await screen.findAllByText("Americano");
-
-    typePhone(CODE);
-
-    expect(
-      await screen.findByText("QR ini sudah berganti. Scan QR yang tampil sekarang di HP pelanggan.")
-    ).toBeInTheDocument();
-    expect(store.getState().customer).toMatchObject({ customerPhone: "", customerName: "" });
     expect(store.getState().cart).toEqual([]);
   });
 

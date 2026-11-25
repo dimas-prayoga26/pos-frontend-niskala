@@ -1,3 +1,4 @@
+import OptionalTag from "../../shared/ui/OptionalTag";
 import { useCallback, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { enqueueSnackbar } from "notistack";
@@ -96,6 +97,9 @@ const CustomerInfo = () => {
           stamps: Number(voucher.reward?.stamps),
           label: voucher.reward?.label || "Hadiah",
         });
+      } else if (voucher.status === "member") {
+        // The card's customer QR (no reward): only the name and number.
+        enqueueSnackbar("Nama dan nomor HP pelanggan terisi.", { variant: "success" });
       } else {
         enqueueSnackbar(voucher.message || "Hadiah ini belum bisa ditukar.", { variant: "warning" });
       }
@@ -205,7 +209,7 @@ const CustomerInfo = () => {
             htmlFor="customer-name"
             className="block text-[#ababab] mb-2 text-xs font-medium"
           >
-            {isCrewOrder ? "Nama Crew" : "Customer Name"}
+            {isCrewOrder ? "Nama Crew" : <>Customer Name <OptionalTag /></>}
           </label>
           <input
             id="customer-name"
@@ -223,7 +227,7 @@ const CustomerInfo = () => {
               htmlFor="customer-phone"
               className="block text-[#ababab] mb-2 text-xs font-medium"
             >
-              Nomor Telepon
+              Nomor Telepon <OptionalTag />
             </label>
             <div className="relative">
               <input
@@ -328,7 +332,7 @@ const CustomerInfo = () => {
 
               {customerData.orderPlatform && (
                 <label className="mt-3 block text-[#ababab] text-xs font-medium">
-                  Biaya Platform
+                  Biaya Platform <OptionalTag />
                   <div className="mt-2 flex overflow-hidden rounded-lg bg-[#1f1f1f] ring-1 ring-transparent transition focus-within:ring-[#a79981]/50">
                     <span className="flex shrink-0 items-center px-4 text-sm font-bold text-[#a79981]">
                       Rp
@@ -363,7 +367,7 @@ const CustomerInfo = () => {
               {cateringFields.map((field) => (
                 <div key={field.id}>
                   <label className="block text-[#ababab] mb-2 text-xs font-medium">
-                    {field.label}
+                    {field.label} <OptionalTag />
                   </label>
                   <input
                     value={customerData.catering?.[field.id] || ""}
@@ -381,7 +385,7 @@ const CustomerInfo = () => {
 
             <div className="mt-3">
               <label className="block text-[#ababab] mb-2 text-xs font-medium">
-                Catatan / Follow-up
+                Catatan / Follow-up <OptionalTag />
               </label>
               <textarea
                 value={customerData.catering?.note || ""}

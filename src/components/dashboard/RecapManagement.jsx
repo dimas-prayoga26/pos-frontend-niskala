@@ -1,3 +1,4 @@
+import OptionalTag from "../../shared/ui/OptionalTag";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   keepPreviousData,
@@ -31,19 +32,12 @@ import {
   getOrderHppTotal,
   getOrderIncomeDeduction,
   getOrderNetRevenue,
-  getOrdersGrossRevenueTotal,
   getOrdersHppTotal,
   isCashPayment,
   isCrewOrder,
   isOrderPlatformMatch,
   isQrPayment,
 } from "../../utils";
-
-const recapTabs = [
-  { key: "daily", label: "Harian" },
-  { key: "weekly", label: "Mingguan" },
-  { key: "monthly", label: "Bulanan" },
-];
 
 const SHOW_HPP_FIELDS = true;
 
@@ -76,63 +70,12 @@ const formatRecapDateLabel = (value) => {
   return date ? formatDateLabel(date) : "-";
 };
 
-const getWeekStart = (date) => {
-  const start = new Date(date);
-  const day = start.getDay();
-  const mondayOffset = day === 0 ? -6 : 1 - day;
-
-  start.setDate(start.getDate() + mondayOffset);
-  start.setHours(0, 0, 0, 0);
-
-  return start;
-};
-
-const getWeekEnd = (date) => {
-  const end = new Date(date);
-  end.setDate(end.getDate() + 6);
-  end.setHours(23, 59, 59, 999);
-
-  return end;
-};
-
-const getWeekLabel = (startDate, endDate = getWeekEnd(startDate)) =>
-  `${formatDateLabel(startDate)} - ${formatDateLabel(endDate)}`;
-
-const getGroupInfo = (orderDate, activeTab) => {
-  if (activeTab === "daily") {
-    return {
-      key: getDateKey(orderDate),
-      label: formatDateLabel(orderDate),
-      sortValue: new Date(orderDate).setHours(0, 0, 0, 0),
-    };
-  }
-
-  if (activeTab === "weekly") {
-    const weekStart = getWeekStart(orderDate);
-    const weekEnd = new Date(weekStart);
-    weekEnd.setDate(weekEnd.getDate() + 6);
-
-    return {
-      key: getDateKey(weekStart),
-      label: `${formatDateLabel(weekStart)} - ${formatDateLabel(weekEnd)}`,
-      sortValue: weekStart.getTime(),
-    };
-  }
-
-  const monthStart = new Date(orderDate.getFullYear(), orderDate.getMonth(), 1);
-
-  return {
-    key: `${orderDate.getFullYear()}-${String(orderDate.getMonth() + 1).padStart(
-      2,
-      "0"
-    )}`,
-    label: orderDate.toLocaleDateString("id-ID", {
-      month: "long",
-      year: "numeric",
-    }),
-    sortValue: monthStart.getTime(),
-  };
-};
+// Rekap is per day: one row per tanggal.
+const getGroupInfo = (orderDate) => ({
+  key: getDateKey(orderDate),
+  label: formatDateLabel(orderDate),
+  sortValue: new Date(orderDate).setHours(0, 0, 0, 0),
+});
 
 const getPaymentLabel = (paymentMethod) => paymentMethod || "Belum diisi";
 const getPlatformLabel = (order) => {
@@ -168,16 +111,6 @@ const addBreakdownAmount = (target, label, amount) => {
   target[label] = (target[label] || 0) + amount;
 };
 
-const formatBreakdown = (breakdown) => {
-  const entries = Object.entries(breakdown).sort((a, b) => b[1] - a[1]);
-
-  if (!entries.length) return "-";
-
-  return entries
-    .map(([label, value]) => `${label}: ${formatCurrency(value)}`)
-    .join(" / ");
-};
-
 const getTodayInputValue = () => {
   const today = new Date();
   const year = today.getFullYear();
@@ -193,17 +126,6 @@ const getMonthInputValue = (value = new Date()) => {
   const month = String(date.getMonth() + 1).padStart(2, "0");
 
   return `${year}-${month}`;
-};
-
-const formatMonthLabel = (value) => {
-  const [year, month] = String(value || "").split("-").map(Number);
-
-  if (!year || !month) return "-";
-
-  return new Date(year, month - 1, 1).toLocaleDateString("id-ID", {
-    month: "long",
-    year: "numeric",
-  });
 };
 
 const getMonthDateRange = (value = getMonthInputValue()) => {
@@ -308,29 +230,6 @@ const createEmptyRecapForm = () => ({
   note: "",
 });
 
-const createEmptyWeeklyRecapForm = () => {
-  const weekStart = getWeekStart(new Date());
-  const weekEnd = getWeekEnd(weekStart);
-
-  return {
-    periodStartDate: getDateKey(weekStart),
-    periodEndDate: getDateKey(weekEnd),
-    operationalIssues: "",
-    teamEvaluation: "",
-    stockEvaluation: "",
-    actionPlan: "",
-  };
-};
-
-const createEmptyMonthlyRecapForm = () => ({
-  periodMonth: getMonthInputValue(),
-  retainedMenu: "",
-  evaluatedMenu: "",
-  promotionEvaluation: "",
-  supplierEvaluation: "",
-  nextMonthStrategy: "",
-});
-
 // Notas of one day (YYYY-MM-DD).
 const getOrdersOfDate = (orders, date) => {
   const selectedDate = getLocalDate(date);
@@ -414,129 +313,8 @@ const RecapSystemHint = ({ label, value, system, detail, isCount, onReset }) => 
   );
 };
 
-const getOrdersInRange = (orders, startDate, endDate) => {
-  return orders.filter((order) => {
-    const orderDate = getLocalDate(order.orderDate);
-
-    return orderDate && orderDate >= startDate && orderDate <= endDate;
-  });
-};
-
-const createWeeklySummary = ({
-  dailyRecaps,
-  menuItems,
-  orders,
-  periodStartDate,
-  periodEndDate,
-}) => {
-  const startDate = getLocalDate(periodStartDate);
-  const endDate = getLocalDate(periodEndDate);
-
-  if (!startDate || !endDate) {
-    return {
-      totalOmzet: 0,
-      grossProfit: 0,
-      offlineRevenue: 0,
-      onlineRevenue: 0,
-      cateringRevenue: 0,
-      cateringOrderCount: 0,
-      topChannel: "-",
-      recordedDays: 0,
-    };
-  }
-
-  endDate.setHours(23, 59, 59, 999);
-
-  const recapsInWeek = dailyRecaps.filter((recap) => {
-    const recapDate = getLocalDate(recap.recapDate);
-
-    return recapDate && recapDate >= startDate && recapDate <= endDate;
-  });
-  const ordersInWeek = getOrdersInRange(orders, startDate, endDate);
-  const cateringOrderCount = ordersInWeek.filter(isCateringOrder).length;
-  const hppTotal = getOrdersHppTotal(ordersInWeek, menuItems);
-  const summary = recapsInWeek.reduce(
-    (current, recap) => ({
-      totalOmzet: current.totalOmzet + (Number(recap.totalRevenue) || 0),
-      offlineRevenue: current.offlineRevenue + (Number(recap.offlineRevenue) || 0),
-      onlineRevenue: current.onlineRevenue + (Number(recap.onlineRevenue) || 0),
-      cateringRevenue:
-        current.cateringRevenue + (Number(recap.cateringRevenue) || 0),
-    }),
-    {
-      totalOmzet: 0,
-      offlineRevenue: 0,
-      onlineRevenue: 0,
-      cateringRevenue: 0,
-    }
-  );
-  summary.grossProfit = summary.totalOmzet - hppTotal;
-  const channelTotals = [
-    { label: "Offline", value: summary.offlineRevenue },
-    { label: "Online", value: summary.onlineRevenue },
-    { label: "Catering", value: summary.cateringRevenue },
-  ];
-  const topChannel =
-    channelTotals.sort((first, second) => second.value - first.value)[0]?.label ||
-    "-";
-
-  return {
-    ...summary,
-    cateringOrderCount,
-    topChannel,
-    recordedDays: recapsInWeek.length,
-  };
-};
-
-const createMonthlySummary = ({ dailyRecaps, menuItems, orders, periodMonth }) => {
-  const [year, month] = String(periodMonth || "").split("-").map(Number);
-
-  if (!year || !month) {
-    return {
-      omzet: 0,
-      hppTotal: 0,
-      grossProfit: 0,
-      estimatedNetProfit: 0,
-      cateringOrderCount: 0,
-    };
-  }
-
-  const monthStart = new Date(year, month - 1, 1);
-  const monthEnd = new Date(year, month, 0, 23, 59, 59, 999);
-  const recapsInMonth = dailyRecaps.filter((recap) => {
-    const recapDate = getLocalDate(recap.recapDate);
-
-    return recapDate && recapDate >= monthStart && recapDate <= monthEnd;
-  });
-  const ordersInMonth = getOrdersInRange(orders, monthStart, monthEnd);
-  const hppTotalFromOrders = getOrdersHppTotal(ordersInMonth, menuItems);
-  const summary = recapsInMonth.reduce(
-    (current, recap) => {
-      const totalRevenue = Number(recap.totalRevenue) || 0;
-      const dailyExpense = Number(recap.dailyExpense) || 0;
-
-      return {
-        omzet: current.omzet + totalRevenue,
-        dailyExpense: current.dailyExpense + dailyExpense,
-      };
-    },
-    {
-      omzet: 0,
-      dailyExpense: 0,
-    }
-  );
-  const grossProfit = summary.omzet - hppTotalFromOrders;
-
-  return {
-    omzet: summary.omzet,
-    hppTotal: hppTotalFromOrders,
-    grossProfit,
-    estimatedNetProfit: grossProfit - summary.dailyExpense,
-    cateringOrderCount: ordersInMonth.filter(isCateringOrder).length,
-  };
-};
-
 const SelectField = ({
+  optional = false,
   label,
   value,
   onChange,
@@ -554,6 +332,7 @@ const SelectField = ({
     <div>
       <label className="block text-sm font-semibold text-[#ababab]">
         {label}
+        {optional && <> <OptionalTag /></>}
       </label>
       <div className="mt-2">
         <CreatableSelect2
@@ -602,7 +381,6 @@ const RecapManagement = () => {
   const queryClient = useQueryClient();
   const currentUser = useSelector((state) => state.user);
   const [recapVersion, setRecapVersion] = useState("old");
-  const [activeTab, setActiveTab] = useState("daily");
   const summaryCardsRef = useRef(null);
   const [summaryScrollState, setSummaryScrollState] = useState({
     canScrollLeft: false,
@@ -619,12 +397,6 @@ const RecapManagement = () => {
   const closeRecapHistory = useCallback(() => setIsRecapHistoryOpen(false), []);
   const [pendingDailyRecapPayload, setPendingDailyRecapPayload] = useState(null);
   const [recapForm, setRecapForm] = useState(createEmptyRecapForm);
-  const [weeklyRecapForm, setWeeklyRecapForm] = useState(
-    createEmptyWeeklyRecapForm
-  );
-  const [monthlyRecapForm, setMonthlyRecapForm] = useState(
-    createEmptyMonthlyRecapForm
-  );
 
   const { data: ordersRes, isLoading } = useQuery({
     queryKey: ["orders"],
@@ -633,13 +405,7 @@ const RecapManagement = () => {
   });
 
   const { data: savedRecapsRes, isLoading: isSavedRecapsLoading } = useQuery({
-    queryKey: ["recaps", activeTab],
-    queryFn: () => getRecaps(activeTab),
-    placeholderData: keepPreviousData,
-  });
-
-  const { data: dailyRecapsSourceRes } = useQuery({
-    queryKey: ["recaps", "daily", "weekly-source"],
+    queryKey: ["recaps", "daily"],
     queryFn: () => getRecaps("daily"),
     placeholderData: keepPreviousData,
   });
@@ -669,7 +435,6 @@ const RecapManagement = () => {
       ).length
     : 0;
   const savedRecaps = savedRecapsRes?.data?.data || [];
-  const dailyRecapsSource = dailyRecapsSourceRes?.data?.data || [];
   const wasteTotalByDate = useMemo(
     () =>
       new Map(
@@ -710,85 +475,6 @@ const RecapManagement = () => {
           item.category?.name || item.categoryName || formatCurrency(item.price),
       })),
     [menuItems]
-  );
-  const weekOptions = useMemo(() => {
-    const weekMap = new Map();
-    const addWeek = (dateValue) => {
-      const date = getLocalDate(dateValue);
-
-      if (!date) return;
-
-      const weekStart = getWeekStart(date);
-      const weekEnd = getWeekEnd(weekStart);
-      const value = getDateKey(weekStart);
-
-      weekMap.set(value, {
-        value,
-        label: getWeekLabel(weekStart, weekEnd),
-        description: "",
-        periodEndDate: getDateKey(weekEnd),
-      });
-    };
-
-    addWeek(new Date());
-    dailyRecapsSource.forEach((recap) => addWeek(recap.recapDate));
-    orders.forEach((order) => addWeek(order.orderDate));
-    savedRecaps
-      .filter((recap) => recap.periodStartDate)
-      .forEach((recap) => addWeek(recap.periodStartDate));
-
-    return Array.from(weekMap.values()).sort(
-      (first, second) => new Date(second.value) - new Date(first.value)
-    );
-  }, [dailyRecapsSource, orders, savedRecaps]);
-  const weeklySummary = useMemo(
-    () =>
-      createWeeklySummary({
-        dailyRecaps: dailyRecapsSource,
-        menuItems,
-        orders,
-        periodStartDate: weeklyRecapForm.periodStartDate,
-        periodEndDate: weeklyRecapForm.periodEndDate,
-      }),
-    [
-      dailyRecapsSource,
-      menuItems,
-      orders,
-      weeklyRecapForm.periodEndDate,
-      weeklyRecapForm.periodStartDate,
-    ]
-  );
-  const monthOptions = useMemo(() => {
-    const monthMap = new Map();
-    const addMonth = (value) => {
-      const monthValue = getMonthInputValue(value);
-
-      monthMap.set(monthValue, {
-        value: monthValue,
-        label: formatMonthLabel(monthValue),
-      });
-    };
-
-    addMonth(new Date());
-    dailyRecapsSource.forEach((recap) => addMonth(recap.recapDate));
-    orders.forEach((order) => addMonth(order.orderDate));
-    savedRecaps
-      .filter((recap) => recap.periodMonth)
-      .forEach((recap) => addMonth(`${recap.periodMonth}-01`));
-
-    return Array.from(monthMap.values()).sort(
-      (first, second) => new Date(`${second.value}-01`) - new Date(`${first.value}-01`)
-    );
-  }, [dailyRecapsSource, orders, savedRecaps]);
-  const monthlySummary = useMemo(
-    () =>
-      createMonthlySummary({
-        dailyRecaps: dailyRecapsSource,
-        menuItems,
-        orders,
-        periodMonth: monthlyRecapForm.periodMonth,
-    }),
-    [dailyRecapsSource, menuItems, monthlyRecapForm.periodMonth, orders]
   );
   const newRecapRangeLabel = getSummaryDateRangeLabel(newRecapDateRange);
   const newRecapPeriodLabel = `Periode ${newRecapRangeLabel}`;
@@ -972,14 +658,14 @@ const RecapManagement = () => {
   const dailyRecapDateKeys = useMemo(
     () =>
       new Set(
-        dailyRecapsSource
+        savedRecaps
           .map((recap) => {
             const recapDate = getLocalDate(recap.recapDate);
             return recapDate ? getDateKey(recapDate) : "";
           })
           .filter(Boolean)
       ),
-    [dailyRecapsSource]
+    [savedRecaps]
   );
 
   const recapRows = useMemo(() => {
@@ -990,7 +676,7 @@ const RecapManagement = () => {
 
       if (!orderDate) return;
 
-      const groupInfo = getGroupInfo(orderDate, activeTab);
+      const groupInfo = getGroupInfo(orderDate);
       const currentGroup =
         groups.get(groupInfo.key) || createEmptyGroup(groupInfo);
       const grossRevenue = getOrderGrossRevenue(order);
@@ -1038,14 +724,12 @@ const RecapManagement = () => {
     });
 
     return Array.from(groups.values()).sort((a, b) => b.sortValue - a.sortValue);
-  }, [activeTab, menuItems, orders]);
+  }, [menuItems, orders]);
   const recapRowByKey = useMemo(
     () => new Map(recapRows.map((row) => [row.key, row])),
     [recapRows]
   );
   const dailyTableRows = useMemo(() => {
-    if (activeTab !== "daily") return savedRecaps;
-
     return savedRecaps.map((recap) => {
       const recapDate = getLocalDate(recap.recapDate);
       const orderGroup = recapDate ? recapRowByKey.get(getDateKey(recapDate)) : null;
@@ -1075,61 +759,7 @@ const RecapManagement = () => {
         netCash: cashRecorded - dailyExpense,
       };
     });
-  }, [activeTab, recapRowByKey, savedRecaps, wasteTotalByDate]);
-  const weeklyTableRows = useMemo(() => {
-    if (activeTab !== "weekly") return savedRecaps;
-
-    return savedRecaps.map((recap) => {
-      const startDate = getLocalDate(recap.periodStartDate);
-      const endDate = getLocalDate(recap.periodEndDate);
-      if (!startDate || !endDate) return recap;
-
-      endDate.setHours(23, 59, 59, 999);
-      const periodOrders = getOrdersInRange(orders, startDate, endDate);
-      const periodRevenue =
-        getOrdersGrossRevenueTotal(periodOrders) || Number(recap.totalOmzet) || 0;
-
-      return {
-        ...recap,
-        totalOmzet: periodRevenue,
-        grossProfit: periodRevenue - getOrdersHppTotal(periodOrders, menuItems),
-      };
-    });
-  }, [activeTab, menuItems, orders, savedRecaps]);
-  const monthlyTableRows = useMemo(() => {
-    if (activeTab !== "monthly") return savedRecaps;
-
-    return savedRecaps.map((recap) => {
-      const [year, month] = String(recap.periodMonth || "").split("-").map(Number);
-      if (!year || !month) return recap;
-
-      const monthStart = new Date(year, month - 1, 1);
-      const monthEnd = new Date(year, month, 0, 23, 59, 59, 999);
-      const monthOrders = getOrdersInRange(orders, monthStart, monthEnd);
-      const monthRevenue =
-        getOrdersGrossRevenueTotal(monthOrders) || Number(recap.omzet) || 0;
-      const monthHpp = getOrdersHppTotal(monthOrders, menuItems);
-      const monthGrossProfit = monthRevenue - monthHpp;
-      const monthExpense = dailyRecapsSource
-        .filter((dailyRecap) => {
-          const recapDate = getLocalDate(dailyRecap.recapDate);
-
-          return recapDate && recapDate >= monthStart && recapDate <= monthEnd;
-        })
-        .reduce(
-          (total, dailyRecap) => total + (Number(dailyRecap.dailyExpense) || 0),
-          0
-        );
-
-      return {
-        ...recap,
-        omzet: monthRevenue,
-        hppTotal: monthHpp,
-        grossProfit: monthGrossProfit,
-        estimatedNetProfit: monthGrossProfit - monthExpense,
-      };
-    });
-  }, [activeTab, dailyRecapsSource, menuItems, orders, savedRecaps]);
+  }, [recapRowByKey, savedRecaps, wasteTotalByDate]);
 
   const totals = recapRows.reduce(
     (summary, row) => ({
@@ -1169,139 +799,43 @@ const RecapManagement = () => {
     (total, row) => total + (Number(row.dailyExpense) || 0),
     0
   );
-  const cashReceivedTotal =
-    activeTab === "daily" ? dailyCashRecordedTotal : totals.receivedRevenue;
-  const cashDifference = cashReceivedTotal - totals.invoiceTotal;
+  const cashReceivedTotal = dailyCashRecordedTotal;
   const netCashTotal = cashReceivedTotal - dailyExpenseTotal;
   const hppTotal = totals.hppTotal;
   const grossProfit = totals.invoiceTotal - hppTotal;
-  const estimatedNetProfit = grossProfit - dailyExpenseTotal;
 
-  const oldSummaryCards =
-    activeTab === "weekly"
-      ? SHOW_HPP_FIELDS
-        ? [
-            {
-              title: "Total omzet",
-              value: formatCurrency(totals.invoiceTotal),
-              color: "#025cca",
-            },
-            {
-              title: "Laba kotor",
-              value: formatCurrency(grossProfit),
-              color: "#02a05a",
-            },
-            {
-              title: "Offline",
-              value: formatCurrency(totals.offlineTotal),
-              color: "#b58105",
-            },
-            {
-              title: "Online",
-              value: formatCurrency(totals.onlineTotal),
-              color: "#be3e3f",
-            },
-          ]
-        : [
-            {
-              title: "Total omzet",
-              value: formatCurrency(totals.invoiceTotal),
-              color: "#025cca",
-            },
-            {
-              title: "Offline",
-              value: formatCurrency(totals.offlineTotal),
-              color: "#b58105",
-            },
-            {
-              title: "Online",
-              value: formatCurrency(totals.onlineTotal),
-              color: "#be3e3f",
-            },
-            {
-              title: "Catering",
-              value: formatCurrency(totals.cateringTotal),
-              color: "#7f167f",
-            },
-          ]
-      : activeTab === "monthly"
-        ? SHOW_HPP_FIELDS
-          ? [
-              {
-                title: "Omzet",
-                value: formatCurrency(totals.invoiceTotal),
-                color: "#025cca",
-              },
-              {
-                title: "HPP",
-                value: formatCurrency(hppTotal),
-                color: "#735f32",
-              },
-              {
-                title: "Laba kotor",
-                value: formatCurrency(grossProfit),
-                color: "#02a05a",
-              },
-              {
-                title: "Estimasi laba bersih",
-                value: formatCurrency(estimatedNetProfit),
-                color: "#7f167f",
-              },
-            ]
-          : [
-              {
-                title: "Omzet",
-                value: formatCurrency(totals.invoiceTotal),
-                color: "#025cca",
-              },
-              {
-                title: "Kas masuk tercatat",
-                value: formatCurrency(cashReceivedTotal),
-                color: "#b58105",
-              },
-              {
-                title: "Pengeluaran",
-                value: formatCurrency(dailyExpenseTotal),
-                color: "#be3e3f",
-              },
-              {
-                title: "Untung bersih",
-                value: formatCurrency(netCashTotal),
-                color: netCashTotal < 0 ? "#be3e3f" : "#7f167f",
-              },
-            ]
+  const oldSummaryCards = [
+    {
+      title: "Total omzet",
+      value: formatCurrency(totals.invoiceTotal),
+      color: "#025cca",
+    },
+    ...(SHOW_HPP_FIELDS
+      ? [
+          {
+            title: "Laba kotor",
+            value: formatCurrency(grossProfit),
+            color: "#02a05a",
+          },
+        ]
       : [
           {
-            title: "Total omzet",
-            value: formatCurrency(totals.invoiceTotal),
-            color: "#025cca",
+            title: "Pengeluaran",
+            value: formatCurrency(dailyExpenseTotal),
+            color: "#be3e3f",
           },
-          ...(SHOW_HPP_FIELDS
-            ? [
-                {
-                  title: "Laba kotor",
-                  value: formatCurrency(grossProfit),
-                  color: "#02a05a",
-                },
-              ]
-            : [
-                {
-                  title: "Pengeluaran",
-                  value: formatCurrency(dailyExpenseTotal),
-                  color: "#be3e3f",
-                },
-              ]),
-          {
-            title: "Kas masuk tercatat",
-            value: formatCurrency(cashReceivedTotal),
-            color: "#b58105",
-          },
-          {
-            title: "Untung bersih",
-            value: formatCurrency(netCashTotal),
-            color: netCashTotal < 0 ? "#be3e3f" : "#7f167f",
-          },
-        ];
+        ]),
+    {
+      title: "Kas masuk tercatat",
+      value: formatCurrency(cashReceivedTotal),
+      color: "#b58105",
+    },
+    {
+      title: "Untung bersih",
+      value: formatCurrency(netCashTotal),
+      color: netCashTotal < 0 ? "#be3e3f" : "#7f167f",
+    },
+  ];
   const newSummaryCards = [
     {
       title: `Total Penjualan ${newRecapRangeLabel}`,
@@ -1395,14 +929,8 @@ const RecapManagement = () => {
     summaryScrollState.canScrollLeft || summaryScrollState.canScrollRight;
   const summaryScrollButtonClass =
     "mb-2 flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-[#444] bg-[#262626] text-[#f5f5f5] transition hover:bg-[#333] disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-[#262626]";
-  const activeRecapTab = recapTabs.find((tab) => tab.key === activeTab);
-  const activeRecapTitle = `Rekap ${activeRecapTab?.label || ""}`.trim();
-  const activeRecapDescription =
-    activeTab === "weekly"
-      ? "Ringkasan omzet, channel, dan action plan mingguan."
-      : activeTab === "monthly"
-        ? "Ringkasan omzet, HPP, laba, dan strategi bulanan."
-        : "Daftar rekap transaksi, kas, HPP, dan menu terlaris harian.";
+  const activeRecapTitle = "Rekap Harian";
+  const activeRecapDescription = "Daftar rekap transaksi, kas, HPP, dan menu terlaris harian.";
 
   const updateRecapForm = (field, value) => {
     setRecapForm((current) => ({ ...current, [field]: value }));
@@ -1412,13 +940,6 @@ const RecapManagement = () => {
     setRecapForm((current) => ({ ...current, ...fields }));
   };
 
-  const updateWeeklyRecapForm = (field, value) => {
-    setWeeklyRecapForm((current) => ({ ...current, [field]: value }));
-  };
-
-  const updateMonthlyRecapForm = (field, value) => {
-    setMonthlyRecapForm((current) => ({ ...current, [field]: value }));
-  };
 
   const applyOrderSummaryToForm = (date) => {
     setRecapForm((current) => ({
@@ -1459,36 +980,6 @@ const RecapManagement = () => {
       note: recapForm.note,
     };
   };
-
-  const buildWeeklyRecapPayload = () => ({
-    periodStartDate: weeklyRecapForm.periodStartDate,
-    periodEndDate: weeklyRecapForm.periodEndDate,
-    totalOmzet: weeklySummary.totalOmzet,
-    grossProfit: weeklySummary.grossProfit,
-    offlineRevenue: weeklySummary.offlineRevenue,
-    onlineRevenue: weeklySummary.onlineRevenue,
-    cateringRevenue: weeklySummary.cateringRevenue,
-    cateringOrderCount: weeklySummary.cateringOrderCount,
-    topChannel: weeklySummary.topChannel,
-    operationalIssues: weeklyRecapForm.operationalIssues,
-    teamEvaluation: weeklyRecapForm.teamEvaluation,
-    stockEvaluation: weeklyRecapForm.stockEvaluation,
-    actionPlan: weeklyRecapForm.actionPlan,
-  });
-
-  const buildMonthlyRecapPayload = () => ({
-    periodMonth: monthlyRecapForm.periodMonth,
-    omzet: monthlySummary.omzet,
-    hppTotal: monthlySummary.hppTotal,
-    grossProfit: monthlySummary.grossProfit,
-    estimatedNetProfit: monthlySummary.estimatedNetProfit,
-    cateringOrderCount: monthlySummary.cateringOrderCount,
-    retainedMenu: monthlyRecapForm.retainedMenu,
-    evaluatedMenu: monthlyRecapForm.evaluatedMenu,
-    promotionEvaluation: monthlyRecapForm.promotionEvaluation,
-    supplierEvaluation: monthlyRecapForm.supplierEvaluation,
-    nextMonthStrategy: monthlyRecapForm.nextMonthStrategy,
-  });
 
   const saveDailyRecapMutation = useMutation({
     mutationFn: (data) => addRecap({ periodType: "daily", data }),
@@ -1531,7 +1022,6 @@ const RecapManagement = () => {
       }
       setRecapForm(createRecapFormFromOrders(orders, menuItems));
       setPendingDailyRecapPayload(null);
-      setActiveTab("daily");
       setIsRecapModalOpen(false);
     },
     onError: (error) => {
@@ -1542,68 +1032,8 @@ const RecapManagement = () => {
     },
   });
 
-  const saveWeeklyRecapMutation = useMutation({
-    mutationFn: (data) => addRecap({ periodType: "weekly", data }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["recaps"] });
-      enqueueSnackbar("Rekap mingguan berhasil disimpan", {
-        variant: "success",
-      });
-      setActiveTab("weekly");
-      setIsRecapModalOpen(false);
-    },
-    onError: (error) => {
-      enqueueSnackbar(
-        error?.response?.data?.message || "Gagal menyimpan rekap mingguan",
-        { variant: "error" }
-      );
-    },
-  });
-
-  const saveMonthlyRecapMutation = useMutation({
-    mutationFn: (data) => addRecap({ periodType: "monthly", data }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["recaps"] });
-      enqueueSnackbar("Rekap bulanan berhasil disimpan", {
-        variant: "success",
-      });
-      setActiveTab("monthly");
-      setIsRecapModalOpen(false);
-    },
-    onError: (error) => {
-      enqueueSnackbar(
-        error?.response?.data?.message || "Gagal menyimpan rekap bulanan",
-        { variant: "error" }
-      );
-    },
-  });
-
   const openRecapModal = () => {
-    if (activeTab === "weekly") {
-      const emptyWeeklyForm = createEmptyWeeklyRecapForm();
-      const currentWeek =
-        weekOptions.find((option) => option.value === emptyWeeklyForm.periodStartDate) ||
-        weekOptions[0];
-
-      setWeeklyRecapForm({
-        ...emptyWeeklyForm,
-        periodStartDate: currentWeek?.value || emptyWeeklyForm.periodStartDate,
-        periodEndDate: currentWeek?.periodEndDate || emptyWeeklyForm.periodEndDate,
-      });
-    } else if (activeTab === "monthly") {
-      const emptyMonthlyForm = createEmptyMonthlyRecapForm();
-      const currentMonth =
-        monthOptions.find((option) => option.value === emptyMonthlyForm.periodMonth) ||
-        monthOptions[0];
-
-      setMonthlyRecapForm({
-        ...emptyMonthlyForm,
-        periodMonth: currentMonth?.value || emptyMonthlyForm.periodMonth,
-      });
-    } else {
-      setRecapForm(createRecapFormFromOrders(orders, menuItems));
-    }
-
+    setRecapForm(createRecapFormFromOrders(orders, menuItems));
     setIsRecapModalOpen(true);
   };
 
@@ -1780,7 +1210,7 @@ const RecapManagement = () => {
                   Pendapatan bersih
                 </th>
               </tr>
-            ) : activeTab === "daily" ? (
+            ) : (
               <tr>
                 <th className={`${dailyHeadClass} text-left`}>Tanggal</th>
                 <th className={`${dailyHeadClass} text-left`}>Petugas</th>
@@ -1805,28 +1235,6 @@ const RecapManagement = () => {
                 <th className={`${dailyHeadClass} text-right`}>Untung bersih</th>
                 <th className={`${dailyHeadClass} text-left`}>Menu laku</th>
                 <th className={`${dailyHeadClass} text-center`}>Aksi</th>
-              </tr>
-            ) : activeTab === "weekly" ? (
-              <tr>
-                <th className="p-3">Periode</th>
-                <th className="p-3">Offline</th>
-                <th className="p-3">Online</th>
-                <th className="p-3">Catering</th>
-                <th className="p-3">Total</th>
-                {SHOW_HPP_FIELDS && <th className="p-3">Laba kotor</th>}
-                <th className="p-3">Order cat.</th>
-                <th className="p-3">Channel</th>
-                <th className="p-3">Action plan</th>
-              </tr>
-            ) : (
-              <tr>
-                <th className="p-3">Bulan</th>
-                <th className="p-3">Omzet</th>
-                {SHOW_HPP_FIELDS && <th className="p-3">HPP</th>}
-                {SHOW_HPP_FIELDS && <th className="p-3">Laba kotor</th>}
-                {SHOW_HPP_FIELDS && <th className="p-3">Laba bersih</th>}
-                <th className="p-3">Order cat.</th>
-                <th className="p-3">Strategi bulan depan</th>
               </tr>
             )}
           </thead>
@@ -1965,7 +1373,7 @@ const RecapManagement = () => {
                   </tr>
                 )}
               </>
-            ) : activeTab === "daily" ? (
+            ) : (
               <>
                 {dailyTableRows.map((row) => (
                   <tr
@@ -2044,101 +1452,6 @@ const RecapManagement = () => {
                   </tr>
                 )}
               </>
-            ) : activeTab === "weekly" ? (
-              <>
-                {weeklyTableRows.map((row) => (
-                  <tr
-                    key={row.id}
-                    className="border-b border-gray-600 hover:bg-[#333]"
-                  >
-                    <td className="p-4 min-w-[200px] font-semibold">
-                      {formatRecapDateLabel(row.periodStartDate)} -{" "}
-                      {formatRecapDateLabel(row.periodEndDate)}
-                    </td>
-                    <td className="p-4">{formatCurrency(row.offlineRevenue)}</td>
-                    <td className="p-4">{formatCurrency(row.onlineRevenue)}</td>
-                    <td className="p-4">{formatCurrency(row.cateringRevenue)}</td>
-                    <td className="p-4">{formatCurrency(row.totalOmzet)}</td>
-                    {SHOW_HPP_FIELDS && (
-                      <td className="p-4">{formatCurrency(row.grossProfit)}</td>
-                    )}
-                    <td className="p-4">{row.cateringOrderCount || 0}</td>
-                    <td className="p-4">{row.topChannel || "-"}</td>
-                    <td className="p-4 min-w-[240px]">
-                      {row.actionPlan || "-"}
-                    </td>
-                  </tr>
-                ))}
-                {!isSavedRecapsLoading && savedRecaps.length === 0 && (
-                  <tr>
-                    <td
-                      className="p-4 text-[#ababab]"
-                      colSpan={SHOW_HPP_FIELDS ? 9 : 8}
-                    >
-                      Belum ada laporan mingguan - isi form evaluasi minggu ini.
-                    </td>
-                  </tr>
-                )}
-                {isSavedRecapsLoading && (
-                  <tr>
-                    <td
-                      className="p-4 text-center text-[#ababab]"
-                      colSpan={SHOW_HPP_FIELDS ? 9 : 8}
-                    >
-                      Loading recap...
-                    </td>
-                  </tr>
-                )}
-              </>
-            ) : (
-              <>
-                {monthlyTableRows.map((row) => (
-                  <tr
-                    key={row.id}
-                    className="border-b border-gray-600 hover:bg-[#333]"
-                  >
-                    <td className="p-4 font-semibold">
-                      {formatMonthLabel(row.periodMonth)}
-                    </td>
-                    <td className="p-4">{formatCurrency(row.omzet)}</td>
-                    {SHOW_HPP_FIELDS && (
-                      <td className="p-4">{formatCurrency(row.hppTotal)}</td>
-                    )}
-                    {SHOW_HPP_FIELDS && (
-                      <td className="p-4">{formatCurrency(row.grossProfit)}</td>
-                    )}
-                    {SHOW_HPP_FIELDS && (
-                      <td className="p-4">
-                        {formatCurrency(row.estimatedNetProfit)}
-                      </td>
-                    )}
-                    <td className="p-4">{row.cateringOrderCount || 0}</td>
-                    <td className="p-4 min-w-[240px]">
-                      {row.nextMonthStrategy || "-"}
-                    </td>
-                  </tr>
-                ))}
-                {!isSavedRecapsLoading && savedRecaps.length === 0 && (
-                  <tr>
-                    <td
-                      className="p-4 text-[#ababab]"
-                      colSpan={SHOW_HPP_FIELDS ? 7 : 4}
-                    >
-                      Belum ada laporan bulanan - isi form strategi bulan ini.
-                    </td>
-                  </tr>
-                )}
-                {isSavedRecapsLoading && (
-                  <tr>
-                    <td
-                      className="p-4 text-center text-[#ababab]"
-                      colSpan={SHOW_HPP_FIELDS ? 7 : 4}
-                    >
-                      Loading recap...
-                    </td>
-                  </tr>
-                )}
-              </>
             )}
           </tbody>
         </table>
@@ -2153,18 +1466,10 @@ const RecapManagement = () => {
             <div className="mb-4 flex items-start justify-between gap-4">
               <div>
                 <h3 className="text-xl font-bold">
-                  {activeTab === "weekly"
-                    ? "Input Rekap Mingguan"
-                    : activeTab === "monthly"
-                      ? "Input Rekap Bulanan"
-                    : "Input Rekap Harian"}
+                  Input Rekap Harian
                 </h3>
                 <p className="mt-1 text-sm text-[#ababab]">
-                  {activeTab === "weekly"
-                    ? "Angka otomatis dari rekap harian dan pesanan catering."
-                    : activeTab === "monthly"
-                      ? "Catat evaluasi dan strategi bulanan."
-                    : "Catat ringkasan operasional dan kas harian."}
+                  Catat ringkasan operasional dan kas harian.
                 </p>
               </div>
               <button
@@ -2176,246 +1481,6 @@ const RecapManagement = () => {
               </button>
             </div>
 
-            {activeTab === "weekly" ? (
-              <form
-                onSubmit={(event) => {
-                  event.preventDefault();
-
-                  if (
-                    !weeklyRecapForm.periodStartDate ||
-                    !weeklyRecapForm.periodEndDate
-                  ) {
-                    enqueueSnackbar("Periode minggu wajib dipilih", {
-                      variant: "warning",
-                    });
-                    return;
-                  }
-
-                  saveWeeklyRecapMutation.mutate(buildWeeklyRecapPayload());
-                }}
-              >
-                <SelectField
-                  label="Pilih minggu"
-                  value={weeklyRecapForm.periodStartDate}
-                  onChange={(value) => {
-                    const selectedWeek = weekOptions.find(
-                      (option) => String(option.value) === String(value)
-                    );
-
-                    setWeeklyRecapForm((current) => ({
-                      ...current,
-                      periodStartDate: selectedWeek?.value || value,
-                      periodEndDate:
-                        selectedWeek?.periodEndDate || current.periodEndDate,
-                    }));
-                  }}
-                  options={weekOptions}
-                  placeholder="Pilih minggu"
-                  isSearchable={false}
-                />
-
-                <label className="mt-4 block text-sm font-semibold text-[#ababab]">
-                  Masalah operasional minggu ini
-                  <textarea
-                    value={weeklyRecapForm.operationalIssues}
-                    onChange={(event) =>
-                      updateWeeklyRecapForm(
-                        "operationalIssues",
-                        event.target.value
-                      )
-                    }
-                    rows={3}
-                    placeholder="Contoh: es batu habis 2 kali di jam ramai; supplier telat"
-                    className="mt-2 w-full resize-none rounded-lg border border-[#333] bg-[#1f1f1f] px-3 py-3 text-sm text-[#f5f5f5] outline-none placeholder:text-[#777] focus:border-[#025cca]"
-                  />
-                </label>
-
-                <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  <label className="block text-sm font-semibold text-[#ababab]">
-                    Evaluasi tim
-                    <textarea
-                      value={weeklyRecapForm.teamEvaluation}
-                      onChange={(event) =>
-                        updateWeeklyRecapForm(
-                          "teamEvaluation",
-                          event.target.value
-                        )
-                      }
-                      rows={3}
-                      placeholder="Contoh: kerja sama baik, kasir perlu latihan refund QRIS"
-                      className="mt-2 w-full resize-none rounded-lg border border-[#333] bg-[#1f1f1f] px-3 py-3 text-sm text-[#f5f5f5] outline-none placeholder:text-[#777] focus:border-[#025cca]"
-                    />
-                  </label>
-                  <label className="block text-sm font-semibold text-[#ababab]">
-                    Evaluasi stok
-                    <textarea
-                      value={weeklyRecapForm.stockEvaluation}
-                      onChange={(event) =>
-                        updateWeeklyRecapForm(
-                          "stockEvaluation",
-                          event.target.value
-                        )
-                      }
-                      rows={3}
-                      placeholder="Contoh: powder aman; ayam fillet cepat habis"
-                      className="mt-2 w-full resize-none rounded-lg border border-[#333] bg-[#1f1f1f] px-3 py-3 text-sm text-[#f5f5f5] outline-none placeholder:text-[#777] focus:border-[#025cca]"
-                    />
-                  </label>
-                </div>
-
-                <label className="mt-4 block text-sm font-semibold text-[#ababab]">
-                  Action plan minggu depan
-                  <textarea
-                    value={weeklyRecapForm.actionPlan}
-                    onChange={(event) =>
-                      updateWeeklyRecapForm("actionPlan", event.target.value)
-                    }
-                    rows={3}
-                    placeholder="Contoh: Dimas - cek supplier cadangan - Rabu; Owner - follow up catering - Jumat"
-                    className="mt-2 w-full resize-none rounded-lg border border-[#333] bg-[#1f1f1f] px-3 py-3 text-sm text-[#f5f5f5] outline-none placeholder:text-[#777] focus:border-[#025cca]"
-                  />
-                </label>
-
-                <div className="mt-5 flex justify-end gap-3 border-t border-[#333] pt-4">
-                  <button
-                    type="button"
-                    onClick={() => setIsRecapModalOpen(false)}
-                    disabled={saveWeeklyRecapMutation.isPending}
-                    className="rounded-lg bg-[#333] px-4 py-2 text-sm font-bold text-[#f5f5f5] hover:bg-[#3d3d3d]"
-                  >
-                    Batal
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={saveWeeklyRecapMutation.isPending}
-                    className="rounded-lg bg-[#a79981] px-4 py-2 text-sm font-bold text-[#101010] hover:bg-[#b7aa94]"
-                  >
-                    {saveWeeklyRecapMutation.isPending
-                      ? "Menyimpan..."
-                      : "Simpan Evaluasi Minggu Ini"}
-                  </button>
-                </div>
-              </form>
-            ) : activeTab === "monthly" ? (
-              <form
-                onSubmit={(event) => {
-                  event.preventDefault();
-
-                  if (!monthlyRecapForm.periodMonth) {
-                    enqueueSnackbar("Bulan wajib dipilih", {
-                      variant: "warning",
-                    });
-                    return;
-                  }
-
-                  saveMonthlyRecapMutation.mutate(buildMonthlyRecapPayload());
-                }}
-              >
-                <SelectField
-                  label="Pilih bulan"
-                  value={monthlyRecapForm.periodMonth}
-                  onChange={(value) => {
-                    updateMonthlyRecapForm("periodMonth", value);
-                  }}
-                  options={monthOptions}
-                  placeholder="Pilih bulan"
-                  isSearchable={false}
-                />
-
-                <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                  <label className="block text-sm font-semibold text-[#ababab]">
-                    Menu yang perlu dipertahankan
-                    <textarea
-                      value={monthlyRecapForm.retainedMenu}
-                      onChange={(event) =>
-                        updateMonthlyRecapForm("retainedMenu", event.target.value)
-                      }
-                      rows={3}
-                      placeholder="Contoh: Chicken Katsu RB, Kopi Gula Aren"
-                      className="mt-2 w-full resize-none rounded-lg border border-[#333] bg-[#1f1f1f] px-3 py-3 text-sm text-[#f5f5f5] outline-none placeholder:text-[#777] focus:border-[#025cca]"
-                    />
-                  </label>
-                  <label className="block text-sm font-semibold text-[#ababab]">
-                    Menu yang perlu dievaluasi
-                    <textarea
-                      value={monthlyRecapForm.evaluatedMenu}
-                      onChange={(event) =>
-                        updateMonthlyRecapForm("evaluatedMenu", event.target.value)
-                      }
-                      rows={3}
-                      placeholder="Contoh: Beef Teriyaki RB - margin rendah"
-                      className="mt-2 w-full resize-none rounded-lg border border-[#333] bg-[#1f1f1f] px-3 py-3 text-sm text-[#f5f5f5] outline-none placeholder:text-[#777] focus:border-[#025cca]"
-                    />
-                  </label>
-                  <label className="block text-sm font-semibold text-[#ababab]">
-                    Evaluasi promosi
-                    <textarea
-                      value={monthlyRecapForm.promotionEvaluation}
-                      onChange={(event) =>
-                        updateMonthlyRecapForm(
-                          "promotionEvaluation",
-                          event.target.value
-                        )
-                      }
-                      rows={3}
-                      placeholder="Contoh: promo opening efektif, lanjutkan bundling"
-                      className="mt-2 w-full resize-none rounded-lg border border-[#333] bg-[#1f1f1f] px-3 py-3 text-sm text-[#f5f5f5] outline-none placeholder:text-[#777] focus:border-[#025cca]"
-                    />
-                  </label>
-                  <label className="block text-sm font-semibold text-[#ababab]">
-                    Evaluasi supplier
-                    <textarea
-                      value={monthlyRecapForm.supplierEvaluation}
-                      onChange={(event) =>
-                        updateMonthlyRecapForm(
-                          "supplierEvaluation",
-                          event.target.value
-                        )
-                      }
-                      rows={3}
-                      placeholder="Contoh: supplier ayam sering telat, cari cadangan"
-                      className="mt-2 w-full resize-none rounded-lg border border-[#333] bg-[#1f1f1f] px-3 py-3 text-sm text-[#f5f5f5] outline-none placeholder:text-[#777] focus:border-[#025cca]"
-                    />
-                  </label>
-                </div>
-
-                <label className="mt-4 block text-sm font-semibold text-[#ababab]">
-                  Rekomendasi strategi bulan depan
-                  <textarea
-                    value={monthlyRecapForm.nextMonthStrategy}
-                    onChange={(event) =>
-                      updateMonthlyRecapForm(
-                        "nextMonthStrategy",
-                        event.target.value
-                      )
-                    }
-                    rows={3}
-                    placeholder="Contoh: fokus kontrak catering rutin; aktifkan ShopeeFood"
-                    className="mt-2 w-full resize-none rounded-lg border border-[#333] bg-[#1f1f1f] px-3 py-3 text-sm text-[#f5f5f5] outline-none placeholder:text-[#777] focus:border-[#025cca]"
-                  />
-                </label>
-
-                <div className="mt-5 flex justify-end gap-3 border-t border-[#333] pt-4">
-                  <button
-                    type="button"
-                    onClick={() => setIsRecapModalOpen(false)}
-                    disabled={saveMonthlyRecapMutation.isPending}
-                    className="rounded-lg bg-[#333] px-4 py-2 text-sm font-bold text-[#f5f5f5] hover:bg-[#3d3d3d]"
-                  >
-                    Batal
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={saveMonthlyRecapMutation.isPending}
-                    className="rounded-lg bg-[#a79981] px-4 py-2 text-sm font-bold text-[#101010] hover:bg-[#b7aa94]"
-                  >
-                    {saveMonthlyRecapMutation.isPending
-                      ? "Menyimpan..."
-                      : "Simpan Evaluasi Bulan Ini"}
-                  </button>
-                </div>
-              </form>
-            ) : (
               <form
               onSubmit={(event) => {
                 event.preventDefault();
@@ -2486,7 +1551,7 @@ const RecapManagement = () => {
                     {field.id === "date" && (
                       // The account logged in is the petugas of the recap.
                       <label className="block text-sm font-semibold text-[#ababab]">
-                        Shift / petugas
+                        Shift / petugas <OptionalTag />
                         <input
                           value={currentUser?.name || "-"}
                           readOnly
@@ -2499,6 +1564,7 @@ const RecapManagement = () => {
                       <>
                         <SelectField
                           label="Menu paling laku"
+                          optional
                           value={recapForm.bestMenuItemId}
                           onChange={(value) => {
                             const selectedMenu = menuOptions.find(
@@ -2515,6 +1581,7 @@ const RecapManagement = () => {
                         />
                         <SelectField
                           label="Menu kurang laku"
+                          optional
                           value={recapForm.leastMenuItemId}
                           onChange={(value) => {
                             const selectedMenu = menuOptions.find(
@@ -2536,7 +1603,7 @@ const RecapManagement = () => {
               </div>
 
               <label className="mt-4 block text-sm font-semibold text-[#ababab]">
-                Catatan operasional & tindak lanjut besok
+                Catatan operasional & tindak lanjut besok <OptionalTag />
                 <textarea
                   value={recapForm.note}
                   onChange={(event) => updateRecapForm("note", event.target.value)}
@@ -2570,7 +1637,6 @@ const RecapManagement = () => {
                 </button>
               </div>
               </form>
-            )}
           </div>
         </div>
       )}
