@@ -284,8 +284,8 @@ describe("program promo", () => {
         total_stamps: 12,
         last_stamp_at: "2026-11-19T12:00:00+07:00",
         cards: 2,
-        // Numbered month-year-sequence; valid until 3 months after its first stamp.
-        card: { number: "11-2026-004", stamps: 2, slots: 10, status: "active", expires_at: "2027-02-19T23:59:59+07:00" },
+        // Numbered year-month-sequence; valid until 3 months after its first stamp.
+        card: { number: "26-11-004", stamps: 2, slots: 10, status: "active", expires_at: "2027-02-19T23:59:59+07:00" },
         rewards_redeemed: 1,
         rewards_ready: 1,
       };
@@ -297,7 +297,7 @@ describe("program promo", () => {
         last_stamp_at: null,
         cards: 1,
         // No stamp yet: no expiry yet.
-        card: { number: "11-2026-009", stamps: 0, slots: 10, status: "active", expires_at: null },
+        card: { number: "26-11-009", stamps: 0, slots: 10, status: "active", expires_at: null },
         rewards_redeemed: 0,
         rewards_ready: 0,
       };
@@ -312,16 +312,16 @@ describe("program promo", () => {
       it("lists every member with all the stamps they earned, their card now and their rewards", async () => {
         const dialog = await openMembers();
 
-        const row = (await within(dialog).findByText("11-2026-004")).closest("tr");
+        const row = (await within(dialog).findByText("26-11-004")).closest("tr");
         expect(Array.from(row.cells).map((cell) => cell.textContent)).toEqual([
           "0987654321NSK-000004 · Demo Makanan",
           "122 kartu",
-          "2/1011-2026-004",
+          "2/1026-11-004",
           "19/02/2027",
           "1 ditukar1 siap ditukar",
           "19/11/26 12:00",
         ]);
-        const fresh = within(dialog).getByText("11-2026-009").closest("tr");
+        const fresh = within(dialog).getByText("26-11-009").closest("tr");
         expect(fresh.cells[1]).toHaveTextContent("01 kartu");
         expect(fresh.cells[3]).toHaveTextContent(/^-$/);
         expect(fresh.cells[5]).toHaveTextContent("Belum ada");
@@ -341,7 +341,7 @@ describe("program promo", () => {
 
       it("says an expired card, its date in red, and searches members", async () => {
         api.getLoyaltyMembers.mockResolvedValue(
-          history([{ ...MEMBER, cards: 1, card: { ...MEMBER.card, number: "08-2026-001", stamps: 10, status: "expired", expires_at: "2026-11-01T23:59:59+07:00" } }])
+          history([{ ...MEMBER, cards: 1, card: { ...MEMBER.card, number: "26-08-001", stamps: 10, status: "expired", expires_at: "2026-11-01T23:59:59+07:00" } }])
         );
         const dialog = await openMembers();
 

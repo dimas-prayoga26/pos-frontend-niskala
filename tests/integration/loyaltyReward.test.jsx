@@ -195,7 +195,7 @@ describe("Loyalty reward as a Kategori Promo menu", () => {
 // with the camera or typed into Nomor Telepon by a scanner gun.
 describe("Stamp card voucher QR at the cashier", () => {
   // NSKV1.<card number>.<reward stamps>.<signature>: the same for as long as the card lives.
-  const CODE = "NSKV1.11-2026-002.5.0123456789abcdef";
+  const CODE = "NSKV1.26-11-002.5.0123456789abcdef";
   const voucher = (overrides = {}) => ({
     data: {
       data: {
@@ -260,7 +260,7 @@ describe("Stamp card voucher QR at the cashier", () => {
 
   it("fills in the customer from the card's customer QR, with no reward and no warning", async () => {
     // Stamps 0: the QR every card has, before any reward is ready.
-    const memberCode = "NSKV1.11-2026-002.0.0123456789abcdef";
+    const memberCode = "NSKV1.26-11-002.0.0123456789abcdef";
     api.getLoyaltyVoucher.mockResolvedValue(voucher({ status: "member", ready: false, message: null, reward: null }));
     const { store } = renderWithProviders(<MenuPage />, { route: "/menu" });
     await screen.findAllByText("Americano");
