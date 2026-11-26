@@ -15,7 +15,8 @@ const errorMessage = (error, fallback) => error?.response?.data?.message || fall
 // reward gives is picked in the promo form (Jenis promo: Hadiah Stamp Card);
 // onEditMenu(menuItemId) opens it from its reward's row. disabled: loyalty is
 // off in Pengaturan → API; the card stays, greyed out, and asks nothing.
-export default function PromoProgramSettings({ onEditMenu = null, disabled = false }) {
+// readOnly (kasir): shown with its switches locked.
+export default function PromoProgramSettings({ onEditMenu = null, disabled = false, readOnly = false }) {
   const queryClient = useQueryClient();
   const programQuery = useQuery({
     queryKey: ["loyalty-program"],
@@ -76,7 +77,7 @@ export default function PromoProgramSettings({ onEditMenu = null, disabled = fal
   }
 
   const { rules = {}, rewards = [] } = program;
-  const isBusy = programMutation.isPending || rewardMutation.isPending;
+  const isBusy = readOnly || programMutation.isPending || rewardMutation.isPending;
 
   return (
     <SettingCard
@@ -151,7 +152,7 @@ export default function PromoProgramSettings({ onEditMenu = null, disabled = fal
           {!rewards.length && <li className="border-t border-[#333] px-4 py-3 text-sm text-[#777]">Belum ada hadiah.</li>}
         </ul>
       </div>
-      {rewards.some((reward) => !reward.promo_menu_item_id) && (
+      {!readOnly && rewards.some((reward) => !reward.promo_menu_item_id) && (
         <p className="mt-2 text-xs text-amber-300">Pilih menunya lewat Tambah Promo → Jenis promo: Hadiah stamp card.</p>
       )}
     </SettingCard>

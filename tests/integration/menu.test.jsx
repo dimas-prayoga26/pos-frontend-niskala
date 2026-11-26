@@ -87,6 +87,52 @@ describe("menu recipe editor", () => {
     );
   });
 
+  it("lets kasir add menus, promos and categories but change or delete nothing", async () => {
+    api.getCategories.mockResolvedValue({
+      data: {
+        data: [
+          { id: 1, name: "Kopi", isActive: true, position: 1 },
+          { id: 2, name: "Promo", isActive: true, isBundle: true, position: 2 },
+        ],
+      },
+    });
+    api.getMenuItems.mockResolvedValue({
+      data: {
+        data: [
+          { id: 7, name: "Americano", categoryId: 1, category: { id: 1, name: "Kopi" }, price: 15000, isAvailable: true },
+          { id: 8, name: "Paket Hemat", categoryId: 2, category: { id: 2, name: "Promo" }, isBundle: true, price: 20000, isAvailable: true },
+        ],
+      },
+    });
+    const noChange = () => {
+      expect(screen.queryByRole("columnheader", { name: "Aksi" })).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "Ubah" })).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "Hapus" })).not.toBeInTheDocument();
+    };
+    renderWithProviders(<MenuManagement canManage={false} />);
+
+    // Menu Items: Tambah Menu, no Ubah or Hapus.
+    expect(await screen.findByText("Americano")).toBeInTheDocument();
+    noChange();
+    fireEvent.click(screen.getByRole("button", { name: "Tambah Menu" }));
+    expect(await screen.findByText("Komposisi Bahan")).toBeInTheDocument();
+    fireEvent.click(screen.getAllByRole("button", { name: "Batal" })[0]);
+
+    // Promo: Tambah Promo and Riwayat; its switch is locked.
+    fireEvent.click(screen.getByRole("button", { name: "Promo" }));
+    expect(await screen.findByText("Paket Hemat")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Tambah Promo" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Riwayat Paket Hemat" })).toBeInTheDocument();
+    expect(screen.getByRole("switch", { name: "Paket Hemat" })).toBeDisabled();
+    noChange();
+
+    // Categories: Tambah Category, not dragged.
+    fireEvent.click(screen.getByRole("button", { name: "Categories" }));
+    expect(await screen.findByRole("button", { name: "Tambah Category" })).toBeInTheDocument();
+    expect(screen.getByText("Kopi").closest("tr")).toHaveAttribute("draggable", "false");
+    noChange();
+  });
+
   it("fills a bahan olahan in portions, never in gram", async () => {
     // Nasi: Rp 4.125 a portion; its old portion size is ignored.
     api.getSemiItems.mockResolvedValue({
@@ -530,7 +576,7 @@ describe("kategori promo", () => {
     expect(hppCell.textContent.replace(/\s/g, " ")).toBe("Rp 4.000Nasi Daun Jeruk: Rp 4.100");
   });
 
-  it("shows each menu's persentase: its price over the HPP plus 30%", async () => {
+  it("shows each menu's persentase: its price over the HPP, no overhead added", async () => {
     api.getMenuItems.mockResolvedValue({
       data: {
         data: [
@@ -550,10 +596,10 @@ describe("kategori promo", () => {
       const cells = within(screen.getByText(name).closest("tr")).getAllByRole("cell");
       return cells[7].textContent;
     };
-    // 15.000 / (2.556 x 1,3), as the COGS sheet writes it.
-    expect(factorOf("Americano")).toBe("451%");
-    // Below 100%: the price does not cover the HPP plus 30%.
-    expect(factorOf("Rugi")).toBe("64%");
+    // 15.000 / 2.556: no 30% is added to the HPP.
+    expect(factorOf("Americano")).toBe("587%");
+    // Below 100%: the price does not cover the HPP.
+    expect(factorOf("Rugi")).toBe("83%");
     // No price or no HPP: nothing to show.
     expect(factorOf("Gratis")).toBe("-");
     expect(factorOf("Tanpa Resep")).toBe("-");

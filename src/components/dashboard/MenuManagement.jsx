@@ -208,16 +208,15 @@ const bundleLineKey = (line) => {
   if (!line.isChoice) return String(line.menuItemId);
   return line.categoryId ? `category:${line.categoryId}` : `choice:${line.choiceId}`;
 };
-// Persentase, as in the owner's COGS sheet: the harga reguler over the HPP
-// plus 30% (operational costs), e.g. Americano Rp 15.000 / (2.556 x 1,3) =
-// 451%. Below 100% the price does not cover that cost. null without a price
-// or an HPP (a package's HPP is counted per sale).
-const HPP_OVERHEAD = 0.3;
+// Persentase: the harga reguler over the HPP, with no overhead added, e.g.
+// Americano Rp 15.000 / 2.556 = 587%. Below 100% the price does not cover
+// the HPP. null without a price or an HPP (a package's HPP is counted per
+// sale).
 const pricingFactorOf = (item) => {
   const price = Number(item?.regularPrice ?? item?.price ?? 0);
   const hpp = isPackageMenu(item) ? 0 : Number(item?.hppCost ?? item?.hpp ?? 0);
   if (!(price > 0) || !(hpp > 0)) return null;
-  return price / (hpp * (1 + HPP_OVERHEAD));
+  return price / hpp;
 };
 const formatFactor = (factor) =>
   `${new Intl.NumberFormat("id-ID", { maximumFractionDigits: 0 }).format(factor * 100)}%`;
@@ -346,7 +345,10 @@ const formatMoneyDisplay = (value) =>
 // made at Stok Bahan ("raw" Tambah Bahan, "semi" Tambah Bahan Olahan).
 // renderPromoHeader({ onEditMenu }): shown above the promos (the stamp card,
 // on develop); onEditMenu(menuItemId) opens a promo it shows.
-const MenuManagement = ({ onCreateIngredient, renderPromoHeader = null }) => {
+// canManage false (kasir): the same Menu Items, Promo and Categories, adding
+// menus, promos and categories; Ubah, Hapus, a promo's on/off switch and
+// dragging the categories stay with admins.
+const MenuManagement = ({ onCreateIngredient, renderPromoHeader = null, canManage = true }) => {
   const queryClient = useQueryClient();
   const [activeSection, setActiveSection] = useState("menus");
   const [categoryForm, setCategoryForm] = useState(emptyCategoryForm);
@@ -1600,7 +1602,9 @@ const MenuManagement = ({ onCreateIngredient, renderPromoHeader = null }) => {
                 <p className="mt-1 text-sm text-[#ababab]">
                   {categoryPositionMutation.isPending
                     ? "Menyimpan urutan..."
-                    : "Geser baris untuk mengatur urutan di POS."}
+                    : canManage
+                      ? "Geser baris untuk mengatur urutan di POS."
+                      : "Urutan category di POS."}
                 </p>
               </div>
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
@@ -1629,7 +1633,7 @@ const MenuManagement = ({ onCreateIngredient, renderPromoHeader = null }) => {
                     <th className="p-3">Category</th>
                     <th className="p-3 text-center">Tax</th>
                     <th className="p-3 text-center">Status</th>
-                    <th className="p-3 text-center">Aksi</th>
+                    {canManage && <th className="p-3 text-center">Aksi</th>}
                   </tr>
                 </thead>
                 <tbody>
@@ -1637,7 +1641,7 @@ const MenuManagement = ({ onCreateIngredient, renderPromoHeader = null }) => {
                     const categoryId = getCategoryId(category);
                     const position = positionOf(category);
                     // An active category is dragged to its place (not while searching).
-                    const isDraggable = canReorderCategories && position > 0;
+                    const isDraggable = canManage && canReorderCategories && position > 0;
                     const isDragging = draggedCategoryId === categoryId;
 
                     return (
@@ -1696,6 +1700,7 @@ const MenuManagement = ({ onCreateIngredient, renderPromoHeader = null }) => {
                           {category.isActive ? "Aktif" : "Nonaktif"}
                         </span>
                       </td>
+                      {canManage && (
                       <td className="p-4">
                         <div className="flex justify-center gap-4 text-sm font-semibold">
                           <button
@@ -1714,12 +1719,13 @@ const MenuManagement = ({ onCreateIngredient, renderPromoHeader = null }) => {
                           </button>
                         </div>
                       </td>
+                      )}
                     </tr>
                     );
                   })}
                   {filteredCategories.length === 0 && (
                     <tr>
-                      <td className="p-4 text-center text-[#ababab]" colSpan={6}>
+                      <td className="p-4 text-center text-[#ababab]" colSpan={canManage ? 6 : 5}>
                         No categories found
                       </td>
                     </tr>
@@ -1785,7 +1791,8 @@ const MenuManagement = ({ onCreateIngredient, renderPromoHeader = null }) => {
                 >
                   <option value="paket">Paket biasa</option>
                   {/* (API): it works through the loyalty key of Pengaturan → API. */}
-                  <option value="loyalty" disabled={!isLoyaltyProgramActive}>
+                  {/* Linking a stamp card reward changes the program: admins only. */}
+                  <option value="loyalty" disabled={!isLoyaltyProgramActive || !canManage}>
                     {isLoyaltyProgramActive ? "Hadiah Stamp Card (API)" : "Hadiah Stamp Card (API) · nonaktif"}
                   </option>
                 </select>
@@ -2283,7 +2290,7 @@ const MenuManagement = ({ onCreateIngredient, renderPromoHeader = null }) => {
             </button>
           </div>
           {/* The stamp card, its rewards and the menu each gives (Ubah opens it). */}
-          {renderPromoHeader?.({ onEditMenu: editMenuById })}
+          {renderPromoHeader?.({ onEditMenu: canManage ? editMenuById : null, readOnly: !canManage })}
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
             {promoCards.map((item) => {
               const rewards = item.isLoyaltyPromo ? linkedRewardsOf(item.id) : [];
@@ -2313,7 +2320,8 @@ const MenuManagement = ({ onCreateIngredient, renderPromoHeader = null }) => {
                   subtitle={summary.filter(Boolean).join(" · ")}
                   note={contents}
                   warning={item.isAvailable === false ? "Tidak tersedia: tidak tampil di kasir." : null}
-                  // On (top right): sold at the cashier (Tersedia).
+                  // On (top right): sold at the cashier (Tersedia); kasir see it
+                  // without switching it.
                   actions={
                     <Switch
                       checked={item.isAvailable !== false}
@@ -2321,7 +2329,7 @@ const MenuManagement = ({ onCreateIngredient, renderPromoHeader = null }) => {
                         availabilityMutation.mutate({ menuItemId: getMenuItemId(item), isAvailable })
                       }
                       label={item.name}
-                      disabled={availabilityMutation.isPending}
+                      disabled={!canManage || availabilityMutation.isPending}
                     />
                   }
                   footer={
@@ -2336,16 +2344,20 @@ const MenuManagement = ({ onCreateIngredient, renderPromoHeader = null }) => {
                         <MdHistory size={16} />
                         Riwayat
                       </button>
-                      <button type="button" onClick={() => startEditMenuItem(item)} className={cardButtonClass}>
-                        Ubah
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setMenuPendingDelete(item)}
-                        className={`ml-auto ${cardDangerButtonClass}`}
-                      >
-                        Hapus
-                      </button>
+                      {canManage && (
+                        <>
+                          <button type="button" onClick={() => startEditMenuItem(item)} className={cardButtonClass}>
+                            Ubah
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setMenuPendingDelete(item)}
+                            className={`ml-auto ${cardDangerButtonClass}`}
+                          >
+                            Hapus
+                          </button>
+                        </>
+                      )}
                     </>
                   }
                 />
@@ -2407,9 +2419,9 @@ const MenuManagement = ({ onCreateIngredient, renderPromoHeader = null }) => {
                     <th className="p-3">Harga Online</th>
                     <th className="p-3">HPP</th>
                     <th className="p-3">Untung Kotor</th>
-                    <th className="p-3" title="Harga reguler ÷ (HPP + 30%)">Persentase Keuntungan</th>
+                    <th className="p-3" title="Harga reguler ÷ HPP">Persentase Keuntungan</th>
                     <th className="p-3 text-center">Status</th>
-                    <th className="p-3 text-center">Aksi</th>
+                    {canManage && <th className="p-3 text-center">Aksi</th>}
                   </tr>
                 </thead>
                 <tbody>
@@ -2475,7 +2487,7 @@ const MenuManagement = ({ onCreateIngredient, renderPromoHeader = null }) => {
                           const factor = pricingFactorOf(item);
                           if (factor === null) return <span className="text-[#ababab]">-</span>;
                           return (
-                            <span className={factor < 1 ? "text-red-300" : "text-emerald-200"} title={`${formatFactor(factor)} dari HPP + 30%`}>
+                            <span className={factor < 1 ? "text-red-300" : "text-emerald-200"} title={`${formatFactor(factor)} dari HPP`}>
                               {formatFactor(factor)}
                             </span>
                           );
@@ -2492,6 +2504,7 @@ const MenuManagement = ({ onCreateIngredient, renderPromoHeader = null }) => {
                           {item.isAvailable ? "Tersedia" : "Tidak Tersedia"}
                         </span>
                       </td>
+                      {canManage && (
                       <td className="p-4">
                         <div className="flex justify-center gap-4 text-sm font-semibold">
                           <button
@@ -2510,11 +2523,12 @@ const MenuManagement = ({ onCreateIngredient, renderPromoHeader = null }) => {
                           </button>
                         </div>
                       </td>
+                      )}
                     </tr>
                   ))}
                   {filteredMenuItems.length === 0 && (
                     <tr>
-                      <td className="p-4 text-center text-[#ababab]" colSpan={10}>
+                      <td className="p-4 text-center text-[#ababab]" colSpan={canManage ? 10 : 9}>
                         No menu items found
                       </td>
                     </tr>

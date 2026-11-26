@@ -276,9 +276,10 @@ describe("dashboard menus: Stok Bahan holds what is on hand, Belanja the purchas
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
-  it("shows Belanja to kasir, who write draft nota", async () => {
+  it("shows Belanja, Menu and Member Stamp Card to kasir, who write draft nota", async () => {
     renderWithProviders(<Dashboard />, { preloadedState: user("Cashier") });
-    expect(menuNames()).toEqual(["Metrik", "Stok Bahan", "Belanja", "Rekap"]);
+    expect(await screen.findByRole("button", { name: "Member Stamp Card" })).toBeInTheDocument();
+    expect(menuNames()).toEqual(["Metrik", "Stok Bahan", "Belanja", "Menu", "Member Stamp Card", "Rekap"]);
     fireEvent.click(await screen.findByRole("button", { name: "Belanja 2" }));
     expect(screen.getByRole("button", { name: "Tambah Belanja" })).toBeInTheDocument();
   });

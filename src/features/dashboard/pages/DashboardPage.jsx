@@ -20,9 +20,10 @@ const Dashboard = () => {
   const user = useSelector((state) => state.user);
   const userRole = user.role;
   const isAdmin = userRole?.toLowerCase() === "admin";
-  // Member Stamp Card: admins, once loyalty is set up in Pengaturan → API.
+  // Member Stamp Card: admins and kasir, once loyalty is set up in
+  // Pengaturan → API.
   const loyalty = useLoyaltyEnabled();
-  const showMembers = isAdmin && loyalty.enabled;
+  const showMembers = loyalty.enabled;
   const [activeTab, setActiveTab] = useState("metrics");
   // Bahan baku a Catat Masak is short of ({ stockItemId, unit }): Belanja
   // Bahan opens Tambah Belanja with them. Any tab click drops them.
@@ -48,13 +49,13 @@ const Dashboard = () => {
 
   // Metrik holds Ringkasan and Menu Paling Laku, Menu the menus and every
   // promo, Member Stamp Card the stamp card's members, stamps and rewards;
-  // Pengaturan is the gear at the end of the bar. Menu, Member Stamp Card and
-  // Pengaturan: admins only.
+  // Pengaturan is the gear at the end of the bar. Pengaturan: admins only;
+  // in Menu kasir add but change or delete nothing.
   const tabs = [
     { key: "metrics", label: "Metrik" },
     { key: "stock", label: "Stok Bahan", badge: lowStockCount },
     { key: "shopping", label: "Belanja", badge: draftCount },
-    ...(isAdmin ? [{ key: "menu", label: "Menu" }] : []),
+    { key: "menu", label: "Menu" },
     ...(showMembers ? [{ key: "members", label: "Member Stamp Card" }] : []),
     { key: "recap", label: "Rekap" },
   ];
@@ -119,12 +120,18 @@ const Dashboard = () => {
         />
       )}
       {activeTab === "shopping" && <ShoppingPage restockItems={restockItems} />}
-      {activeTab === "menu" && isAdmin && (
+      {activeTab === "menu" && (
         <MenuTab
-          onCreateIngredient={(kind, name) => {
-            setActiveTab("stock");
-            setCreateStockItem({ kind, name });
-          }}
+          canManage={isAdmin}
+          // Only admins add bahan (Stok Bahan → Tambah Bahan).
+          onCreateIngredient={
+            isAdmin
+              ? (kind, name) => {
+                  setActiveTab("stock");
+                  setCreateStockItem({ kind, name });
+                }
+              : undefined
+          }
         />
       )}
       {activeTab === "members" && showMembers && <MemberStampCard />}

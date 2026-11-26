@@ -5,6 +5,8 @@ describe("loyalty voucher", () => {
   it("recognizes a stamp card voucher QR, nothing else", () => {
     expect(isLoyaltyVoucherCode("NSKV1.NSK-000001-01.5.0123456789abcdef")).toBe(true);
     expect(isLoyaltyVoucherCode(" NSKV1.NSK-000001-01.10.0123456789ABCDEF\n")).toBe(true);
+    // Card numbers since 2026-11-26: year, month, 4-digit sequence, no dashes.
+    expect(isLoyaltyVoucherCode("NSKV1.26110002.0.0123456789abcdef")).toBe(true);
 
     expect(isLoyaltyVoucherCode("081234567890")).toBe(false);
     // With a time slot (the old QR that changed every minute).
