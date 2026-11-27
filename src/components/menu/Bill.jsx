@@ -60,6 +60,10 @@ const Bill = () => {
   const orderType = customerData.orderType || "Offline";
   // Konsumsi Crew: the menus are free (their value shows as one minus).
   const isCrewOrder = orderType === CREW_ORDER_TYPE;
+  // Online: the customer paid the platform, so no Tunai / Non Tunai; the
+  // order is saved with the platform as its payment (GoFood, ShopeeFood...).
+  const isOnlineOrder = orderType === "Online";
+  const needsPaymentChoice = !isCrewOrder && !isOnlineOrder;
   const onlineOrderCharge = 0;
   const taxableTotal = total + onlineOrderCharge;
   const itemTax = isCrewOrder
@@ -119,7 +123,11 @@ const Bill = () => {
 
   const buildOrderData = (
     paymentData,
-    selectedPaymentMethod = isCrewOrder ? CREW_ORDER_TYPE : paymentMethod
+    selectedPaymentMethod = isCrewOrder
+      ? CREW_ORDER_TYPE
+      : isOnlineOrder
+        ? customerData.orderPlatform || "Online"
+        : paymentMethod
   ) => ({
     customerDetails: {
       name: getCustomerName(),
@@ -202,7 +210,7 @@ const Bill = () => {
       return;
     }
 
-    if (!paymentMethod) {
+    if (needsPaymentChoice && !paymentMethod) {
       enqueueSnackbar("Please select a payment method!", {
         variant: "warning",
       });
@@ -238,7 +246,7 @@ const Bill = () => {
       return;
     }
 
-    if (paymentMethod === "Non Tunai") {
+    if (needsPaymentChoice && paymentMethod === "Non Tunai") {
       setShowNonCashPayment(true);
     } else {
       submitOrder(buildOrderData());
@@ -455,7 +463,7 @@ const Bill = () => {
           </div>
         </>
       )}
-      {!isCrewOrder && (
+      {needsPaymentChoice && (
       <div className="flex flex-col sm:flex-row items-center gap-3 px-5 mt-4">
         <button
           onClick={() => setPaymentMethod("Tunai")}
