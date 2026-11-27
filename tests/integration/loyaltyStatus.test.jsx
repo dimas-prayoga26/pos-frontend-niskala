@@ -9,6 +9,7 @@ vi.mock("../../src/https/index", async (importOriginal) => ({
   // Pengaturan → API: the loyalty key is set (a test may answer otherwise).
   getIntegrationStatus: vi.fn(async () => ({ data: { success: true, data: { loyalty: true } } })),
   getLoyaltyCustomer: vi.fn(),
+  getOrderCustomerName: vi.fn(async () => ({ data: { data: { name: null } } })),
   getLoyaltyProgram: vi.fn(),
   // The POS catalog, where the reward promos are looked up.
   getCategories: vi.fn(async () => ({ data: { data: [] } })),
@@ -117,5 +118,20 @@ describe("LoyaltyStatus", () => {
 
     expect(await findText("Sudah dapat stamp hari ini")).toBeInTheDocument();
     expect(screen.queryByText(/Stamp untuk order min\./)).not.toBeInTheDocument();
+  });
+
+  it("shows that purchases forfeit their stamp while the card is full", async () => {
+    respond({
+      registered: true,
+      customer: { code: "NSK-TEST" },
+      card: { stamps: 10, slots: 10 },
+      stamp_min_order_total: 25000,
+      stamp_blocked_by_full_card: true,
+      ready_rewards: [],
+    });
+    renderWithProviders(<LoyaltyStatus phone="083123555526" />);
+    expect(await findText("Kartu penuh.")).toBeInTheDocument();
+    expect(screen.getByText("10/10 stamp")).toBeInTheDocument();
+    expect(screen.queryByText(/Stamp untuk order min/)).not.toBeInTheDocument();
   });
 });

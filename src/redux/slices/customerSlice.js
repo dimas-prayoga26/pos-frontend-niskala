@@ -5,6 +5,7 @@ const getToday = () => getJakartaDateKey();
 
 const initialState = {
     customerName: "",
+    customerNameSource: null,
     customerPhone: "",
     orderType: "Offline",
     orderPlatformId: null,
@@ -43,7 +44,15 @@ const customerSlice = createSlice({
                 note,
                 catering
             } = action.payload;
-            state.customerName = name ?? state.customerName;
+            const phoneChanged = phone != null && phone.trim() !== state.customerPhone.trim();
+            if (phoneChanged || (orderType && orderType !== state.orderType)) {
+                if (["lookup", "voucher", "suggestion"].includes(state.customerNameSource)) state.customerName = "";
+                if (!state.customerName) state.customerNameSource = null;
+            }
+            if (name != null) {
+                state.customerName = name;
+                state.customerNameSource = action.payload.nameSource ?? "manual";
+            }
             state.customerPhone = phone ?? state.customerPhone;
             state.orderType = orderType ?? state.orderType;
             if (Object.prototype.hasOwnProperty.call(action.payload, "orderPlatformId")) {
@@ -62,8 +71,16 @@ const customerSlice = createSlice({
                 : state.catering;
         },
 
+        fillCustomerName: (state, { payload: { phone, name } }) => {
+            if (state.orderType !== "Offline" || state.customerPhone.trim() !== phone) return;
+            if (state.customerNameSource !== "lookup" && (state.customerNameSource || state.customerName)) return;
+            state.customerName = name;
+            state.customerNameSource = "lookup";
+        },
+
         removeCustomer: (state) => {
             state.customerName = "";
+            state.customerNameSource = null;
             state.customerPhone = "";
             state.orderType = "Offline";
             state.orderPlatformId = null;
@@ -87,5 +104,5 @@ const customerSlice = createSlice({
 })
 
 
-export const { setCustomer, removeCustomer } = customerSlice.actions;
+export const { setCustomer, fillCustomerName, removeCustomer } = customerSlice.actions;
 export default customerSlice.reducer;

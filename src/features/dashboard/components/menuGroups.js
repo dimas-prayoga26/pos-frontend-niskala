@@ -1,9 +1,12 @@
-import { MdBakeryDining, MdLocalCafe, MdRedeem, MdRestaurant } from "react-icons/md";
+import { MdBakeryDining, MdLocalCafe, MdMoreHoriz, MdRedeem, MdRestaurant } from "react-icons/md";
 import { BEST_SELLER_GROUPS } from "../../home/utils/bestSeller";
 
 // The kinds of menu on the Menu Paling Laku tab: the Best Seller tabs plus Bundling.
 export const BUNDLING = "Bundling";
 export const MENU_GROUPS = [...BEST_SELLER_GROUPS, BUNDLING];
+// Only in the omzet donut: sales outside those kinds (Add Ons, menus since
+// deleted), so its total is the period's whole omzet.
+export const OTHER = "Lainnya";
 
 // Per kind: its Top 1 card icon and its chart color. The cards themselves are
 // all neutral; only the (hidden) charts color the kinds. The chart colors are
@@ -16,6 +19,9 @@ export const GROUP_STYLES = {
   Minuman: { Icon: MdLocalCafe, chart: "#3987e5" },
   Snack: { Icon: MdBakeryDining, chart: "#c98500" },
   [BUNDLING]: { Icon: MdRedeem, chart: "#9085e9" },
+  // A neutral gray, last in the ring between Bundling and Makanan (checked
+  // against both).
+  [OTHER]: { Icon: MdMoreHoriz, chart: "#b5b5b5" },
 };
 
 // Kategori Promo menus (packages) are Bundling; every other menu keeps its

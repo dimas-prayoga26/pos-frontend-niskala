@@ -123,6 +123,43 @@ describe("Menu Paling Laku tab", () => {
     expect(within(donut).getAllByText("27,4%")).toHaveLength(2);
   });
 
+  it("adds Add Ons and menus since deleted to the donut as Lainnya, so its total is the whole omzet", async () => {
+    api.getMenuItems.mockResolvedValue({
+      data: { data: [...menuItems, { id: 6, name: "Air Mineral", category: category("Add Ons", null) }] },
+    });
+    api.getOrders.mockResolvedValue({
+      data: {
+        data: [
+          ...orders,
+          {
+            id: 5,
+            orderDate: `${today} 13:00:00`,
+            orderType: "Offline",
+            // An add-on, a menu deleted since (no menuItemId, no menu by its name)
+            // and a loyalty reward (no sale).
+            items: [
+              line(6, "Air Mineral", 4, 5000),
+              line(null, "Hazelnut Latte", 2, 20000),
+              { ...line(3, "Es Teh", 1, 8000), id: "loyalty-5" },
+            ],
+          },
+        ],
+      },
+    });
+    renderWithProviders(<MenuPerformance />);
+
+    // 219.000 of the kinds + Lainnya 60.000 (20.000 + 40.000) = 279.000.
+    expect(
+      await screen.findByRole("img", {
+        name: "Komposisi omzet: Makanan 42,7%, Minuman 14,3%, Snack 0%, Bundling 21,5%, Lainnya 21,5%",
+      })
+    ).toBeInTheDocument();
+    const donut = screen.getByRole("region", { name: "Komposisi Omzet per Kategori" });
+    expect(within(donut).getByText(/^Rp\s279\.000$/)).toBeInTheDocument();
+    // Neither shows up as a menu of the table.
+    expect(screen.queryByRole("cell", { name: /Air Mineral|Hazelnut Latte/ })).not.toBeInTheDocument();
+  });
+
   it("follows the period filter", async () => {
     renderWithProviders(<MenuPerformance />);
     await within(card("Makanan")).findByText("Nasi Goreng");

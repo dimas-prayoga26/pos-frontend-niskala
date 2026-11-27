@@ -5,14 +5,14 @@ import { formatCurrency } from "../../../shared/lib/format";
 import { getJakartaDateKey } from "../../../shared/lib/dates";
 import { isCrewOrder } from "../../orders";
 import OrderDateRangeFilter from "../../orders/components/OrderDateRangeFilter";
-import { rankBestSellers, resolveMenuImage } from "../../home/utils/bestSeller";
+import { rankBestSellers, resolveMenuImage, salesRevenue } from "../../home/utils/bestSeller";
 import { DEFAULT_PERIOD, PERIOD_OPTIONS, periodRange, rangeLabel } from "../../inventory/utils/periods";
 import { getMenuItems, getOrders } from "../api";
 import { buildMenuRows, trendRanges, unsoldMenus } from "../utils/menuTable";
 import CategoryRevenueDonut from "./CategoryRevenueDonut";
 import MenuDetailTable from "./MenuDetailTable";
 import TopMenusBarChart from "./TopMenusBarChart";
-import { GROUP_STYLES, MENU_GROUPS, menuGroupOf } from "./menuGroups";
+import { GROUP_STYLES, MENU_GROUPS, OTHER, menuGroupOf } from "./menuGroups";
 
 // The Top 10 bar chart and the omzet donut: hidden 2026-11-17, shown again
 // 2026-11-18 at the user's request; set to false to hide them.
@@ -102,18 +102,18 @@ const MenuPerformance = ({ showCharts = SHOW_CHARTS }) => {
 
   const range = useMemo(() => periodRange(period, customRange), [period, customRange]);
   const trend = useMemo(() => trendRanges(period, range), [period, range]);
+  // The sales (no Konsumsi Crew) of some days.
+  const salesOrdersIn = useMemo(() => {
+    const salesOrders = (ordersRes?.data?.data || []).filter((order) => !isCrewOrder(order));
+    return (days) => salesOrders.filter((order) => isInRange(getJakartaDateKey(order.orderDate), days));
+  }, [ordersRes]);
   // Menus sold in some days, most sold first, each with its kind and omzet.
   const rankMenusIn = useMemo(() => {
-    const salesOrders = (ordersRes?.data?.data || []).filter((order) => !isCrewOrder(order));
     const menuItems = menuItemsRes?.data?.data || [];
-    return (days) =>
-      rankBestSellers(
-        salesOrders.filter((order) => isInRange(getJakartaDateKey(order.orderDate), days)),
-        menuItems,
-        menuGroupOf
-      );
-  }, [menuItemsRes, ordersRes]);
+    return (days) => rankBestSellers(salesOrdersIn(days), menuItems, menuGroupOf);
+  }, [menuItemsRes, salesOrdersIn]);
   const rankedMenus = useMemo(() => rankMenusIn(range), [rankMenusIn, range]);
+  const periodRevenue = useMemo(() => salesRevenue(salesOrdersIn(range)), [salesOrdersIn, range]);
   const previousMenus = useMemo(() => trend && rankMenusIn(trend.previous), [trend, rankMenusIn]);
   // On sale but not sold once in the period: the bottom of Kurang Laku.
   const notSoldMenus = useMemo(
@@ -133,14 +133,16 @@ const MenuPerformance = ({ showCharts = SHOW_CHARTS }) => {
     () => new Map(MENU_GROUPS.map((group) => [group, shownMenus.find((dish) => dish.group === group)])),
     [shownMenus]
   );
-  const revenueSlices = useMemo(
-    () =>
-      MENU_GROUPS.map((group) => ({
-        group,
-        revenue: rankedMenus.reduce((sum, dish) => (dish.group === group ? sum + dish.revenue : sum), 0),
-      })),
-    [rankedMenus]
-  );
+  // Each kind's omzet, then Lainnya (Add Ons, menus since deleted) when sold,
+  // so the donut's total is the whole omzet, the same as Rekap New's.
+  const revenueSlices = useMemo(() => {
+    const kinds = MENU_GROUPS.map((group) => ({
+      group,
+      revenue: rankedMenus.reduce((sum, dish) => (dish.group === group ? sum + dish.revenue : sum), 0),
+    }));
+    const other = periodRevenue - kinds.reduce((sum, slice) => sum + slice.revenue, 0);
+    return other > 0 ? [...kinds, { group: OTHER, revenue: other }] : kinds;
+  }, [periodRevenue, rankedMenus]);
   const isLoading = isOrdersLoading || isMenuItemsLoading;
 
   return (

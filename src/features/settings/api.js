@@ -18,6 +18,7 @@ export {
   getPaymentSources,
   getUsers,
   register,
+  resetLoyaltyMemberPin,
   testIntegration,
   updateCategoryBestSellerGroups,
   updateIntegration,

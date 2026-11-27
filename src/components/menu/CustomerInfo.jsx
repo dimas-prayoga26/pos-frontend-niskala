@@ -1,5 +1,5 @@
 import OptionalTag from "../../shared/ui/OptionalTag";
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { enqueueSnackbar } from "notistack";
 import { setCustomer } from "../../redux/slices/customerSlice";
@@ -16,6 +16,7 @@ import { getLoyaltyVoucher, getOrderPlatforms } from "../../https";
 import { MdKeyboardArrowDown, MdQrCodeScanner } from "react-icons/md";
 import LoyaltyStatus from "./LoyaltyStatus";
 import LoyaltyQrScanner from "./LoyaltyQrScanner";
+import CustomerPhoneSuggestions from "./CustomerPhoneSuggestions";
 import useLoyaltyEnabled from "../../shared/lib/useLoyaltyEnabled";
 import { isLoyaltyVoucherCode, localPhone } from "../../features/pos/utils/loyaltyVoucher";
 
@@ -24,6 +25,8 @@ const voucherErrorMessage = (error) =>
 
 const CustomerInfo = () => {
   const [isPlatformOpen, setIsPlatformOpen] = useState(false);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const phoneInput = useRef(null);
   // Stamp card voucher QR: the camera, the lookup, and the reward to put in
   // the order once LoyaltyStatus has looked the number up ({ id, phone, stamps, label }).
   const [isScannerOpen, setIsScannerOpen] = useState(false);
@@ -51,23 +54,13 @@ const CustomerInfo = () => {
     isOnlineOrder && customerData.orderDate ? customerData.orderDate : new Date();
 
   const updateCustomer = (field, value) => {
-    dispatch(
-      setCustomer({
-        name:
-          field === "name"
-            ? value
-            : customerData.customerName || "",
-        phone:
-          field === "phone"
-            ? value
-            : customerData.customerPhone || "",
-      })
-    );
+    dispatch(setCustomer({ [field]: value }));
   };
 
   // A scanned voucher fills in its customer's name and number; a ready
   // reward then goes in the order like Tukar.
   const applyVoucher = async (code) => {
+    setShowSuggestions(false);
     setIsScannerOpen(false);
     if (!isLoyaltyVoucherCode(code)) {
       enqueueSnackbar("QR ini bukan voucher Stamp Card Niskala.", { variant: "warning" });
@@ -86,7 +79,7 @@ const CustomerInfo = () => {
       dispatch(
         setCustomer({
           phone,
-          name: voucher.customer?.name?.trim() || customerData.customerName || "",
+          ...(voucher.customer?.name?.trim() && { name: voucher.customer.name.trim(), nameSource: "voucher" }),
         })
       );
 
@@ -120,6 +113,7 @@ const CustomerInfo = () => {
       applyVoucher(value.trim());
       return;
     }
+    setShowSuggestions(true);
     updateCustomer("phone", value);
   };
 
@@ -222,7 +216,14 @@ const CustomerInfo = () => {
         </div>
 
         {!isOnlineOrder && !isCrewOrder && (
-          <div>
+          <div onBlur={(event) => {
+            if (!event.currentTarget.contains(event.relatedTarget)) setShowSuggestions(false);
+          }} onKeyDown={(event) => {
+            if (event.key === "Escape") {
+              phoneInput.current?.focus();
+              setShowSuggestions(false);
+            }
+          }}>
             <label
               htmlFor="customer-phone"
               className="block text-[#ababab] mb-2 text-xs font-medium"
@@ -232,6 +233,9 @@ const CustomerInfo = () => {
             <div className="relative">
               <input
                 id="customer-phone"
+                ref={phoneInput}
+                autoComplete="off"
+                onFocus={() => setShowSuggestions(true)}
                 value={customerData.customerPhone}
                 onChange={(event) => updatePhone(event.target.value)}
                 type="tel"
@@ -241,7 +245,7 @@ const CustomerInfo = () => {
               />
               <button
                 type="button"
-                onClick={() => setIsScannerOpen(true)}
+                onClick={() => { setShowSuggestions(false); setIsScannerOpen(true); }}
                 disabled={loyaltyOff || isCheckingVoucher}
                 aria-label="Scan QR Stamp Card"
                 title={loyaltyOff ? "Loyalty nonaktif" : "Scan QR Stamp Card"}
@@ -254,6 +258,17 @@ const CustomerInfo = () => {
                 )}
               </button>
             </div>
+            {showSuggestions && (
+              <CustomerPhoneSuggestions
+                phone={customerData.customerPhone}
+                loyaltyEnabled={loyaltyApi.enabled}
+                onSelect={(customer) => {
+                  dispatch(setCustomer({ ...customer, nameSource: "suggestion" }));
+                  phoneInput.current?.focus();
+                  setShowSuggestions(false);
+                }}
+              />
+            )}
             <LoyaltyStatus
               phone={customerData.customerPhone}
               claim={voucherClaim}

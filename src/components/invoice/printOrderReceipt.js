@@ -1,5 +1,5 @@
 import { enqueueSnackbar } from "notistack";
-import { createDraftThermalPrintUrl, createThermalPrintUrl } from "../../https";
+import { createThermalPrintUrl } from "../../https";
 import {
   isAndroidDevice,
   openBluetoothPrintApp,
@@ -11,7 +11,7 @@ import {
   getReceiptPaperWidth,
 } from "../../utils/thermerReceipt";
 
-// Printing a receipt, shared by Invoice (after an order), Bill and OrderCard.
+// Printing a saved order from Invoice or OrderCard.
 // Its own module so Invoice.jsx exports only its component (Fast Refresh).
 
 // Laptop / PC: the same receipt template as Thermer, through Chrome's print dialog.
@@ -27,7 +27,7 @@ const printReceiptWithBrowser = (orderInfo, paperWidth) =>
 // (useReceiptPaperDialog); otherwise the last one used on this device.
 export const printOrderReceipt = async (
   orderInfo,
-  { isDraft = false, paperWidth = getReceiptPaperWidth() } = {}
+  { paperWidth = getReceiptPaperWidth() } = {}
 ) => {
   if (!isAndroidDevice()) {
     return printReceiptWithBrowser(orderInfo, paperWidth);
@@ -36,7 +36,7 @@ export const printOrderReceipt = async (
   try {
     const numericOrderId = orderInfo.id || orderInfo._id;
 
-    if (!isDraft && !numericOrderId) {
+    if (!numericOrderId) {
       throw new Error("Order ID tidak ditemukan untuk struk ini.");
     }
 
@@ -45,9 +45,7 @@ export const printOrderReceipt = async (
       logoBaseUrl: window.location.origin,
       paperWidth,
     });
-    const response = isDraft
-      ? await createDraftThermalPrintUrl({ payload })
-      : await createThermalPrintUrl({ orderId: numericOrderId, payload });
+    const response = await createThermalPrintUrl({ orderId: numericOrderId, payload });
     const responseUrl = response.data?.data?.url;
 
     if (!responseUrl) {

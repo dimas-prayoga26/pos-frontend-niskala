@@ -12,6 +12,7 @@ vi.mock("../../src/https/index", async (importOriginal) => ({
   getLoyaltyStamps: vi.fn(),
   getMenuItems: vi.fn(),
   getOrderPlatforms: vi.fn(),
+  resetLoyaltyMemberPin: vi.fn(),
   updateLoyaltyProgram: vi.fn(),
   updateLoyaltyReward: vi.fn(),
 }));
@@ -320,6 +321,7 @@ describe("program promo", () => {
           "19/02/2027",
           "1 ditukar1 siap ditukar",
           "19/11/26 12:00",
+          "Reset PIN",
         ]);
         const fresh = within(dialog).getByText("26-11-009").closest("tr");
         expect(fresh.cells[1]).toHaveTextContent("01 kartu");
@@ -327,6 +329,70 @@ describe("program promo", () => {
         expect(fresh.cells[5]).toHaveTextContent("Belum ada");
         expect(within(dialog).getByText("2 member")).toBeInTheDocument();
         expect(api.getLoyaltyMembers).toHaveBeenCalledWith({ page: 1, perPage: 20, q: "" });
+      });
+
+      it("resets a member's PIN only after Reset PIN is confirmed", async () => {
+        api.resetLoyaltyMemberPin.mockReset();
+        api.resetLoyaltyMemberPin.mockResolvedValue(answer({ id: 4, own_pin: false }));
+        api.getLoyaltyMembers.mockResolvedValue(history([{ ...MEMBER, own_pin: true }, { ...NEW_MEMBER, own_pin: false }]));
+        const dialog = await openMembers();
+        expect(within(dialog).getByRole("columnheader", { name: "Aksi" })).toBeInTheDocument();
+
+        // Still the first PIN (last 4 digits of the number): nothing to reset.
+        expect(await within(dialog).findByRole("button", { name: "Reset PIN 081111111111" })).toBeDisabled();
+
+        const resetButton = within(dialog).getByRole("button", { name: "Reset PIN 0987654321" });
+        fireEvent.click(resetButton);
+        let confirm = screen.getByRole("dialog", { name: "Reset PIN member?" });
+        expect(confirm).toHaveTextContent(
+          "PIN 0987654321 (Demo Makanan) kembali ke 4 angka terakhir nomor HP: 4321. Pelanggan membuat PIN baru saat membuka kartu."
+        );
+        // Batal: nothing is reset.
+        fireEvent.click(within(confirm).getByRole("button", { name: "Batal" }));
+        expect(screen.queryByRole("dialog", { name: "Reset PIN member?" })).not.toBeInTheDocument();
+        expect(api.resetLoyaltyMemberPin).not.toHaveBeenCalled();
+
+        fireEvent.click(resetButton);
+        confirm = screen.getByRole("dialog", { name: "Reset PIN member?" });
+        fireEvent.click(within(confirm).getByRole("button", { name: "Reset PIN" }));
+
+        expect(await screen.findByText("PIN 0987654321 direset.")).toBeInTheDocument();
+        expect(api.resetLoyaltyMemberPin).toHaveBeenCalledTimes(1);
+        expect(api.resetLoyaltyMemberPin).toHaveBeenCalledWith(4);
+        expect(screen.queryByRole("dialog", { name: "Reset PIN member?" })).not.toBeInTheDocument();
+        // The list is read again (own_pin now false).
+        await waitFor(() => expect(api.getLoyaltyMembers).toHaveBeenCalledTimes(2));
+      });
+
+      it("shows no Aksi to a cashier", async () => {
+        renderWithProviders(<MemberStampCard />, { preloadedState: asCashier });
+        const page = await screen.findByRole("region", { name: "Member Stamp Card" });
+
+        expect(await within(page).findByText("26-11-004")).toBeInTheDocument();
+        expect(within(page).queryByRole("columnheader", { name: "Aksi" })).not.toBeInTheDocument();
+        expect(within(page).queryByRole("button", { name: /^Reset PIN/ })).not.toBeInTheDocument();
+      });
+
+      it("opens the member's expired and redeemed cards from its kartu count, one line each", async () => {
+        api.getLoyaltyMembers.mockResolvedValue(history([{ ...MEMBER, card_history: [
+          { number: "26100003", status: "expired", stamps: 3, redemptions: [] },
+          { number: "26070002", status: "redeemed", stamps: 10, redemptions: [
+            { id: 7, label: "Minuman gratis", redeemed_at: REDEEMED.redeemed_at },
+          ] },
+        ] }, NEW_MEMBER]));
+        const dialog = await openMembers();
+        const summary = await within(dialog).findByText("2 kartu");
+        expect(summary.tagName).toBe("SUMMARY");
+        fireEvent.click(summary);
+
+        const [expired, redeemed] = within(summary.closest("details")).getAllByRole("listitem");
+        expect(expired).toHaveTextContent(/^26100003 · Kedaluwarsa · 3 stamp$/);
+        expect(expired).not.toHaveAttribute("title");
+        expect(redeemed).toHaveTextContent(/^26070002 · Selesai · 10 stamp · 1 hadiah$/);
+        // The reward's name and date on hover.
+        expect(redeemed).toHaveAttribute("title", "Minuman gratis · 20/11/2026");
+        // No past cards: the count is plain text.
+        expect(within(dialog).getByText("1 kartu").tagName).toBe("SPAN");
       });
 
       it("says a full card, its expiry still ahead (not red)", async () => {

@@ -16,7 +16,6 @@ import {
 vi.mock("../../src/https/index", async (importOriginal) => ({
   ...(await importOriginal()),
   createThermalPrintUrl: vi.fn(),
-  createDraftThermalPrintUrl: vi.fn(),
 }));
 
 vi.mock("../../src/utils/printReceipt", async (importOriginal) => ({

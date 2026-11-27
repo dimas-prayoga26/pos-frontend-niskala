@@ -18,6 +18,18 @@ export const resolveMenuImage = (imagePath) => {
   return imagePath;
 };
 
+// What a line brought in: the unit price charged × qty.
+const lineRevenue = (item) => (Number(item.pricePerQuantity ?? item.price) || 0) * (Number(item.quantity) || 0);
+
+// Everything the orders sold, valued as in rankBestSellers but with every
+// line counted (add-ons and menus since deleted too); loyalty rewards are no sale.
+export const salesRevenue = (orders) =>
+  orders.reduce(
+    (total, order) =>
+      total + (order.items || []).reduce((sum, item) => (isLoyaltyLine(item) ? sum : sum + lineRevenue(item)), 0),
+    0
+  );
+
 // Menus sold across orders, most sold first, each with its tab (group), its
 // menu categories (categories: the Ice and Hot copy can sit in two) and what
 // it brought in (revenue: the unit price charged × qty). An order line
@@ -51,9 +63,8 @@ export const rankBestSellers = (orders, menuItems, groupOf = categoryGroup) => {
       };
       const categoryName = menuItem.category?.name;
       if (categoryName && !current.categories.includes(categoryName)) current.categories.push(categoryName);
-      const quantity = Number(item.quantity) || 0;
-      current.numberOfOrders += quantity;
-      current.revenue += (Number(item.pricePerQuantity ?? item.price) || 0) * quantity;
+      current.numberOfOrders += Number(item.quantity) || 0;
+      current.revenue += lineRevenue(item);
       salesByName.set(name, current);
     });
   });

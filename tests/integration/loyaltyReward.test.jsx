@@ -13,6 +13,9 @@ vi.mock("../../src/https/index", async (importOriginal) => ({
   getMenuItems: vi.fn(),
   getOrderPlatforms: vi.fn(),
   getLoyaltyCustomer: vi.fn(),
+  getOrderCustomerName: vi.fn(async () => ({ data: { data: { name: null } } })),
+  getOrderCustomerSuggestions: vi.fn(async () => ({ data: { data: [] } })),
+  getLoyaltyMembers: vi.fn(async () => ({ data: { data: { data: [] } } })),
   getLoyaltyProgram: vi.fn(),
   getLoyaltyVoucher: vi.fn(),
 }));
@@ -74,6 +77,70 @@ describe("Loyalty reward as a Kategori Promo menu", () => {
     fireEvent.click(screen.getByText("PROMO"));
     expect(await screen.findByText("Paket Hemat")).toBeInTheDocument();
     expect(screen.queryByText("Loyalty Minuman")).not.toBeInTheDocument();
+  });
+
+  it("fills the cashier's name field from order history when loyalty is unavailable", async () => {
+    api.getLoyaltyProgram.mockRejectedValueOnce(new Error("offline"));
+    api.getOrderCustomerName.mockResolvedValueOnce({ data: { data: { name: "Dina" } } });
+    renderWithProviders(<MenuPage />, { route: "/menu" });
+    const name = screen.getByPlaceholderText("Guest");
+    typePhone("+62 812-3456-7890");
+    await waitFor(() => expect(name).toHaveValue("Dina"), { timeout: 2500 });
+    expect(api.getOrderCustomerName).toHaveBeenCalledWith("081234567890");
+    typePhone("081200000000");
+    expect(name).toHaveValue("");
+  });
+
+  it("suggests distinct customers after six digits and fills both fields only after selection", async () => {
+    api.getOrderCustomerSuggestions.mockClear().mockResolvedValueOnce({ data: { data: [
+      { phone: "081234111111", name: "Nama lama" },
+      { phone: "081234222222", name: "Budi" },
+    ] } });
+    api.getLoyaltyMembers.mockResolvedValueOnce({ data: { data: { data: [
+      { customer: { phone: "6281234111111", name: "Dina" } },
+      { customer: { phone: "6289981234000", name: "Nomor lain" } },
+    ] } } });
+    renderWithProviders(<MenuPage />, { route: "/menu" });
+    typePhone("08123");
+    await act(() => new Promise(resolve => setTimeout(resolve, 350)));
+    expect(api.getOrderCustomerSuggestions).not.toHaveBeenCalled();
+    typePhone("081-234");
+    const choice = await screen.findByRole("button", { name: /Dina 081234111111/ });
+    const list = screen.getByRole("list", { name: "Pelanggan yang cocok" });
+    expect(within(list).getAllByRole("button")).toHaveLength(2);
+    expect(screen.getByPlaceholderText("Guest")).toHaveValue("");
+    fireEvent.click(choice);
+    expect(screen.getByPlaceholderText("Guest")).toHaveValue("Dina");
+    expect(screen.getByPlaceholderText("0812-xxxx-xxxx")).toHaveValue("081234111111");
+    expect(list).not.toBeInTheDocument();
+  });
+
+  it("discards suggestions when the cashier changes the prefix while a lookup is pending", async () => {
+    let resolveOld;
+    api.getOrderCustomerSuggestions.mockClear().mockImplementationOnce(() => new Promise(resolve => { resolveOld = resolve; }));
+    renderWithProviders(<MenuPage />, { route: "/menu" });
+    typePhone("081234");
+    await waitFor(() => expect(resolveOld).toBeTypeOf("function"));
+    typePhone("081235");
+    await act(async () => resolveOld({ data: { data: [{ phone: "081234888888", name: "Stale" }] } }));
+    expect(await screen.findByText("Belum ada pelanggan yang cocok.")).toBeInTheDocument();
+    expect(screen.queryByText("Stale")).not.toBeInTheDocument();
+    expect(screen.getByPlaceholderText("Guest")).toHaveValue("");
+  });
+
+  it("uses the member name and preserves a cashier correction", async () => {
+    api.getLoyaltyCustomer.mockResolvedValueOnce({ data: { data: {
+      ...customer, customer: { code: "NSK-TEST", name: "Rina" },
+    } } });
+    renderWithProviders(<MenuPage />, { route: "/menu" });
+    const name = screen.getByPlaceholderText("Guest");
+    typePhone("081211112222");
+    await waitFor(() => expect(name).toHaveValue("Rina"), { timeout: 2500 });
+    fireEvent.change(name, { target: { value: "Rina S." } });
+    api.getOrderCustomerName.mockResolvedValueOnce({ data: { data: { name: "Nama tersimpan" } } });
+    typePhone("081211112223");
+    await waitFor(() => expect(api.getOrderCustomerName).toHaveBeenCalledWith("081211112223"), { timeout: 2500 });
+    expect(name).toHaveValue("Rina S.");
   });
 
   it("puts the reward promo in the order on Tukar; its coffee is picked like any promo", async () => {

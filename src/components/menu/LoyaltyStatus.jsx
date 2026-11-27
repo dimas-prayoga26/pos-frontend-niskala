@@ -1,13 +1,16 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { enqueueSnackbar } from "notistack";
 import { MdRedeem } from "react-icons/md";
 import { useDispatch, useSelector } from "react-redux";
-import { getCategories, getLoyaltyCustomer, getLoyaltyProgram, getMenuItems } from "../../https";
+import { getCategories, getLoyaltyCustomer, getLoyaltyProgram, getMenuItems, getOrderCustomerName } from "../../https";
+import { fillCustomerName } from "../../redux/slices/customerSlice";
+import { localPhone } from "../../features/pos/utils/loyaltyVoucher";
 import { formatCurrency } from "../../utils";
 import { addItems, removeLoyaltyItemsNotFor } from "../../features/pos/cartSlice";
 import { buildMenuCatalog } from "../../features/pos/utils/menuCatalog";
 import useLoyaltyEnabled from "../../shared/lib/useLoyaltyEnabled";
+import useDebounced from "../../shared/lib/useDebounced";
 import {
   buildLoyaltyRewardLine,
   findLoyaltyRewardMenu,
@@ -20,15 +23,6 @@ import {
 // coffee / rice bowl is picked; the reward is redeemed when the order is saved.
 const MIN_DIGITS = 10;
 const DEBOUNCE_MS = 500;
-
-const useDebounced = (value, delay) => {
-  const [debounced, setDebounced] = useState(value);
-  useEffect(() => {
-    const timer = setTimeout(() => setDebounced(value), delay);
-    return () => clearTimeout(timer);
-  }, [value, delay]);
-  return debounced;
-};
 
 const errorMessage = (error) => error?.response?.data?.message || "Loyalty tidak tersedia.";
 
@@ -46,6 +40,14 @@ const LoyaltyStatus = ({ phone, claim = null, onClaimDone }) => {
   const trimmed = String(phone || "").trim();
   const debouncedPhone = useDebounced(trimmed, DEBOUNCE_MS);
   const enabled = debouncedPhone.replace(/\D/g, "").length >= MIN_DIGITS;
+  const lookupPhone = localPhone(debouncedPhone);
+  const canMatchName = trimmed === debouncedPhone && /^[+\d().\s-]+$/.test(trimmed) && /^\d{10,15}$/.test(lookupPhone);
+  const { data: previousOrder } = useQuery({
+    queryKey: ["order-customer-name", lookupPhone],
+    queryFn: () => getOrderCustomerName(lookupPhone),
+    enabled: canMatchName,
+    retry: false,
+  });
 
   // No loyalty key (Pengaturan → API), or the stamp card off: the number is
   // not looked up at all.
@@ -106,6 +108,12 @@ const LoyaltyStatus = ({ phone, claim = null, onClaimDone }) => {
   // the reward's promo), its reward goes in the order once.
   const handledClaimId = useRef(null);
   const lookedUp = data?.data?.data;
+  const memberName = programActive && loyaltyApi.enabled && lookedUp?.registered && lookedUp.customer?.name?.trim();
+  const matchedName = memberName || previousOrder?.data?.data?.name;
+  useEffect(() => {
+    if (canMatchName && matchedName) dispatch(fillCustomerName({ phone: trimmed, name: matchedName }));
+  }, [canMatchName, matchedName, trimmed, dispatch]);
+
   useEffect(() => {
     if (!claim || handledClaimId.current === claim.id) return;
     if (claim.phone !== trimmed || debouncedPhone !== trimmed || isFetching || !menuItemsRes) return;
@@ -185,7 +193,9 @@ const LoyaltyStatus = ({ phone, claim = null, onClaimDone }) => {
         </p>
       )}
       {/* One stamp a number a day: no promise of another one today. */}
-      {loyalty.daily_limit_reached ? (
+      {loyalty.stamp_blocked_by_full_card ? (
+        <p className="mt-1">Kartu penuh. Stamp pembelian berikutnya hangus selama masih ada hadiah yang belum ditukar.</p>
+      ) : loyalty.daily_limit_reached ? (
         <p className="mt-1">Sudah dapat stamp hari ini</p>
       ) : (
         minimumNote && <p className="mt-1">{minimumNote}</p>

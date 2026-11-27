@@ -1,7 +1,9 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { useSelector } from "react-redux";
 import { getLoyaltyMembers, getLoyaltyRedemptions, getLoyaltyStamps } from "../api";
 import { formatJakartaReceiptDate, formatJakartaReceiptDateTime } from "../../../shared/lib/dates";
+import ResetPinDialog from "./ResetPinDialog";
 
 const PER_PAGE = 20;
 const SEARCH_DELAY_MS = 400;
@@ -22,6 +24,34 @@ const CustomerCell = ({ customer }) => (
 
 const CARD_STATUS = { completed: "Penuh", redeemed: "Selesai", expired: "Kedaluwarsa" };
 
+// "N kartu"; with past cards (expired, or every reward handed over) it opens
+// them, one line each. The rewards' names and dates show on hover; the Hadiah
+// tab lists them all.
+const CardCount = ({ count, history }) =>
+  history?.length > 0 ? (
+    <details className="text-xs">
+      <summary className="cursor-pointer text-[#d6c9b6]">{count} kartu</summary>
+      <ul className="mt-1 space-y-0.5 text-[#ababab]">
+        {history.map((card) => (
+          <li
+            key={card.number}
+            className="whitespace-nowrap"
+            title={
+              card.redemptions
+                .map((redemption) => `${redemption.label} · ${formatJakartaReceiptDate(redemption.redeemed_at)}`)
+                .join("\n") || undefined
+            }
+          >
+            <span className="text-[#f5f5f5]">{card.number}</span> · {CARD_STATUS[card.status]} · {card.stamps} stamp
+            {card.redemptions.length > 0 && ` · ${card.redemptions.length} hadiah`}
+          </li>
+        ))}
+      </ul>
+    </details>
+  ) : (
+    <span className="text-xs text-[#ababab]">{count} kartu</span>
+  );
+
 // Dashboard → Member Stamp Card (admin, loyalty on). Member (first, opens by
 // default): every member, most stamps first, with all the stamps they have
 // earned. Stamp Masuk and Hadiah, newest first: the stamps given
@@ -41,7 +71,7 @@ const VIEWS = [
         <CustomerCell customer={row.customer} />
         <td className={cellClass}>
           <span className="block text-base font-bold">{row.total_stamps}</span>
-          <span className="text-xs text-[#ababab]">{row.cards} kartu</span>
+          <CardCount count={row.cards} history={row.card_history} />
         </td>
         <td className={cellClass}>
           {row.card ? (
@@ -130,7 +160,14 @@ export default function MemberStampCard() {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [q, setQ] = useState("");
+  // The member whose Reset PIN waits for its confirmation.
+  const [pinMember, setPinMember] = useState(null);
+  const closePinDialog = useCallback(() => setPinMember(null), []);
   const view = VIEWS.find((candidate) => candidate.key === viewKey);
+  // Aksi (Reset PIN): admins only, on the Member tab.
+  const isAdmin = useSelector((state) => state.user?.role)?.toLowerCase() === "admin";
+  const showActions = isAdmin && view.key === "members";
+  const columns = showActions ? [...view.columns, "Aksi"] : view.columns;
 
   useEffect(() => {
     const timer = setTimeout(() => setQ(search.trim()), SEARCH_DELAY_MS);
@@ -196,7 +233,7 @@ export default function MemberStampCard() {
         <table className="w-full text-left text-sm">
           <thead className="bg-[#202020] text-[#ababab]">
             <tr>
-              {view.columns.map((column) => (
+              {columns.map((column) => (
                 <th key={column} className={cellClass}>
                   {column}
                 </th>
@@ -207,11 +244,26 @@ export default function MemberStampCard() {
             {rows.map((row) => (
               <tr key={row.id} className="border-t border-[#333]">
                 {view.renderRow(row)}
+                {showActions && (
+                  <td className={cellClass}>
+                    {/* own_pin false: still the first PIN, nothing to reset. */}
+                    <button
+                      type="button"
+                      onClick={() => setPinMember(row)}
+                      disabled={row.own_pin === false}
+                      title={row.own_pin === false ? "PIN masih 4 angka terakhir nomor HP." : undefined}
+                      aria-label={`Reset PIN ${localPhone(row.customer?.phone)}`}
+                      className="whitespace-nowrap rounded-lg bg-[#333] px-3 py-1.5 text-xs font-bold text-[#f5f5f5] hover:bg-[#3d3d3d] disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      Reset PIN
+                    </button>
+                  </td>
+                )}
               </tr>
             ))}
             {!rows.length && (
               <tr>
-                <td colSpan={view.columns.length} className={`${cellClass} py-6 text-center text-[#ababab]`}>
+                <td colSpan={columns.length} className={`${cellClass} py-6 text-center text-[#ababab]`}>
                   {listQuery.isError ? (
                     <span role="alert" className="text-red-300">
                       {errorMessage(listQuery.error)}
@@ -250,6 +302,10 @@ export default function MemberStampCard() {
             Berikutnya
           </button>
         </div>
+      )}
+
+      {pinMember && (
+        <ResetPinDialog member={pinMember} phone={localPhone(pinMember.customer?.phone)} onClose={closePinDialog} />
       )}
     </section>
   );

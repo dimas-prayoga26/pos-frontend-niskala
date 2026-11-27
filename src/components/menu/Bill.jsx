@@ -7,9 +7,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { removeAllItems } from "../../redux/slices/cartSlice";
 import { removeCustomer, setCustomer } from "../../redux/slices/customerSlice";
 import Invoice from "../invoice/Invoice";
-import { printOrderReceipt } from "../invoice/printOrderReceipt";
 import NonCashPaymentModal from "./NonCashPaymentModal";
-import { useReceiptPaperDialog } from "../invoice/useReceiptPaperDialog";
 import { hasMissingBundlePicks } from "../../features/pos/utils/bundleChoices";
 import { isLoyaltyLine } from "../../features/pos/utils/loyaltyReward";
 import { MdWarningAmber } from "react-icons/md";
@@ -20,7 +18,6 @@ import {
   isCrewMealTime,
   normalizeNominalInput,
 } from "../../utils";
-import { isAndroidDevice } from "../../utils/printReceipt";
 
 const getItemTaxRate = (item) => {
   const taxRate = Number(item.taxRate);
@@ -92,8 +89,6 @@ const Bill = () => {
       : 0;
 
   const [paymentMethod, setPaymentMethod] = useState();
-  const isPrintingReceiptRef = useRef(false);
-  const { choosePaperWidth, paperDialog } = useReceiptPaperDialog();
   const isSubmittingOrderRef = useRef(false);
   const [showNonCashPayment, setShowNonCashPayment] = useState(false);
   const [showInvoice, setShowInvoice] = useState(false);
@@ -334,40 +329,6 @@ const Bill = () => {
     orderMutation.mutate(orderData);
   };
 
-  // The same receipt template on every device: Thermer on Android, Chrome's
-  // print dialog on a laptop or PC.
-  const handlePrintReceipt = async () => {
-    if (isPrintingReceiptRef.current) return;
-
-    if (cartData.length === 0) {
-      enqueueSnackbar("Please add at least one menu item before printing!", {
-        variant: "warning",
-      });
-      return;
-    }
-
-    const paperWidth = await choosePaperWidth();
-    if (!paperWidth) return;
-
-    isPrintingReceiptRef.current = true;
-    try {
-      const didPrint = await printOrderReceipt({
-        ...buildOrderData(),
-        orderCode: "DRAFT",
-        createdAt: new Date().toISOString(),
-        paymentMethod: isCrewOrder ? CREW_ORDER_TYPE : paymentMethod || "-",
-      }, { isDraft: true, paperWidth });
-
-      if (didPrint === false && !isAndroidDevice()) {
-        enqueueSnackbar("Popup blocked. Please allow popups to print receipt.", {
-          variant: "warning",
-        });
-      }
-    } finally {
-      window.setTimeout(() => { isPrintingReceiptRef.current = false; }, 3200);
-    }
-  };
-
   return (
     <>
       <div className="flex items-center justify-between px-5 mt-2">
@@ -515,15 +476,7 @@ const Bill = () => {
       </div>
       )}
 
-      {paperDialog}
-
-      <div className="flex flex-col sm:flex-row items-center gap-3 px-5 mt-4 pb-4">
-        <button
-          onClick={handlePrintReceipt}
-          className="bg-[#025cca] px-4 py-3 w-full rounded-lg text-[#f5f5f5] font-semibold text-lg"
-        >
-          Print Receipt
-        </button>
+      <div className="px-5 mt-4 pb-4">
         <button
           onClick={handlePlaceOrder}
           disabled={orderMutation.isPending || showNonCashPayment || stockWarningItems.length > 0 || cartData.length === 0}

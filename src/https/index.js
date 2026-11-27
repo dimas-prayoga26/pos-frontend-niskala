@@ -53,9 +53,11 @@ export const getMenuItemSales = ({ menuItemId, page = 1, perPage = 20 }) =>
 export const addOrder = (data) => axiosWrapper.post("/api/order/", data);
 export const createThermalPrintUrl = ({ orderId, payload }) =>
   axiosWrapper.post(`/api/order/${orderId}/thermal-print-url`, { payload });
-export const createDraftThermalPrintUrl = ({ payload }) =>
-  axiosWrapper.post("/api/order/draft/thermal-print-url", { payload });
 export const getOrders = () => axiosWrapper.get("/api/order");
+export const getOrderCustomerName = (phone) =>
+  axiosWrapper.get("/api/order/customer-name", { params: { phone } });
+export const getOrderCustomerSuggestions = (prefix, signal) =>
+  axiosWrapper.get("/api/order/customer-suggestions", { params: { prefix }, signal });
 // Rincian HPP of one sold item: its bahan, per portion and in total.
 export const getOrderItemCosts = (itemId) => axiosWrapper.get(`/api/order/items/${itemId}/costs`);
 export const deleteOrder = (orderId) =>
@@ -95,8 +97,12 @@ export const getLoyaltyStamps = ({ page = 1, perPage = 20, q = "" } = {}) =>
 export const getLoyaltyRedemptions = ({ page = 1, perPage = 20, q = "" } = {}) =>
   axiosWrapper.get("/api/loyalty/redemptions", { params: { page, perPage, ...(q ? { q } : {}) } });
 // The members, most stamps first, with all the stamps each has earned.
-export const getLoyaltyMembers = ({ page = 1, perPage = 20, q = "" } = {}) =>
-  axiosWrapper.get("/api/loyalty/members", { params: { page, perPage, ...(q ? { q } : {}) } });
+export const getLoyaltyMembers = ({ page = 1, perPage = 20, q = "" } = {}, signal) =>
+  axiosWrapper.get("/api/loyalty/members", { params: { page, perPage, ...(q ? { q } : {}) }, signal });
+// Member Stamp Card → Reset PIN (admin): the PIN goes back to the last 4
+// digits of the member's number.
+export const resetLoyaltyMemberPin = (memberId) =>
+  axiosWrapper.post(`/api/loyalty/members/${memberId}/reset-pin`);
 // Pengaturan → API (API Management, admin): the outside services and their
 // keys. status ({ loyalty }) is read by every user to show or hide loyalty.
 export const getIntegrationStatus = () => axiosWrapper.get("/api/integrations/status");
